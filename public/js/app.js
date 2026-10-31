@@ -38,5 +38,5 @@ await loadStones(); listSims();
 $('#dims').addEventListener('submit', () => {
   const d = Object.fromEntries(new FormData($('#dims')));
   localStorage.setItem('currentSim', JSON.stringify(d));
-  setTimeout(() => (location.href = matchMedia('(max-width: 820px)').matches ? 'mobile/mobile.html' : 'layout.html'), 300);
+  setTimeout(() => (location.href = 'layout.html'), 300);
 });

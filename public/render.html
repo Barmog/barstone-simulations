@@ -1,3 +1,12 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>רינדור · Barstone</title>
-<style>@import url(https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700&display=swap);body{margin:0;font-family:Heebo,system-ui;background:#f4f1ec;color:#1d1b19;padding:28px 20px 100px}main{max-width:900px;margin:auto}.card{background:rgba(255,255,255,.8);border-radius:22px;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.08)}img{width:100%;border-radius:16px}.tag{display:inline-block;background:#efe6d6;color:#8a6d3b;border-radius:999px;padding:3px 12px;font-size:13px}</style></head>
-<body><main><div class="card"><span class="tag">בפיתוח</span><h1>רינדור הדמיה</h1><p>שלב הרינדור התלת-ממדי עדיין לא מחובר. בינתיים מוצגת תצוגת הפריסה שנבחרה.</p><img src="img/layout-desktop.png" alt="תצוגת פריסת שיש"></div></main><script src="js/flow.js"></script></body></html>
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=4">
+<style>.stage{perspective:1600px;padding:30px 10px 60px;overflow:hidden}.stage>div{transform:rotateX(52deg) rotateZ(-8deg);transform-origin:center;filter:drop-shadow(0 40px 30px rgba(60,48,30,.35))}main{max-width:1000px;margin:auto;padding:16px}</style></head>
+<body><header class="top"><img src="logo.png" alt="Barstone"><h1>רינדור הדמיה</h1><span class="sp"></span><a class="btn ghost" href="layout.html" style="text-decoration:none">חזרה לפריסה</a><a class="btn" href="document/document.html" style="text-decoration:none">למסמך ›</a></header>
+<main><section class="panel"><h2>תצוגה פרספקטיבית מהפריסה שלך</h2><div class="stage"><div id="r"></div></div><div class="m" id="mm"></div>
+<p style="font-size:12px;color:var(--mute)">תצוגה זו נוצרת מהפריסה בפועל — הטקסטורה לכל חלק נלקחת מהמיקום שלו בלוח. רינדור תלת-ממדי פוטוריאליסטי — בפיתוח.</p></section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=2"></script><script src="js/engine.js?v=2"></script><script src="js/views.js?v=2"></script>
+<script>(async()=>{const S=SimStore,sim=S.getSim();if(!sim||!sim.length_cm){r.innerHTML='<p>אין עדיין הדמיה — <a href="dimensions.html">להתחלה</a></p>';return}
+const st=await S.stones(),stone=st.find(s=>String(s.id)===String(sim.stone_id))||st[0],tex=S.texture(stone);
+const res=StoneEngine.run(sim,S.getBoards(),{edgeH:sim.edge_mm||40,kerf:sim.kerf_mm||4});res.sim=sim;
+r.innerHTML=StoneViews.planSVG(res,tex,Math.min(860,innerWidth-60));const m=res.metrics;
+mm.innerHTML=[['אבן',stone.name],['לוחות',m.boards],['ניצולת',m.utilization+'%'],['צריכה',m.consumed_m2+' מ"ר']].map(([a,b])=>`<div><small>${a}</small><b>${StoneViews.esc(b)}</b></div>`).join('')})()</script>
+<script src="js/flow.js?v=2"></script></body></html>

@@ -2,7 +2,7 @@
 (function(){
   const base = location.pathname.includes('/mobile/')||location.pathname.includes('/document/') ? '../' : '';
   const mob = matchMedia('(max-width: 820px)').matches;
-  const steps = [['dimensions.html','מידות'],[mob?'mobile/mobile.html':'layout.html','פריסת שיש'],['render.html','רינדור'],['document/document.html','מסמך']];
+  const steps = [['dimensions.html','מידות'],['layout.html','פריסת שיש'],['render.html','רינדור'],['document/document.html','מסמך']];
   const here = location.pathname.split('/').slice(-2).join('/');
   const cur = steps.findIndex(([h])=>here.endsWith(h.split('/').pop()) || (h.startsWith('mobile/')&&here.startsWith('mobile/')));
   const sim = JSON.parse(localStorage.getItem('currentSim')||'null');
