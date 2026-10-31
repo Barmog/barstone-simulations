@@ -12,7 +12,7 @@
     getBoards: () => J('boards', []),
     setBoards: (b) => localStorage.setItem('boards', JSON.stringify(b)),
     async stones() {
-      if (sb) { const { data, error } = await sb.from('stones').select('*').order('id'); if (!error && data && data.length) return data; }
+      if (sb) { const { data, error } = await sb.from('stones').select('*').order('id'); if (!error && data && data.length) return data.sort((a, b) => (b.supplier === 'Barstone') - (a.supplier === 'Barstone') || String(a.name).localeCompare(String(b.name))); } // אבני Barstone ראשונות
       return FALLBACK;
     },
     texture(stone) {

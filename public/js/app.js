@@ -6,10 +6,10 @@ $('#status').textContent = sb ? 'מחובר ל-Supabase' : 'מצב מקומי (S
 const DEFAULT_STONES = [{ id: 'local-1', name: 'שיש לבן קררה', tile_path: null, color: '#e9e7e2' },{ id: 'local-2', name: 'שחור מרקיניה', tile_path: null, color: '#222' },{ id: 'local-3', name: 'טאג׳ מהאל', tile_path: null, color: '#d8ccb4' }];
 let stones = DEFAULT_STONES;
 async function loadStones() {
-  if (sb) { const { data, error } = await sb.from('stones').select('*').order('name'); if (!error && data.length) stones = data; }
+  if (sb) { const { data, error } = await sb.from('stones').select('*').order('name'); if (!error && data.length) stones = data.sort((a, b) => (b.supplier === 'Barstone') - (a.supplier === 'Barstone')); }
   $('#stones').innerHTML = stones.map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
 }
-function tileUrl(s) { return sb && s.tile_path ? sb.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : null; }
+function tileUrl(s) { if (sb && s.slab_path) return sb.storage.from('slabs').getPublicUrl(s.slab_path).data.publicUrl; return sb && s.tile_path ? sb.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : null; }
 function draw(d) {
   const c = $('#preview').getContext('2d'); c.clearRect(0, 0, 800, 300);
   const s = stones.find((x) => String(x.id) === String(d.stone_id)) || stones[0];
