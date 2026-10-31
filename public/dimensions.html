@@ -28,27 +28,27 @@
  <label class="full">שם לקוח<input name="client_name" required autocomplete="name" placeholder="למשל: משפחת כהן"></label>
  <label class="full">סוג אבן<select name="stone_id" id="stones"></select></label></div></section>
 <section class="grp"><h3>משטחים</h3><div class="g2">
- <label>אורך משטח<input name="length_cm" type="number" inputmode="decimal" required placeholder="ס״מ"></label>
- <label>עומק<input name="depth_cm" type="number" inputmode="decimal" value="60" required></label>
- <label>עובי<input name="thickness_cm" type="number" inputmode="decimal" value="2" step="0.1"></label>
- <label>משטח L (0 = אין)<input name="l_length_cm" type="number" inputmode="decimal" value="0"></label>
- <label>עומק L<input name="l_depth_cm" type="number" inputmode="decimal" step="0.1" placeholder="כמו הראשי"></label>
- <label>אי · אורך<input name="island_l_cm" type="number" inputmode="decimal" value="0"></label>
- <label>אי · רוחב<input name="island_w_cm" type="number" inputmode="decimal" value="90"></label></div></section>
+ <label>אורך משטח<input name="length_cm" type="number" step="any" inputmode="decimal" required placeholder="ס״מ"></label>
+ <label>עומק<input name="depth_cm" type="number" step="any" inputmode="decimal" value="60" required></label>
+ <label>עובי<input name="thickness_cm" type="number" inputmode="decimal" value="2" step="any"></label>
+ <label>משטח L (0 = אין)<input name="l_length_cm" type="number" step="any" inputmode="decimal" value="0"></label>
+ <label>עומק L<input name="l_depth_cm" type="number" inputmode="decimal" step="any" placeholder="כמו הראשי"></label>
+ <label>אי · אורך<input name="island_l_cm" type="number" step="any" inputmode="decimal" value="0"></label>
+ <label>אי · רוחב<input name="island_w_cm" type="number" step="any" inputmode="decimal" value="90"></label></div></section>
 <section class="grp"><h3>כיור וכיריים</h3><div class="g2">
  <label class="sw full">כיור<input type="checkbox" name="sink"></label>
  <div class="dep sink">
   <label class="full">סוג כיור<select name="sink_type"><option value="bought">כיור קנוי (תחתון / שטוח) — פתח בלבד</option><option value="stone">כיור בנוי מאבן</option></select></label>
   <label class="full">מיקום כיור<select name="sink_piece"><option value="A">משטח ראשי</option><option value="B">משטח L</option><option value="C">אי</option></select></label>
-  <label>רוחב<input name="sink_w_cm" type="number" inputmode="decimal" value="60"></label>
-  <label>עומק<input name="sink_d_cm" type="number" inputmode="decimal" value="40"></label>
-  <label class="full">מרכז מתחילת החלק<input name="sink_x_cm" type="number" inputmode="decimal" min="0" placeholder="אמצע (אוטומטי)"></label>
+  <label>רוחב<input name="sink_w_cm" type="number" step="any" inputmode="decimal" value="60"></label>
+  <label>עומק<input name="sink_d_cm" type="number" step="any" inputmode="decimal" value="40"></label>
+  <label class="full">מרכז מתחילת החלק<input name="sink_x_cm" type="number" step="any" inputmode="decimal" min="0" placeholder="אמצע (אוטומטי)"></label>
   <label class="sw full">כיור כפול<input type="checkbox" name="sink_double"></label></div>
  <label class="sw full">פתח כיריים<input type="checkbox" name="cooktop"></label>
  <div class="dep cook">
   <label class="full">מיקום כיריים<select name="cooktop_piece"><option value="A">משטח ראשי</option><option value="B">משטח L</option><option value="C">אי</option></select></label>
-  <label>רוחב<input name="cooktop_w_cm" type="number" inputmode="decimal" value="56"></label>
-  <label>עומק<input name="cooktop_d_cm" type="number" inputmode="decimal" value="49"></label></div>
+  <label>רוחב<input name="cooktop_w_cm" type="number" step="any" inputmode="decimal" value="56"></label>
+  <label>עומק<input name="cooktop_d_cm" type="number" step="any" inputmode="decimal" value="49"></label></div>
 </div></section>
 <section class="grp"><h3>תצוגה מקדימה</h3><div id="pv">הזינו אורך משטח</div><canvas id="preview" width="800" height="300"></canvas></section>
 <div class="cta"><button class="btn">המשך לפריסת שיש ›</button></div>
