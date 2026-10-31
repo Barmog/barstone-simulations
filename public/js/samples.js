@@ -9,6 +9,12 @@
       if (!host.value) return;
       const sim = await (await fetch(base + 'samples/' + host.value, { cache: 'no-store' })).json();
       delete sim._source; localStorage.setItem('currentSim', JSON.stringify(sim)); localStorage.setItem('boards', '[]');
+      const f = document.getElementById('dims');
+      if (f) { // בדף המידות: ממלאים את הטופס ונשארים — המשתמש בודק ולוחץ "המשך"
+        for (const el of f.querySelectorAll('[name]')) if (sim[el.name] !== undefined && sim[el.name] !== null) el.type === 'checkbox' ? (el.checked = !!sim[el.name]) : (el.value = sim[el.name]);
+        f.dispatchEvent(new Event('input', { bubbles: true })); f.dispatchEvent(new Event('change', { bubbles: true }));
+        window.bsHaptic && window.bsHaptic(); return;
+      }
       location.href = base + 'layout.html';
     };
   } catch (e) { host.innerHTML = '<option>אין דוגמאות</option>'; }
