@@ -1,5 +1,5 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>פריסת שיש · Barstone</title><link rel="stylesheet" href="css/studio.css?v=10"></head><body>
+<title>פריסת שיש · Barstone</title><link rel="stylesheet" href="css/studio.css?v=11"></head><body>
 <header class="top"><img src="logo.png" alt="Barstone"><h1>פריסת שיש</h1><span class="sp"></span><span id="sb" style="font-size:12px;color:var(--mute)"></span>
 <button class="btn ghost" id="toDoc">מסמך ללקוח</button><button class="btn" id="save">שמירה</button></header>
 <div class="wrap">
@@ -24,6 +24,13 @@
     <label>כיור גובה<input name="sink_h_cm" type="number" value="20"></label>
     <label>מיקום כיור<select name="sink_piece"><option value="A">משטח ראשי</option><option value="B">משטח L</option><option value="C">אי</option></select></label>
     <label>מרכז כיור מתחילת החלק (ס"מ)<input name="sink_x_cm" type="number" placeholder="אמצע" min="0"></label>
+    <label class="chk"><input type="checkbox" name="sink_double"> כיור כפול</label>
+    <label class="chk"><input type="checkbox" name="faucet_hole" checked> חור ברז במשטח</label>
+    <label class="chk full"><input type="checkbox" name="cooktop"> פתח כיריים</label>
+    <label>כיריים רוחב (ס"מ)<input name="cooktop_w_cm" type="number" value="56"></label>
+    <label>כיריים עומק (ס"מ)<input name="cooktop_d_cm" type="number" value="49"></label>
+    <label>מיקום כיריים<select name="cooktop_piece"><option value="A">משטח ראשי</option><option value="B">משטח L</option><option value="C">אי</option></select></label>
+    <label>מרכז כיריים מתחילת החלק (ס"מ)<input name="cooktop_x_cm" type="number" placeholder="אוטומטי" min="0"></label>
   </div>
   <h2 style="margin-top:18px">ערימת לוחות</h2>
   <div class="f">
@@ -44,9 +51,9 @@
 </main>
 <aside class="panel side">
   <h2>בדיקה</h2><div class="m" id="metrics"></div><div id="warn"></div>
-  <h2 style="margin-top:16px">חלקים</h2><ul class="list" id="parts"></ul>
+  <h2 style="margin-top:16px">פתחים</h2><ul class="list" id="cuts"></ul><h2 style="margin-top:16px">חלקים</h2><ul class="list" id="parts"></ul>
 </aside></div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js"></script><script src="js/store.js?v=10"></script><script src="js/engine.js?v=10"></script><script src="js/views.js?v=10"></script><script src="js/studio.js?v=10"></script><script src="js/flow.js?v=10"></script>
+<script src="js/config.js"></script><script src="js/store.js?v=11"></script><script src="js/engine.js?v=11"></script><script src="js/views.js?v=11"></script><script src="js/studio.js?v=11"></script><script src="js/flow.js?v=11"></script>
 </body></html>

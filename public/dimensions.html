@@ -1,5 +1,5 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Barstone — הדמיות</title><link rel="stylesheet" href="css/app.css"></head><body>
+<title>Barstone — הדמיות</title><link rel="stylesheet" href="css/app.css?v=11"></head><body>
 <header><h1>Barstone · הדמיות מטבח</h1><span id="status">טוען…</span></header>
 <main>
 <section class="card"><h2>1. מידות</h2>
@@ -8,9 +8,16 @@
 <label>עומק (ס"מ) <input name="depth_cm" type="number" value="60" required></label>
 <label>עובי (ס"מ) <input name="thickness_cm" type="number" value="2"></label>
 <label>סוג אבן <select name="stone_id" id="stones"></select></label>
+<label class="chk"><input type="checkbox" name="sink"> כיור בנוי מאבן</label>
+<label>מיקום כיור <select name="sink_piece"><option value="A">משטח ראשי</option><option value="B">משטח L</option><option value="C">אי</option></select></label>
+<label>כיור רוחב (ס"מ) <input name="sink_w_cm" type="number" value="60"></label>
+<label>כיור עומק (ס"מ) <input name="sink_d_cm" type="number" value="40"></label>
+<label>מרכז כיור מתחילת החלק (ס"מ) <input name="sink_x_cm" type="number" min="0" placeholder="אמצע"></label>
+<label class="chk"><input type="checkbox" name="sink_double"> כיור כפול</label>
+<label class="chk"><input type="checkbox" name="cooktop"> פתח כיריים</label>
 <button>שמור והמשך לפריסת שיש ›</button></form></section>
 <section class="card"><h2>2. פריסת שיש / תצוגה</h2><canvas id="preview" width="800" height="300"></canvas></section>
 <section class="card"><h2>3. הדמיות שמורות</h2><ul id="list"></ul></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js"></script><script type="module" src="js/app.js"></script><script src="js/flow.js"></script></body></html>
+<script src="js/config.js"></script><script type="module" src="js/app.js?v=11"></script><script src="js/flow.js?v=11"></script></body></html>

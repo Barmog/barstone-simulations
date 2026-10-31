@@ -29,14 +29,18 @@ $('#dims').addEventListener('input', (e) => draw(Object.fromEntries(new FormData
 $('#dims').addEventListener('submit', async (e) => {
   e.preventDefault(); const d = Object.fromEntries(new FormData(e.currentTarget));
   ['length_cm', 'depth_cm', 'thickness_cm'].forEach((k) => (d[k] = Number(d[k])));
-  if (sb) { const { error } = await sb.from('simulations').insert({ ...d, stone_id: isNaN(+d.stone_id) ? null : +d.stone_id }); if (error) return alert('שגיאה: ' + error.message); }
+  if (sb) { const { error } = await sb.from('simulations').insert({ client_name: d.client_name, length_cm: d.length_cm, depth_cm: d.depth_cm, thickness_cm: d.thickness_cm, stone_id: isNaN(+d.stone_id) ? null : +d.stone_id }); if (error) return alert('שגיאה: ' + error.message); }
   else { const a = JSON.parse(localStorage.getItem('sims') || '[]'); a.unshift(d); localStorage.setItem('sims', JSON.stringify(a)); }
   draw(d); listSims();
 });
 await loadStones(); listSims();
+// מילוי הטופס מההדמיה הנוכחית (חזרה לדף שומרת מיקום כיור וכו')
+{ const cur = JSON.parse(localStorage.getItem('currentSim') || 'null'); if (cur) { for (const el of $('#dims').querySelectorAll('[name]')) if (cur[el.name] !== undefined && cur[el.name] !== null) el.type === 'checkbox' ? (el.checked = !!cur[el.name]) : (el.value = cur[el.name]); if (cur.length_cm) draw(Object.fromEntries(new FormData($('#dims')))); } }
 // מעבר לשלב הבא במסלול
 $('#dims').addEventListener('submit', () => {
-  const d = Object.fromEntries(new FormData($('#dims')));
+  // מיזוג עם ההדמיה הקיימת — לא מוחקים שדות של פריסה/רינדור (L, אי, מיקומי תוכנית…)
+  const f = $('#dims'), prev = JSON.parse(localStorage.getItem('currentSim') || '{}'), d = { ...prev };
+  for (const el of f.querySelectorAll('[name]')) d[el.name] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (el.value === '' ? '' : +el.value) : el.value;
   localStorage.setItem('currentSim', JSON.stringify(d));
   setTimeout(() => (location.href = 'layout.html'), 300);
 });

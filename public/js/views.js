@@ -49,12 +49,28 @@
         g += `<line ${fr} stroke="#E0428F" stroke-width="22" stroke-linecap="round"/>`;
         if (q.b.strips > 1) g += `<line x1="${q.x}" y1="${q.y}" x2="${q.x + q.w}" y2="${q.y}" stroke="#E0428F" stroke-width="22"/>`;
       }
-      if (q.b.seg > 0) g += `<line x1="${q.x}" y1="${q.y}" x2="${q.rot ? q.x + q.w : q.x}" y2="${q.rot ? q.y : q.y + q.h}" stroke="#2FB070" stroke-width="14" stroke-dasharray="40 20"/>`;
+      if (q.b.seg > 0) g += `<line x1="${q.x}" y1="${q.y}" x2="${q.rot ? q.x + q.w : q.x}" y2="${q.rot ? q.y : q.y + q.h}" stroke="#2FB070" stroke-width="20" stroke-dasharray="44 22"/>`;
       g += `<text x="${q.x + q.w / 2}" y="${q.y + q.h / 2}" font-size="90" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18" font-weight="600" style="paint-order:stroke;stroke:rgba(255,255,255,.8);stroke-width:14px">${esc(q.pc.name)}</text></g>`;
     }
-    // פתח כיור על המשטח הראשי (מיקום מהמנוע — לא חוצה חיבור)
-    const sk = window.StoneEngine && StoneEngine.sinkPlan ? StoneEngine.sinkPlan(res) : null;
-    if (sk) g += `<rect x="${sk.x}" y="${sk.y}" width="${sk.pw}" height="${sk.ph}" rx="40" fill="rgba(27,26,24,.18)" stroke="#1B1A18" stroke-width="8" stroke-dasharray="30 18"/><text x="${sk.x + sk.pw / 2}" y="${sk.y + sk.ph / 2}" font-size="60" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18">כיור</text>`;
+    // פתחים (מהמנוע — לא חוצים חיבור): כיור יחיד/כפול, חור ברז, כיריים
+    const E = window.StoneEngine, cuts = E && E.cutouts ? E.cutouts(res).items : [];
+    for (const c of cuts) {
+      const bad = c.ok === false || /חוצה|אין מקום|גדול/.test(c.note || ''), st = bad ? '#E5484D' : '#1B1A18';
+      if (c.type === 'sink') {
+        for (const bs of c.basins) { const r = c.rot ? { x: c.x, y: c.y + bs.off, w: c.pw, h: bs.w } : { x: c.x + bs.off, y: c.y, w: bs.w, h: c.ph };
+          g += `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="40" fill="rgba(27,26,24,.2)" stroke="${st}" stroke-width="8" stroke-dasharray="30 18"/><circle cx="${r.x + r.w / 2}" cy="${r.y + r.h / 2}" r="22" fill="none" stroke="${st}" stroke-width="6"/>`; }
+        g += `<text x="${c.x + c.pw / 2}" y="${c.y + c.ph + 70}" font-size="56" text-anchor="middle" fill="${st}" style="paint-order:stroke;stroke:rgba(255,255,255,.85);stroke-width:12px">${c.double ? 'כיור כפול' : 'כיור'} ${c.w / 10}×${c.d / 10}</text>`;
+      } else if (c.type === 'faucet') g += `<circle cx="${c.x + c.pw / 2}" cy="${c.y + c.ph / 2}" r="${c.w / 2 + 6}" fill="#fff" stroke="${st}" stroke-width="8"/><circle cx="${c.x + c.pw / 2}" cy="${c.y + c.ph / 2}" r="6" fill="${st}"/>`;
+      else if (c.type === 'cooktop') {
+        g += `<rect x="${c.x}" y="${c.y}" width="${c.pw}" height="${c.ph}" rx="18" fill="rgba(20,20,22,.82)" stroke="${st}" stroke-width="8"/>`;
+        const bw = c.pw, bh = c.ph; for (const [fx, fy, rr] of [[.3, .3, .16], [.7, .3, .12], [.3, .7, .12], [.7, .7, .16]]) g += `<circle cx="${c.x + bw * fx}" cy="${c.y + bh * fy}" r="${Math.min(bw, bh) * rr}" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="6"/>`;
+        g += `<text x="${c.x + c.pw / 2}" y="${c.y + c.ph + 70}" font-size="56" text-anchor="middle" fill="${st}" style="paint-order:stroke;stroke:rgba(255,255,255,.85);stroke-width:12px">כיריים ${c.w / 10}×${c.d / 10}</text>`;
+      }
+    }
+    // חיבורים: סימון בולט + תווית
+    for (const q of geo) if (q.b.seg > 0) { const lx = q.rot ? q.x + q.w / 2 : q.x, ly = q.rot ? q.y : q.y + q.h / 2;
+      g += `<g><circle cx="${lx}" cy="${ly}" r="46" fill="#2FB070" stroke="#fff" stroke-width="10"/><text x="${lx}" y="${ly + 4}" font-size="54" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700">J</text>
+      <text x="${lx}" y="${ly - 70}" font-size="50" text-anchor="middle" fill="#1F7A4D" style="paint-order:stroke;stroke:rgba(255,255,255,.9);stroke-width:12px">חיבור · ${(q.b.offsetL / 10).toFixed(0)} ס"מ</text></g>`; }
     g += `<text x="0" y="${-40}" font-size="70" fill="#8C857B">${(maxX / 10).toFixed(0)} ס"מ</text>`;
     return g + '</svg>';
   }
