@@ -33,25 +33,29 @@
     $('#parts').innerHTML = res.pieces.map((p) => `<li><span>${p.key} · ${V.esc(p.name)}</span><span>${p.L}×${p.W}</span></li>`).join('');
     // גרירת חלקים בתוכנית → שמירת מיקום ב-sim.plan_pos וחישוב מחדש
     const psvg = document.querySelector('svg.plan');
-    if (psvg) psvg.querySelectorAll('.pp').forEach((g) => {
-      g.style.touchAction = 'none';
-      g.onpointerdown = (e) => {
-        if (window.__bsPinch) return; e.preventDefault(); g.setPointerCapture(e.pointerId); g.style.cursor = 'grabbing'; window.bsHaptic && bsHaptic(10); g.classList.add('lift');
+    if (psvg) psvg.querySelectorAll('.pp').forEach((n) => (n.style.touchAction = 'none'));
+    // גרירה: זיהוי החלק לפי גאומטריה (לא לפי האלמנט שנלחץ) — פתחים, חיצי מידה ותוויות מעל החלק לא חוסמים יותר
+    if (psvg) psvg.onpointerdown = (e) => {
+        if (window.__bsPinch || (e.button && e.button !== 0)) return;
+        const m = psvg.getScreenCTM(); if (!m) return;
+        const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+        const hitP = [...res.pieces].reverse().find((p) => { if (!p.plan) return false; const q = StoneEngine.planRect(p, p.plan.x, p.plan.y); return pt.x >= q.x && pt.x <= q.x + q.w && pt.y >= q.y && pt.y <= q.y + q.h; });
+        if (!hitP) return; const g = psvg.querySelector(`.pp[data-key="${hitP.key}"]`); if (!g) return;
+        e.preventDefault(); e.stopPropagation(); psvg.setPointerCapture(e.pointerId); g.style.cursor = 'grabbing'; window.bsHaptic && bsHaptic(10); g.classList.add('lift');
         const r = psvg.getBoundingClientRect(), k = psvg.viewBox.baseVal.width / r.width, x0 = e.clientX, y0 = e.clientY;
         const key = g.dataset.key, same = psvg.querySelectorAll(`.pp[data-key="${key}"]`);
         let dx = 0, dy = 0;
-        g.onpointermove = (ev) => { if (window.__bsPinch) return; dx = (ev.clientX - x0) * k; dy = (ev.clientY - y0) * k; same.forEach((n) => n.setAttribute('transform', `translate(${dx},${dy})`)); };
-        g.onpointercancel = () => { same.forEach((n) => n.removeAttribute('transform')); g.onpointermove = g.onpointerup = null; g.classList.remove('lift'); };
-        g.onpointerup = () => {
-          g.onpointermove = g.onpointerup = g.onpointercancel = null; g.classList.remove('lift');
+        psvg.onpointermove = (ev) => { if (window.__bsPinch) return; dx = (ev.clientX - x0) * k; dy = (ev.clientY - y0) * k; same.forEach((n) => n.setAttribute('transform', `translate(${dx},${dy})`)); };
+        psvg.onpointercancel = () => { same.forEach((n) => n.removeAttribute('transform')); psvg.onpointermove = psvg.onpointerup = null; g.classList.remove('lift'); };
+        psvg.onpointerup = () => {
+          psvg.onpointermove = psvg.onpointerup = psvg.onpointercancel = null; g.classList.remove('lift');
           if (window.__bsPinch || Math.abs(dx) + Math.abs(dy) < 5) { same.forEach((n) => n.removeAttribute('transform')); return; }
           window.bsHaptic && bsHaptic(14);
           const pc = res.pieces.find((p) => p.key === key), r = StoneEngine.resolvePlan(res.pieces, key, pc.plan.x + dx, pc.plan.y + dy);
           planPos = { ...planPos, [key]: { x: r.x, y: r.y } };
           draw(); toast(r.reverted ? `אין מקום פנוי — "${pc.name}" חזר למקומו` : r.moved ? `"${pc.name}" הוסט כדי למנוע חפיפה · החישוב עודכן` : `"${pc.name}" הוזז · החישוב עודכן`);
         };
-      };
-    });
+    };
     // לחיצה על לוח = סימון פגם
     document.querySelectorAll('svg[data-board]').forEach((svg) => svg.onclick = (e) => {
       const id = svg.dataset.board, r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
@@ -79,7 +83,7 @@
   };
   let t; form.addEventListener('input', () => { clearTimeout(t); t = setTimeout(draw, 150); });
   addEventListener('resize', () => { clearTimeout(t); t = setTimeout(draw, 200); });
-  $('#save').onclick = async () => { try { const r = await S.saveRemote(sim, res); toast(r.local ? 'נשמר במכשיר' : 'נשמר בענן ✓'); } catch (e) { toast('שגיאה בשמירה: ' + e.message); } };
+  $('#save').onclick = async () => { try { const r = await S.saveRemote(sim, res); toast(r.local ? 'נשמר במכשיר' : r.same ? 'כבר שמור בענן ✓ (ללא שינוי)' : 'נשמר בענן ✓'); } catch (e) { toast('שגיאה בשמירה: ' + e.message); } };
   $('#toDoc').onclick = () => (location.href = 'document/document.html');
   $('#resetPos').onclick = () => { planPos = {}; draw(); toast('מיקומי התוכנית אופסו'); };
   // ===== תוכנית: צביטה לזום, גרירה עם שתי אצבעות / אצבע אחת כשמוגדל, כפתורי זום =====

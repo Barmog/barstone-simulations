@@ -36,3 +36,5 @@ svg{display:block}svg text{font-family:Heebo}
 .zb button{border:0;background:none;min-width:40px;min-height:40px;border-radius:999px;font:600 18px Heebo;color:var(--ink);cursor:pointer}.zb span{font:500 12px "JetBrains Mono",monospace;color:var(--mute);min-width:42px;text-align:center}
 @media(max-width:820px){.wrap{grid-template-columns:1fr}.panel.side{order:3}#plan{touch-action:pan-y}.zb{left:20px;bottom:20px}}
 @media(max-width:600px){#plan{overflow:hidden!important;touch-action:pan-y!important}#plan.zoomed{touch-action:none!important}.list li{min-height:40px;align-items:center}.legend{gap:8px 12px}}
+
+svg.plan>:not(.pp){pointer-events:none}svg.plan{user-select:none;-webkit-user-select:none}

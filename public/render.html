@@ -1,4 +1,4 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=13">
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=14">
 <style>main{max-width:1200px;margin:auto;padding:16px}#c{width:100%;height:640px;display:block;border-radius:16px;background:#e9e3da;touch-action:none}
 .ctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0;font-size:13px}.ctl select{padding:6px 10px;border-radius:10px;border:1px solid #ddd}.cvw{position:relative}.ld{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;border-radius:16px;background:rgba(233,227,218,.92);color:#6b625a;font-size:14px;transition:opacity .4s}.ld.off{opacity:0;pointer-events:none}.ld i{width:28px;height:28px;border-radius:50%;border:3px solid #d8cfc2;border-top-color:#1B1A18;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
 .vb{position:absolute;top:12px;right:12px;display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 20px rgba(0,0,0,.12)}.vb button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:36px;font:500 13px Heebo,system-ui;color:#3a3530;cursor:pointer;white-space:nowrap}.vb button.on{background:#1B1A18;color:#fff}@media(max-width:600px){.vb{right:8px;left:8px;justify-content:center}.vb button{flex:1;min-height:40px}}
@@ -9,7 +9,7 @@
 <div class="ctl" data-sheet="הגדרות הדמיה" data-fab="⚙︎ אבן, תאורה וצילום"><label>אבן <select id="st"></select></label><label><input type="checkbox" id="cab" checked> ארונות</label><label>תאורה <select id="lt"><option value="day">אור יום</option><option value="warm">חם (ערב)</option><option value="studio">סטודיו</option></select></label><button class="btn ghost" id="shot">צילום תמונה</button><span id="st8" style="color:var(--mute)">טוען…</span></div>
 <div class="cvw"><canvas id="c"></canvas><div id="ld" class="ld"><i></i><span>טוען הדמיה…</span></div><div class="vb"><button id="vFront" class="on">פרספקטיבה</button><button id="vTop">מלמעלה</button><button id="vSink">כיור</button></div></div><div class="m" id="mm"></div>
 <p class="cr">גררו לסיבוב · גלגלת/צביטה לזום. הטקסטורה של כל משטח וקנט נלקחת מהמיקום שלו בלוח (קנט רציף). תאורה והשתקפויות מחושבות בדפדפן (Three.js) — הדמיה, לא צילום.</p><p class="cr" id="cred"></p></section></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=13"></script><script src="js/engine.js?v=13"></script><script src="js/views.js?v=13"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=14"></script><script src="js/engine.js?v=14"></script><script src="js/views.js?v=14"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -90,7 +90,7 @@ async function build(){
      g.add(box,kick);const doors=Math.max(1,Math.round(cl/600)),hm=new THREE.MeshStandardMaterial({color:'#b8b2a8',metalness:1,roughness:.25});
      for(let i=1;i<doors;i++){const s=new THREE.Mesh(new THREE.BoxGeometry(.004,.75,.004),new THREE.MeshStandardMaterial({color:'#9d968c'}));s.position.set((-cl/2+i*cl/doors)*mm,.485,cw/2*mm+.002);g.add(s)}
      for(let i=0;i<doors;i++){const hd=new THREE.Mesh(new THREE.BoxGeometry(.16,.012,.02),hm);hd.position.set((-cl/2+(i+.5)*cl/doors)*mm,.82,cw/2*mm+.012);g.add(hd)}
-     g.position.z=-.03;g.traverse(n=>{n.castShadow=n.receiveShadow=true});G.add(g)}
+     g.position.z=0; /* חזית ארון 15 מ"מ מאחורי קצה המשטח (היה -30 מ"מ נוספים → דופן הכיור בלטה מול הארון = הפס הכהה) */g.traverse(n=>{n.castShadow=n.receiveShadow=true});G.add(g)}
    }}
   // חדר: רצפת עץ, קיר אחורי וקיר צד, חיפוי
   const W=maxX*mm,D=maxZ*mm,floor=new THREE.Mesh(new THREE.PlaneGeometry(W+6,D+6),new THREE.MeshPhysicalMaterial({color:'#b89a78',roughness:.55,clearcoat:.4,clearcoatRoughness:.3}));
@@ -119,4 +119,4 @@ $('#shot').onclick=()=>{const a=document.createElement('a');a.href=cv.toDataURL(
 await build();['vFront','vTop','vSink'].forEach(id=>$('#'+id).onclick=()=>setView(id));
 (function loop(){requestAnimationFrame(loop);if(tw)tw();ctl.update();R.render(scene,cam)})();
 </script>
-<script src="js/flow.js?v=13"></script></body></html>
+<script src="js/flow.js?v=14"></script></body></html>

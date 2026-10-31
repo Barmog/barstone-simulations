@@ -29,8 +29,8 @@ $('#dims').addEventListener('input', (e) => draw(Object.fromEntries(new FormData
 $('#dims').addEventListener('submit', async (e) => {
   e.preventDefault(); const d = Object.fromEntries(new FormData(e.currentTarget));
   ['length_cm', 'depth_cm', 'thickness_cm'].forEach((k) => (d[k] = Number(d[k])));
-  if (sb) { const { error } = await sb.from('simulations').insert({ client_name: d.client_name, length_cm: d.length_cm, depth_cm: d.depth_cm, thickness_cm: d.thickness_cm, stone_id: isNaN(+d.stone_id) ? null : +d.stone_id }); if (error) return alert('שגיאה: ' + error.message); }
-  else { const a = JSON.parse(localStorage.getItem('sims') || '[]'); a.unshift(d); localStorage.setItem('sims', JSON.stringify(a)); }
+  // לא שומרים בענן כאן — שורה אחת נוצרת רק ב"שמירה" בדף הפריסה (בלי שורות טיוטה כפולות)
+  if (!sb) { const a = JSON.parse(localStorage.getItem('sims') || '[]'); a.unshift(d); localStorage.setItem('sims', JSON.stringify(a)); }
   draw(d); listSims();
 });
 await loadStones(); listSims();

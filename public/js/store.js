@@ -27,7 +27,12 @@
         stone_id: /^\d+$/.test(String(sim.stone_id)) ? +sim.stone_id : null, status: 'layout',
         layout: { sim, boards: S.getBoards().map(({ tex, ...b }) => b), metrics: result.metrics, warnings: result.warnings,
           placements: result.used.map((u) => ({ board: u.board.id, w: u.board.w, h: u.board.h, pieces: u.place.map((p) => ({ key: p.block.piece.key, name: p.block.piece.name, seg: p.block.seg, x: p.x, y: p.y, w: p.w, h: p.h, strips: p.block.strips })) })) } };
+      // אותה הדמיה בלי שינוי → אותה שורה (לא מכפילים). שינוי אמיתי → גרסה חדשה (ל-anon יש הרשאת הוספה בלבד)
+      const sig = JSON.stringify(row); let h = 0; for (let i = 0; i < sig.length; i++) h = (h * 31 + sig.charCodeAt(i)) | 0;
+      const last = JSON.parse(localStorage.getItem('lastSaved') || 'null');
+      if (last && last.h === h && last.id) return { id: last.id, same: true };
       const { data, error } = await sb.from('simulations').insert(row).select('id').single();
+      if (!error) localStorage.setItem('lastSaved', JSON.stringify({ h, id: data.id }));
       if (error) throw error;
       localStorage.setItem('lastSimId', data.id); return data;
     },
