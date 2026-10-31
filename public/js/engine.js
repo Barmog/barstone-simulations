@@ -9,10 +9,10 @@
     const L = T(sim.length_cm), D = T(sim.depth_cm || 60);
     const edge = sim.edge !== false; // קנט רציף חובה כברירת מחדל
     if (L > 0) P.push({ key: 'A', name: 'משטח ראשי', L, W: D, edge, plan: { x: 0, y: 0 } });
-    if (T(sim.l_length_cm) > 0) P.push({ key: 'B', name: 'משטח L', L: T(sim.l_length_cm), W: D, edge, rot: true, plan: { x: L - D, y: D } } /* רגל L צמודה לקצה השמאלי-תחתון של המשטח, מתחת לפינה */);
+    if (T(sim.l_length_cm) > 0) P.push({ key: 'B', name: 'משטח L', L: T(sim.l_length_cm), W: T(sim.l_depth_cm) || D, edge, rot: true, plan: { x: L - (T(sim.l_depth_cm) || D), y: D } } /* רגל L צמודה לקצה השמאלי-תחתון של המשטח, מתחת לפינה */);
     if (T(sim.island_l_cm) > 0) P.push({ key: 'C', name: 'אי', L: T(sim.island_l_cm), W: T(sim.island_w_cm || 90), edge, edgeBoth: true, plan: { x: Math.max(0, (L - T(sim.island_l_cm)) / 2), y: D + 1000 } } /* אי ממורכז, מעבר 100 ס"מ */);
     if (T(sim.splash_h_cm) > 0) P.push({ key: 'D', name: 'חיפוי', L, W: T(sim.splash_h_cm), edge: false, plan: null });
-    if (sim.sink) { // כיור בנוי מאבן: 4 דפנות + תחתית
+    if (sim.sink && sim.sink_type === 'stone') { // כיור בנוי מאבן: 4 דפנות + תחתית (כיור קנוי = פתח בלבד, בלי חלקי אבן)
       const sw = T(sim.sink_w_cm || 60), sd = T(sim.sink_d_cm || 40), sh = T(sim.sink_h_cm || 20), t = T(sim.thickness_cm || 2);
       P.push({ key: 'S1', name: 'כיור · תחתית', L: sw, W: sd, sink: true });
       P.push({ key: 'S2', name: 'כיור · דופן קדמית', L: sw, W: sh, sink: true });
@@ -27,6 +27,10 @@
         P.push({ key: 'S10', name: 'כיור 2 · דופן שמאל', L: sd - 2 * t, W: sh, sink: true });
       }
     }
+    // אזורי פתחים רצויים (לא לשים בהם חיבור): מרכז שהוזן או אמצע החלק, + 60 מ"מ מכל צד
+    const keepOn = (k, cx, w) => { const p = P.find((q) => q.key === (['A', 'B', 'C'].includes(k) ? k : 'A')); if (!p) return; const c = +cx > 0 ? T(cx) : p.L / 2; (p.keep = p.keep || []).push([Math.round(c - w / 2 - 60), Math.round(c + w / 2 + 60)]); };
+    if (sim.sink) keepOn(sim.sink_piece, sim.sink_x_cm, T(sim.sink_w_cm || 60) * (sim.sink_double ? 2 : 1) + (sim.sink_double ? 80 : 0));
+    if (sim.cooktop) keepOn(sim.cooktop_piece || 'A', sim.cooktop_x_cm, T(sim.cooktop_w_cm || 56));
     const pos = sim.plan_pos || {};
     for (const p of P) if (p.plan && pos[p.key]) p.plan = { x: +pos[p.key].x, y: +pos[p.key].y };
     return P;
@@ -38,12 +42,19 @@
     for (const p of pieces) {
       const maxL = o.boardW - 2 * o.margin;
       const segs = Math.ceil(p.L / maxL); // חלק ארוך מהלוח → פיצול עם חיבור
-      const segL = Math.ceil(p.L / segs);
+      // נקודות חיבור: חלוקה שווה, ואז הזזה אל מחוץ לאזורי פתחים (כיור/כיריים) — כל קטע עדיין נכנס בלוח
+      const cuts = []; for (let i = 1; i < segs; i++) cuts.push(Math.round((p.L * i) / segs));
+      for (let i = 0; i < cuts.length; i++) for (const [a, b] of p.keep || []) if (cuts[i] > a && cuts[i] < b) {
+        const prev = i ? cuts[i - 1] : 0, next = i < cuts.length - 1 ? cuts[i + 1] : p.L;
+        const opts = [a, b].filter((c) => c - prev <= maxL && next - c <= maxL && c > prev && c < next).sort((x, y) => Math.abs(x - cuts[i]) - Math.abs(y - cuts[i]));
+        if (opts.length) cuts[i] = opts[0];
+      }
+      const pts = [0, ...cuts, p.L];
       for (let i = 0; i < segs; i++) {
-        const L = i === segs - 1 ? p.L - segL * (segs - 1) : segL;
+        const L = pts[i + 1] - pts[i];
         const strips = p.edge ? (p.edgeBoth ? 2 : 1) : 0;
         const H = p.W + strips * (o.kerf + o.edgeH);
-        blocks.push({ piece: p, seg: i, segs, L, W: p.W, strips, H, offsetL: segL * i });
+        blocks.push({ piece: p, seg: i, segs, L, W: p.W, strips, H, offsetL: pts[i] });
       }
     }
     return blocks.sort((a, b) => b.H * b.L - a.H * a.L);
@@ -183,14 +194,14 @@
   }
   function pickPiece(res, k) { const key = ['A', 'B', 'C'].includes(k) ? k : 'A'; let P = res.pieces.find((p) => p.key === key && p.plan), fb = false; if (!P) { P = res.pieces.find((p) => p.key === 'A' && p.plan); fb = true; } return { P, fb }; }
   function cutouts(res, sim) {
-    sim = sim || res.sim || {}; const items = [], warnings = [], M = 60, T = (n, d) => Math.round((+n || d) * 10);
+    sim = sim || res.sim || {}; const items = [], warnings = [], M = 60, MD = 20 /* מרווח מינימלי מחזית/גב (2 ס"מ) */, T = (n, d) => Math.round((+n || d) * 10);
     if (sim.sink) {
       const { P, fb } = pickPiece(res, sim.sink_piece);
       if (P) {
         const sw = T(sim.sink_w_cm, 60), sd = T(sim.sink_d_cm, 40), dbl = !!sim.sink_double, gap = 80, tw = dbl ? 2 * sw + gap : sw;
-        const base = { type: 'sink', key: P.key, piece: P.name, w: tw, d: sd, rot: !!P.rot, double: dbl, basins: dbl ? [{ off: 0, w: sw }, { off: sw + gap, w: sw }] : [{ off: 0, w: sw }] };
+        const base = { type: 'sink', sinkType: sim.sink_type === 'stone' ? 'stone' : 'bought', key: P.key, piece: P.name, w: tw, d: sd, rot: !!P.rot, double: dbl, basins: dbl ? [{ off: 0, w: sw }, { off: sw + gap, w: sw }] : [{ off: 0, w: sw }] };
         let note = fb ? 'החלק שנבחר לכיור לא קיים — הכיור הוצב במשטח הראשי' : '';
-        if (tw > P.L - 2 * M || sd > P.W - 2 * M) { const it = { ...base, ok: false, note: 'הכיור גדול מהחלק שנבחר', localX: 0, localY: 0, cx: 0, ...toPlan(P, 0, 0, tw, sd) }; items.push(it); warnings.push(`כיור: ${it.note}`); }
+        if (tw > P.L - 2 * M || sd > P.W - 2 * MD) { const it = { ...base, ok: false, note: 'הכיור גדול מהחלק שנבחר', localX: 0, localY: 0, cx: 0, ...toPlan(P, 0, 0, tw, sd) }; items.push(it); warnings.push(`כיור: ${it.note}`); }
         else {
           const want = +sim.sink_x_cm > 0 ? +sim.sink_x_cm * 10 : P.L / 2, r = placeAlong(res, P, want, tw, M, []);
           let cx = want, ok = true;
@@ -212,7 +223,7 @@
       if (P) {
         const w = T(sim.cooktop_w_cm, 56), d = T(sim.cooktop_d_cm, 49); let note = fb ? 'החלק שנבחר לכיריים לא קיים — הוצבו במשטח הראשי' : '';
         const avoid = items.filter((i) => i.key === P.key && i.type === 'sink' && i.ok).map((i) => [i.localX - 300, i.localX + i.w + 300]);
-        if (w > P.L - 2 * M || d > P.W - 2 * M) { note = 'הכיריים גדולות מהחלק שנבחר'; items.push({ type: 'cooktop', key: P.key, piece: P.name, w, d, ok: false, note, localX: 0, localY: 0, cx: 0, ...toPlan(P, 0, 0, w, d) }); warnings.push(`כיריים: ${note}`); }
+        if (w > P.L - 2 * M || d > P.W - 2 * MD) { note = 'הכיריים גדולות מהחלק שנבחר'; items.push({ type: 'cooktop', key: P.key, piece: P.name, w, d, ok: false, note, localX: 0, localY: 0, cx: 0, ...toPlan(P, 0, 0, w, d) }); warnings.push(`כיריים: ${note}`); }
         else {
           const want = +sim.cooktop_x_cm > 0 ? +sim.cooktop_x_cm * 10 : (avoid.length ? (avoid[0][0] > P.L / 2 ? P.L / 4 : P.L * 3 / 4) : P.L / 2);
           const r = placeAlong(res, P, want, w, M, avoid); let cx = want, ok = true;

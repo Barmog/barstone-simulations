@@ -1,15 +1,16 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>פריסת שיש · Barstone</title><link rel="stylesheet" href="css/studio.css?v=11"></head><body>
+<title>פריסת שיש · Barstone</title><link rel="stylesheet" href="css/studio.css?v=13"></head><body>
 <header class="top"><img src="logo.png" alt="Barstone"><h1>פריסת שיש</h1><span class="sp"></span><span id="sb" style="font-size:12px;color:var(--mute)"></span>
 <button class="btn ghost" id="toDoc">מסמך ללקוח</button><button class="btn" id="save">שמירה</button></header>
 <div class="wrap">
-<aside class="panel">
+<aside class="panel" data-sheet="מידות, פתחים ולוחות" data-fab="✎ עריכת מידות ופתחים">
   <h2>מידות</h2>
   <div class="f" id="form">
     <label class="full">שם לקוח<input name="client_name"></label>
     <label>אורך משטח (ס"מ)<input name="length_cm" type="number" value="300"></label>
     <label>עומק (ס"מ)<input name="depth_cm" type="number" value="62"></label>
     <label>משטח L (ס"מ)<input name="l_length_cm" type="number" value="0"></label>
+    <label>עומק L (ס"מ)<input name="l_depth_cm" type="number" step="0.1" placeholder="כמו הראשי"></label>
     <label>חיפוי גובה (ס"מ)<input name="splash_h_cm" type="number" value="0"></label>
     <label>אי אורך (ס"מ)<input name="island_l_cm" type="number" value="0"></label>
     <label>אי רוחב (ס"מ)<input name="island_w_cm" type="number" value="90"></label>
@@ -18,10 +19,11 @@
     <label class="chk full"><input type="checkbox" name="edge" checked> קנט רציף מהלוח (חובה)</label>
     <label>קנט (מ"מ)<input name="edge_mm" type="number" value="40"></label>
     <label>עובי מסור (מ"מ)<input name="kerf_mm" type="number" value="4"></label>
-    <label class="chk full"><input type="checkbox" name="sink"> כיור בנוי מאבן</label>
+    <label class="chk full"><input type="checkbox" name="sink"> כיור</label>
+    <label class="full">סוג כיור<select name="sink_type"><option value="bought">כיור קנוי (תחתון / שטוח) — פתח בלבד</option><option value="stone">כיור בנוי מאבן</option></select></label>
     <label>כיור רוחב<input name="sink_w_cm" type="number" value="60"></label>
     <label>כיור עומק<input name="sink_d_cm" type="number" value="40"></label>
-    <label>כיור גובה<input name="sink_h_cm" type="number" value="20"></label>
+    <label>עומק אגן (כיור אבן)<input name="sink_h_cm" type="number" value="20"></label>
     <label>מיקום כיור<select name="sink_piece"><option value="A">משטח ראשי</option><option value="B">משטח L</option><option value="C">אי</option></select></label>
     <label>מרכז כיור מתחילת החלק (ס"מ)<input name="sink_x_cm" type="number" placeholder="אמצע" min="0"></label>
     <label class="chk"><input type="checkbox" name="sink_double"> כיור כפול</label>
@@ -55,5 +57,5 @@
 </aside></div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js"></script><script src="js/store.js?v=11"></script><script src="js/engine.js?v=11"></script><script src="js/views.js?v=11"></script><script src="js/studio.js?v=11"></script><script src="js/flow.js?v=11"></script>
+<script src="js/config.js"></script><script src="js/store.js?v=13"></script><script src="js/engine.js?v=13"></script><script src="js/views.js?v=13"></script><script src="js/studio.js?v=13"></script><script src="js/flow.js?v=13"></script>
 </body></html>

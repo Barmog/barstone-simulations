@@ -25,7 +25,7 @@
    <div class="meta"><div><small>תאריך</small><b>${d}</b></div><div><small>מספר מסמך</small><b class="ltr">${num}</b></div><div><small>לוחות</small><b>${m.boards}</b></div><div><small>צריכת אבן</small><b>${m.consumed_m2} מ"ר</b></div><div><small>חיבורים</small><b>${m.joints}</b></div><div><small>פתחים</small><b>${cu.items.length}</b></div></div></section>
 
   <section class="pg">${hd('סיכום ותוכנית')}<h2>סיכום</h2>
-   ${kv([['משטח ראשי', `${sim.length_cm}×${sim.depth_cm} ס"מ`], sim.l_length_cm ? ['משטח L', `${sim.l_length_cm}×${sim.depth_cm} ס"מ`] : null, sim.island_l_cm ? ['אי', `${sim.island_l_cm}×${sim.island_w_cm} ס"מ`] : null, sim.splash_h_cm ? ['חיפוי', `גובה ${sim.splash_h_cm} ס"מ`] : null,
+   ${kv([['משטח ראשי', `${sim.length_cm}×${sim.depth_cm} ס"מ`], sim.l_length_cm ? ['משטח L', `${sim.l_length_cm}×${sim.l_depth_cm || sim.depth_cm} ס"מ`] : null, sim.island_l_cm ? ['אי', `${sim.island_l_cm}×${sim.island_w_cm} ס"מ`] : null, sim.splash_h_cm ? ['חיפוי', `גובה ${sim.splash_h_cm} ס"מ`] : null,
      ['אבן', esc(stone.name)], ['עובי', `${sim.thickness_cm || 2} ס"מ`], ['קנט', sim.edge !== false ? `רציף מהלוח · ${res.opts.edgeH} מ"מ · ${m.edge_m} מ'` : 'ללא'], ['שטח חלקים', `${m.piece_m2} מ"ר`], ['ניצולת לוחות', `${m.utilization}%`]])}
    <h3 class="h3">תוכנית</h3><div class="fig">${V.planSVG(res, tex, w)}</div>
    <div class="lg"><span><i style="background:#E0428F"></i>קנט רציף</span><span><i style="background:#2FB070"></i>חיבור (J)</span><span><i style="background:rgba(27,26,24,.35)"></i>כיור</span><span><i style="background:#141416"></i>כיריים</span><span><i style="background:#fff;box-shadow:inset 0 0 0 2px #1B1A18;border-radius:50%"></i>חור ברז</span></div>
@@ -33,10 +33,10 @@
 
   ${cu.items.length || sinkParts.length ? `<section class="pg">${hd('פתחים וכיור')}<h2>פתחים במשטח</h2>
    <div class="tw"><table class="tb"><tr><th>פתח</th><th>חלק</th><th>מידה (ס"מ)</th><th>מרכז מתחילת החלק</th><th>הערה</th></tr>${cu.items.map((c) => `<tr><td>${lbl[c.type]}${c.double ? ' כפול' : ''}</td><td>${esc(c.piece)}</td><td class="ltr">${c.type === 'faucet' ? 'Ø3.5' : `${c.w / 10}×${c.d / 10}`}</td><td>${(c.cx / 10).toFixed(0)} ס"מ</td><td>${c.note ? `<span class="bad">${esc(c.note)}</span>` : '✓'}</td></tr>`).join('')}</table></div>
-   ${sim.sink ? `<p class="p">הכיור בנוי מאותה אבן${sim.sink_double ? ' — שני אגנים עם מחיצה של 8 ס"מ' : ''}: עומק אגן ${sim.sink_h_cm || 20} ס"מ, ${sinkParts.length} חלקים (תחתית + 4 דפנות לכל אגן). פתחי הכיור והכיריים ממוקמים כך שלא יחצו חיבור ושיישאר לפחות 6 ס"מ מכל קצה.</p>` : ''}
+   ${sim.sink ? `<p class="p">${sim.sink_type === 'stone' ? `הכיור בנוי מאותה אבן${sim.sink_double ? ' — שני אגנים עם מחיצה של 8 ס"מ' : ''}: עומק אגן ${sim.sink_h_cm || 20} ס"מ, ${sinkParts.length} חלקים (תחתית + 4 דפנות לכל אגן).` : `כיור קנוי (התקנה תחתונה / שטוחה)${sim.sink_double ? ', כפול' : ''} — במשטח נחתך פתח בלבד לפי מידות הכיור.`} פתחי הכיור והכיריים ממוקמים כך שלא יחצו חיבור ושיישאר לפחות 6 ס"מ מקצות החלק ו-2 ס"מ מהחזית ומהגב.</p>` : ''}
    ${sinkParts.length ? `<div class="tw"><table class="tb"><tr><th>חלק כיור</th><th>מידה (מ"מ)</th><th>לוח</th></tr>${sinkParts.map((p) => `<tr><td>${esc(p.name)}</td><td class="ltr">${p.L}×${p.W}</td><td class="ltr">${esc((where[p.key] || ['—']).join(', '))}</td></tr>`).join('')}</table></div>` : ''}</section>` : ''}
 
-  <section class="pg">${hd('פריסה על הלוחות')}<h2>הלוחות</h2>
+  <section class="pg brd">${hd('פריסה על הלוחות')}<h2>הלוחות</h2>
    <p class="p">כל חלק נחתך יחד עם פס הקנט שלו (${res.opts.edgeH} מ"מ + מסור ${res.opts.kerf} מ"מ), כך שהגיד ממשיך ברציפות מהמשטח אל הקנט.</p>
    ${res.used.map((u) => `<figure class="fig"><div>${V.boardSVG(u, res, tex, w)}</div><figcaption><span class="ltr">${esc(u.board.id)}</span> · ${u.board.w}×${u.board.h} מ"מ · ניצולת ${bu(u)}%</figcaption></figure>`).join('')}
    <div class="tw"><table class="tb"><tr><th>לוח</th><th>מידה</th><th>חלקים</th><th>ניצולת</th></tr>${res.used.map((u) => `<tr><td class="ltr">${esc(u.board.id)}${u.board.auto ? ' · אוטומטי' : ''}</td><td class="ltr">${u.board.w}×${u.board.h}</td><td>${u.place.length}</td><td>${bu(u)}%</td></tr>`).join('')}</table></div></section>

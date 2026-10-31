@@ -34,8 +34,12 @@
       const w = rot ? b.W : b.L, h = rot ? b.L : b.W;
       maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h); return { u, p, b, pc, rot, x, y, w, h };
     });
-    const pad = 120, VW = maxX + pad * 2, VH = maxY + pad * 2, s = maxW / VW;
+    const pad = 170, VW = maxX + pad * 2, VH = maxY + pad * 2, s = maxW / VW;
     let g = `<svg class="plan" data-s="${s}" width="${maxW}" height="${VH * s}" viewBox="${-pad} ${-pad} ${VW} ${VH}" style="background:linear-gradient(rgba(27,26,24,.05) 1px,transparent 1px) 0 0/16px 16px,linear-gradient(90deg,rgba(27,26,24,.05) 1px,transparent 1px) 0 0/16px 16px,#FBF9F6;border-radius:16px">`;
+    const E0 = window.StoneEngine, cuts0 = E0 && E0.cutouts ? E0.cutouts(res).items : [];
+    // מיקום תווית שם החלק: מרכז, ואם יש שם פתח — נקודה פנויה לאורך החלק
+    const lblPos = (q) => { const hitc = (x, y) => cuts0.some((c) => x > c.x - 140 && x < c.x + c.pw + 140 && y > c.y - 90 && y < c.y + c.ph + 90);
+      for (const t of [.5, .22, .78, .12, .88, .35, .65]) { const x = q.rot ? q.x + q.w / 2 : q.x + q.w * t, y = q.rot ? q.y + q.h * t : q.y + q.h / 2; if (!hitc(x, y)) return [x, y]; } return [q.x + q.w / 2, q.y + q.h / 2]; };
     for (const q of geo) {
       const W = q.u.board.w || res.opts.boardW, H = q.u.board.h || res.opts.boardH, cid = 'pc' + (uid++);
       // מיפוי: נקודת הלוח (p.x,p.y) → נקודת התוכנית (x,y)
@@ -50,10 +54,10 @@
         if (q.b.strips > 1) g += `<line x1="${q.x}" y1="${q.y}" x2="${q.x + q.w}" y2="${q.y}" stroke="#E0428F" stroke-width="22"/>`;
       }
       if (q.b.seg > 0) g += `<line x1="${q.x}" y1="${q.y}" x2="${q.rot ? q.x + q.w : q.x}" y2="${q.rot ? q.y : q.y + q.h}" stroke="#2FB070" stroke-width="20" stroke-dasharray="44 22"/>`;
-      g += `<text x="${q.x + q.w / 2}" y="${q.y + q.h / 2}" font-size="90" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18" font-weight="600" style="paint-order:stroke;stroke:rgba(255,255,255,.8);stroke-width:14px">${esc(q.pc.name)}</text></g>`;
+      const [lx0, ly0] = lblPos(q); g += `<text x="${lx0}" y="${ly0}" font-size="90" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18" font-weight="600" style="paint-order:stroke;stroke:rgba(255,255,255,.8);stroke-width:14px">${esc(q.pc.name)}</text></g>`;
     }
     // פתחים (מהמנוע — לא חוצים חיבור): כיור יחיד/כפול, חור ברז, כיריים
-    const E = window.StoneEngine, cuts = E && E.cutouts ? E.cutouts(res).items : [];
+    const cuts = cuts0;
     for (const c of cuts) {
       const bad = c.ok === false || /חוצה|אין מקום|גדול/.test(c.note || ''), st = bad ? '#E5484D' : '#1B1A18';
       if (c.type === 'sink') {
@@ -67,11 +71,19 @@
         g += `<text x="${c.x + c.pw / 2}" y="${c.y + c.ph + 70}" font-size="56" text-anchor="middle" fill="${st}" style="paint-order:stroke;stroke:rgba(255,255,255,.85);stroke-width:12px">כיריים ${c.w / 10}×${c.d / 10}</text>`;
       }
     }
+    // קווי מידה: מתחילת החלק עד מרכז הכיור/הכיריים
+    const P0 = {}; for (const q of geo) if (!P0[q.pc.key]) P0[q.pc.key] = q.pc;
+    let mk = `<defs><marker id="ar${uid}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9C8360"/></marker></defs>`, mid = 'ar' + (uid++);
+    g += mk.replace(`ar${uid - 1}`, mid);
+    cuts.filter((c) => c.type !== 'faucet').forEach((c, i) => { const pc = P0[c.key]; if (!pc) return; const off = 55 + i * 0;
+      const lab = `${(c.cx / 10).toFixed(0)} ס"מ`, ts = 'font-size="46" fill="#7A6546" text-anchor="middle" style="paint-order:stroke;stroke:#FBF9F6;stroke-width:12px"';
+      if (pc.rot) { const x = pc.plan.x + pc.W + off, y1 = pc.plan.y, y2 = pc.plan.y + c.cx; g += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#9C8360" stroke-width="5" marker-start="url(#${mid})" marker-end="url(#${mid})"/><line x1="${x - 25}" y1="${y2}" x2="${pc.plan.x + pc.W}" y2="${y2}" stroke="#9C8360" stroke-width="3" stroke-dasharray="10 8"/><text x="${x + 20}" y="${(y1 + y2) / 2}" ${ts} transform="rotate(90 ${x + 20} ${(y1 + y2) / 2})">${lab}</text>`; }
+      else { const y = pc.plan.y - off, x1 = pc.plan.x, x2 = pc.plan.x + c.cx; g += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#9C8360" stroke-width="5" marker-start="url(#${mid})" marker-end="url(#${mid})"/><line x1="${x2}" y1="${y - 25}" x2="${x2}" y2="${pc.plan.y}" stroke="#9C8360" stroke-width="3" stroke-dasharray="10 8"/><text x="${(x1 + x2) / 2}" y="${y - 16}" ${ts}>${lab}</text>`; } });
     // חיבורים: סימון בולט + תווית
     for (const q of geo) if (q.b.seg > 0) { const lx = q.rot ? q.x + q.w / 2 : q.x, ly = q.rot ? q.y : q.y + q.h / 2;
       g += `<g><circle cx="${lx}" cy="${ly}" r="46" fill="#2FB070" stroke="#fff" stroke-width="10"/><text x="${lx}" y="${ly + 4}" font-size="54" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700">J</text>
       <text x="${lx}" y="${ly - 70}" font-size="50" text-anchor="middle" fill="#1F7A4D" style="paint-order:stroke;stroke:rgba(255,255,255,.9);stroke-width:12px">חיבור · ${(q.b.offsetL / 10).toFixed(0)} ס"מ</text></g>`; }
-    g += `<text x="0" y="${-40}" font-size="70" fill="#8C857B">${(maxX / 10).toFixed(0)} ס"מ</text>`;
+    g += `<text x="0" y="${-110}" font-size="56" fill="#8C857B">${(maxX / 10).toFixed(0)} ס"מ</text>`;
     return g + '</svg>';
   }
   window.StoneViews = { boardSVG, planSVG, esc };

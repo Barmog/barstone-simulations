@@ -1,14 +1,15 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=11">
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=13">
 <style>main{max-width:1200px;margin:auto;padding:16px}#c{width:100%;height:640px;display:block;border-radius:16px;background:#e9e3da;touch-action:none}
 .ctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0;font-size:13px}.ctl select{padding:6px 10px;border-radius:10px;border:1px solid #ddd}.cvw{position:relative}.ld{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;border-radius:16px;background:rgba(233,227,218,.92);color:#6b625a;font-size:14px;transition:opacity .4s}.ld.off{opacity:0;pointer-events:none}.ld i{width:28px;height:28px;border-radius:50%;border:3px solid #d8cfc2;border-top-color:#1B1A18;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
 .vb{position:absolute;top:12px;right:12px;display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 20px rgba(0,0,0,.12)}.vb button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:36px;font:500 13px Heebo,system-ui;color:#3a3530;cursor:pointer;white-space:nowrap}.vb button.on{background:#1B1A18;color:#fff}@media(max-width:600px){.vb{right:8px;left:8px;justify-content:center}.vb button{flex:1;min-height:40px}}
+@media(max-width:820px){main{padding:10px}#c{height:calc(100svh - 250px)!important;min-height:360px;border-radius:20px}.panel>h2{font-size:15px}}
 .cr{font-size:11px;color:var(--mute);margin-top:8px}</style></head>
 <body><header class="top"><img src="logo.png" alt="Barstone"><h1>רינדור הדמיה</h1><span class="sp"></span><a class="btn ghost" href="layout.html" style="text-decoration:none">חזרה לפריסה</a><a class="btn" href="document/document.html" style="text-decoration:none">למסמך ›</a></header>
 <main><section class="panel"><h2>הדמיה תלת-ממדית מהפריסה שלך</h2>
-<div class="ctl"><label>אבן <select id="st"></select></label><label><input type="checkbox" id="cab" checked> ארונות</label><label>תאורה <select id="lt"><option value="day">אור יום</option><option value="warm">חם (ערב)</option><option value="studio">סטודיו</option></select></label><button class="btn ghost" id="shot">צילום תמונה</button><span id="st8" style="color:var(--mute)">טוען…</span></div>
+<div class="ctl" data-sheet="הגדרות הדמיה" data-fab="⚙︎ אבן, תאורה וצילום"><label>אבן <select id="st"></select></label><label><input type="checkbox" id="cab" checked> ארונות</label><label>תאורה <select id="lt"><option value="day">אור יום</option><option value="warm">חם (ערב)</option><option value="studio">סטודיו</option></select></label><button class="btn ghost" id="shot">צילום תמונה</button><span id="st8" style="color:var(--mute)">טוען…</span></div>
 <div class="cvw"><canvas id="c"></canvas><div id="ld" class="ld"><i></i><span>טוען הדמיה…</span></div><div class="vb"><button id="vFront" class="on">פרספקטיבה</button><button id="vTop">מלמעלה</button><button id="vSink">כיור</button></div></div><div class="m" id="mm"></div>
 <p class="cr">גררו לסיבוב · גלגלת/צביטה לזום. הטקסטורה של כל משטח וקנט נלקחת מהמיקום שלו בלוח (קנט רציף). תאורה והשתקפויות מחושבות בדפדפן (Three.js) — הדמיה, לא צילום.</p><p class="cr" id="cred"></p></section></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=11"></script><script src="js/engine.js?v=11"></script><script src="js/views.js?v=11"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=13"></script><script src="js/engine.js?v=13"></script><script src="js/views.js?v=13"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -17,11 +18,11 @@ if(!sim||!sim.length_cm){$('main').innerHTML='<p class="panel">אין עדיין
 const stones=await S.stones();$('#st').innerHTML=stones.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
 $('#st').value=String(sim.stone_id||stones[0].id);if(!$('#st').value)$('#st').value=String(stones[0].id);
 const CR={'stones/v3/carrara.jpg':'James St. John · CC BY 2.0','stones/v3/statuario.jpg':'James St. John · CC BY 2.0','stones/v3/taj.jpg':'James St. John · CC BY 2.0','stones/v3/connemara.jpg':'James St. John · CC BY 2.0','stones/v3/black.jpg':'James St. John · CC BY 2.0','stones/v3/onyx.jpg':'Kevin Walsh · CC BY 2.0','stones/v3/calacatta.jpg':'Stones slabs · CC BY-SA 4.0'};
-const cv=$('#c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});R.setPixelRatio(Math.min(2,devicePixelRatio));
+const cv=$('#c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});const MOB=matchMedia('(max-width:820px), (pointer:coarse)').matches;R.setPixelRatio(Math.min(MOB?1.5:2,devicePixelRatio));
 R.toneMapping=THREE.ACESFilmicToneMapping;R.outputColorSpace=THREE.SRGBColorSpace;R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
 const scene=new THREE.Scene(),pm=new THREE.PMREMGenerator(R);scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture;scene.background=new THREE.Color('#e9e3da');
-const cam=new THREE.PerspectiveCamera(38,1,.05,60),ctl=new OrbitControls(cam,cv);ctl.enableDamping=true;ctl.maxPolarAngle=Math.PI*.49;
-const hemi=new THREE.HemisphereLight('#fffaf0','#8a7a66',.5),sun=new THREE.DirectionalLight('#ffffff',2.2);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-.0004;sun.shadow.normalBias=.02;
+const cam=new THREE.PerspectiveCamera(38,1,.05,60),ctl=new OrbitControls(cam,cv);ctl.enableDamping=true;ctl.dampingFactor=.08;ctl.rotateSpeed=MOB?.7:1;ctl.zoomSpeed=MOB?.9:1;ctl.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};ctl.maxPolarAngle=Math.PI*.49;
+const hemi=new THREE.HemisphereLight('#fffaf0','#8a7a66',.5),sun=new THREE.DirectionalLight('#ffffff',2.2);sun.castShadow=true;sun.shadow.mapSize.set(MOB?1024:2048,MOB?1024:2048);sun.shadow.bias=-.0004;sun.shadow.normalBias=.02;
 const lamps=new THREE.Group();scene.add(hemi,sun,sun.target,lamps);
 const loader=new THREE.TextureLoader();loader.setCrossOrigin('anonymous');const cache={};
 const loadTex=(u)=>cache[u]||(cache[u]=new Promise(r=>{const to=setTimeout(()=>r(null),12000);loader.load(u,t=>{clearTimeout(to);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=R.capabilities.getMaxAnisotropy();r(t)},undefined,()=>{clearTimeout(to);r(null)})}));
@@ -69,7 +70,7 @@ async function build(){
       const lev=new THREE.Mesh(new THREE.CylinderGeometry(.008,.008,.09,16),steel);lev.rotation.z=Math.PI/2.6;lev.position.set(.045,.12,0);const hub=new THREE.Mesh(new THREE.SphereGeometry(.02,24,16),steel);hub.position.set(.022,.1,0);
       fg.add(bp,neck,noz,aer,lev,hub);fg.position.set(fx,ty,fz);fg.traverse(n=>{n.castShadow=true});G.add(fg)};
      for(const c of segCuts){
-      if(c.type==='sink'){sinkMsg=c.note;const t=(+sim.thickness_cm||2)*10*mm,bd=(+sim.sink_h_cm||20)*10*mm,sd=c.d*mm,cz=Z(c.localY+c.d/2),bm=new THREE.MeshPhysicalMaterial({map:bt,roughness:.2,clearcoat:.8,envMapIntensity:.9});
+      if(c.type==='sink'){sinkMsg=c.note;const t=c.sinkType==='stone'?(+sim.thickness_cm||2)*10*mm:.0012,bd=(+sim.sink_h_cm||20)*10*mm,sd=c.d*mm,cz=Z(c.localY+c.d/2),bm=c.sinkType==='stone'?new THREE.MeshPhysicalMaterial({map:bt,roughness:.2,clearcoat:.8,envMapIntensity:.9}):new THREE.MeshPhysicalMaterial({color:'#cfd2d4',metalness:1,roughness:.32,envMapIntensity:1.2});
        const add=(gw,gh,gd,x,y,z)=>{const q=new THREE.Mesh(new THREE.BoxGeometry(gw,gh,gd),bm);q.position.set(x,y,z);q.castShadow=q.receiveShadow=true;G.add(q)};
        for(const bs of c.basins){const sw=bs.w*mm,cx=X(c.localX+bs.off+bs.w/2);
         add(sw,bd,t,cx,ty-bd/2,cz-sd/2+t/2);add(sw,bd,t,cx,ty-bd/2,cz+sd/2-t/2);add(t,bd,sd-2*t,cx-sw/2+t/2,ty-bd/2,cz);add(t,bd,sd-2*t,cx+sw/2-t/2,ty-bd/2,cz);add(sw,t,sd,cx,ty-bd+t/2,cz);
@@ -118,4 +119,4 @@ $('#shot').onclick=()=>{const a=document.createElement('a');a.href=cv.toDataURL(
 await build();['vFront','vTop','vSink'].forEach(id=>$('#'+id).onclick=()=>setView(id));
 (function loop(){requestAnimationFrame(loop);if(tw)tw();ctl.update();R.render(scene,cam)})();
 </script>
-<script src="js/flow.js?v=11"></script></body></html>
+<script src="js/flow.js?v=13"></script></body></html>
