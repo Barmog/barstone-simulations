@@ -1,18 +1,21 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=14">
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=15">
 <style>main{max-width:1200px;margin:auto;padding:16px}#c{width:100%;height:640px;display:block;border-radius:16px;background:#e9e3da;touch-action:none}
+.pk{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 8px;border-radius:14px;background:rgba(255,255,255,.6)}.pk b{font-weight:600}.sws{display:inline-flex;gap:4px;flex-wrap:wrap}.sws button{width:28px;height:28px;min-width:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);cursor:pointer;padding:0}.sws button.on{box-shadow:0 0 0 2px #1b1a18}.pk input[type=color]{width:32px;height:32px;border:none;background:none;padding:0;cursor:pointer}@media (max-width:820px){.sws button{width:36px;height:36px}.pk{width:100%}}
 .ctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0;font-size:13px}.ctl select{padding:6px 10px;border-radius:10px;border:1px solid #ddd}.cvw{position:relative}.ld{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;border-radius:16px;background:rgba(233,227,218,.92);color:#6b625a;font-size:14px;transition:opacity .4s}.ld.off{opacity:0;pointer-events:none}.ld i{width:28px;height:28px;border-radius:50%;border:3px solid #d8cfc2;border-top-color:#1B1A18;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
 .vb{position:absolute;top:12px;right:12px;display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 20px rgba(0,0,0,.12)}.vb button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:36px;font:500 13px Heebo,system-ui;color:#3a3530;cursor:pointer;white-space:nowrap}.vb button.on{background:#1B1A18;color:#fff}@media(max-width:600px){.vb{right:8px;left:8px;justify-content:center}.vb button{flex:1;min-height:40px}}
 @media(max-width:820px){main{padding:10px}#c{height:calc(100svh - 250px)!important;min-height:360px;border-radius:20px}.panel>h2{font-size:15px}}
 .cr{font-size:11px;color:var(--mute);margin-top:8px}</style></head>
 <body><header class="top"><img src="logo.png" alt="Barstone"><h1>רינדור הדמיה</h1><span class="sp"></span><a class="btn ghost" href="layout.html" style="text-decoration:none">חזרה לפריסה</a><a class="btn" href="document/document.html" style="text-decoration:none">למסמך ›</a></header>
 <main><section class="panel"><h2>הדמיה תלת-ממדית מהפריסה שלך</h2>
-<div class="ctl" data-sheet="הגדרות הדמיה" data-fab="⚙︎ אבן, תאורה וצילום"><label>אבן <select id="st"></select></label><label><input type="checkbox" id="cab" checked> ארונות</label><label>תאורה <select id="lt"><option value="day">אור יום</option><option value="warm">חם (ערב)</option><option value="studio">סטודיו</option></select></label><button class="btn ghost" id="shot">צילום תמונה</button><span id="st8" style="color:var(--mute)">טוען…</span></div>
+<div class="ctl" data-sheet="הגדרות הדמיה" data-fab="⚙︎ אבן, תאורה וצילום"><label>אבן <select id="st"></select></label><label><input type="checkbox" id="cab" checked> ארונות</label><span class="pk"><b>ריצוף</b><select id="flT"><option value="wood">פרקט אלון</option><option value="tile60">פורצלן 60×60</option><option value="tile120">פורצלן 120×60</option><option value="concrete">בטון מוחלק</option><option value="terrazzo">טראצו</option></select><span class="sws" id="flS"></span><input type="color" id="flC" title="צבע מותאם לריצוף"></span>
+<span class="pk"><b>ארונות</b><span class="sws" id="cbS"></span><input type="color" id="cbC" title="צבע מותאם לארונות"><select id="cbF"><option value="matte">מט</option><option value="satin">סאטן</option><option value="gloss">מבריק</option><option value="wood">עץ</option></select></span>
+<label><input type="checkbox" id="hq" checked> איכות גבוהה</label><label>תאורה <select id="lt"><option value="day">אור יום</option><option value="warm">חם (ערב)</option><option value="studio">סטודיו</option></select></label><button class="btn ghost" id="shot">צילום תמונה</button><span id="st8" style="color:var(--mute)">טוען…</span></div>
 <div class="cvw"><canvas id="c"></canvas><div id="ld" class="ld"><i></i><span>טוען הדמיה…</span></div><div class="vb"><button id="vFront" class="on">פרספקטיבה</button><button id="vTop">מלמעלה</button><button id="vSink">כיור</button></div></div><div class="m" id="mm"></div>
 <p class="cr">גררו לסיבוב · גלגלת/צביטה לזום. הטקסטורה של כל משטח וקנט נלקחת מהמיקום שלו בלוח (קנט רציף). תאורה והשתקפויות מחושבות בדפדפן (Three.js) — הדמיה, לא צילום.</p><p class="cr" id="cred"></p></section></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=14"></script><script src="js/engine.js?v=14"></script><script src="js/views.js?v=14"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=15"></script><script src="js/engine.js?v=15"></script><script src="js/views.js?v=15"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
-import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';import {GTAOPass} from 'three/addons/postprocessing/GTAOPass.js';import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 const S=SimStore,sim=S.getSim(),$=(q)=>document.querySelector(q),esc=StoneViews.esc;
 if(!sim||!sim.length_cm){$('main').innerHTML='<p class="panel">אין עדיין הדמיה — <a href="dimensions.html">להתחלה</a></p>';throw 0}
 const stones=await S.stones();$('#st').innerHTML=stones.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
@@ -22,16 +25,39 @@ const cv=$('#c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDra
 R.toneMapping=THREE.ACESFilmicToneMapping;R.outputColorSpace=THREE.SRGBColorSpace;R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
 const scene=new THREE.Scene(),pm=new THREE.PMREMGenerator(R);scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture;scene.background=new THREE.Color('#e9e3da');
 const cam=new THREE.PerspectiveCamera(38,1,.05,60),ctl=new OrbitControls(cam,cv);ctl.enableDamping=true;ctl.dampingFactor=.08;ctl.rotateSpeed=MOB?.7:1;ctl.zoomSpeed=MOB?.9:1;ctl.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};ctl.maxPolarAngle=Math.PI*.49;
-const hemi=new THREE.HemisphereLight('#fffaf0','#8a7a66',.5),sun=new THREE.DirectionalLight('#ffffff',2.2);sun.castShadow=true;sun.shadow.mapSize.set(MOB?1024:2048,MOB?1024:2048);sun.shadow.bias=-.0004;sun.shadow.normalBias=.02;
+const hemi=new THREE.HemisphereLight('#fffaf0','#8a7a66',.5),sun=new THREE.DirectionalLight('#ffffff',2.2);sun.castShadow=true;sun.shadow.mapSize.set(MOB?1024:4096,MOB?1024:4096);sun.shadow.radius=4;sun.shadow.bias=-.0004;sun.shadow.normalBias=.02;
 const lamps=new THREE.Group();scene.add(hemi,sun,sun.target,lamps);
 const loader=new THREE.TextureLoader();loader.setCrossOrigin('anonymous');const cache={};
 const loadTex=(u)=>cache[u]||(cache[u]=new Promise(r=>{const to=setTimeout(()=>r(null),12000);loader.load(u,t=>{clearTimeout(to);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=R.capabilities.getMaxAnisotropy();r(t)},undefined,()=>{clearTimeout(to);r(null)})}));
+
+// ריצוף וארונות: טקסטורות פרוצדורליות (canvas) + צבע לבחירה
+const FLP={wood:['#b89a78','#d8c3a2','#8a6a4a','#5b4330','#c9b8a6'],tile60:['#e7e2da','#cfc8bd','#a7a29a','#6f6c68','#3a3937'],tile120:['#e9e5de','#d6cfc4','#9d9891','#57544f'],concrete:['#b9b5ae','#9a958d','#d3cfc7','#6e6a64'],terrazzo:['#e9e4dc','#d9d0c3','#bfb6aa']};
+const CBP=[['#f4f1ec','לבן'],['#e9dfcf','שמנת'],['#c9c3b8','גרג׳'],['#7d8a7a','ירוק מרווה'],['#5e6650','ירוק זית'],['#2f3b4c','כחול נייבי'],['#4a4b4d','אפור גרפיט'],['#1f1e1d','שחור'],['#8b6a4c','אגוז'],['#c7a882','אלון בהיר']];
+const PF=JSON.parse(localStorage.getItem('renderPrefs')||'{}');if(PF.flT&&!FLP[PF.flT])delete PF.flT;const pref=Object.assign({flT:'wood',flC:'#b89a78',cbC:'#f4f1ec',cbF:'matte',hq:!MOB},PF);
+const savePref=()=>localStorage.setItem('renderPrefs',JSON.stringify(pref));
+function rnd(s){return()=>{s=(s*16807)%2147483647;return s/2147483647}}
+function shade(hex,k){const c=new THREE.Color(hex);c.offsetHSL(0,0,k);return '#'+c.getHexString()}
+function floorTex(type,col){const N=1024,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d'),r=rnd(7),rc=document.createElement('canvas');rc.width=rc.height=N;const y=rc.getContext('2d');
+ y.fillStyle='#8a8a8a';y.fillRect(0,0,N,N);let rep=4;
+ const grain=(X,Y,w,h,base,v)=>{x.fillStyle=shade(base,(r()-.5)*.08);x.fillRect(X,Y,w,h);for(let i=0;i<h*1.2;i++){x.strokeStyle=shade(base,(r()-.5)*.14)+'55';x.lineWidth=r()*1.6;x.beginPath();const yy=Y+r()*h;x.moveTo(X,yy);for(let k=0;k<=8;k++)x.lineTo(X+w*k/8,yy+Math.sin(k*.9+r()*2)*2);x.stroke()}if(v){x.fillStyle=shade(base,-.12)+'88';x.beginPath();x.ellipse(X+r()*w,Y+h/2,6+r()*8,3,0,0,7);x.fill()}};
+ if(type==='wood'){const ph=N/8;for(let j=0;j<8;j++){let off=-(r()*N);while(off<N){const L=N*(.45+r()*.4);grain(off,j*ph,L,ph,col,r()<.4);x.fillStyle='rgba(0,0,0,.35)';x.fillRect(off,j*ph,2,ph);off+=L}x.fillStyle='rgba(0,0,0,.3)';x.fillRect(0,j*ph,N,2)}y.fillStyle='#9a9a9a';rep=1/1.5}
+ else if(type==='herring'){const w=N/4,h=N/16;x.fillStyle=col;x.fillRect(0,0,N,N);for(let i=-4;i<12;i++)for(let j=-4;j<20;j++){x.save();x.translate(i*w*.7071*1.0+j*0,j*h*1.414);const a=(j%2?1:-1)*Math.PI/4;x.translate(i*w*.7,0);x.rotate(a);grain(0,0,w,h,col,0);x.strokeStyle='rgba(0,0,0,.35)';x.strokeRect(0,0,w,h);x.restore()}rep=3}
+ else if(type==='tile60'||type==='tile120'){const cols=type==='tile60'?4:2,rows=4,tw=N/cols,th=N/rows;for(let i=0;i<cols;i++)for(let j=0;j<rows;j++){x.fillStyle=shade(col,(r()-.5)*.03);x.fillRect(i*tw,j*th,tw,th);for(let k=0;k<60;k++){x.strokeStyle=shade(col,(r()-.4)*.08)+'30';x.lineWidth=r()*3;x.beginPath();x.moveTo(i*tw+r()*tw,j*th+r()*th);x.bezierCurveTo(i*tw+r()*tw,j*th+r()*th,i*tw+r()*tw,j*th+r()*th,i*tw+r()*tw,j*th+r()*th);x.stroke()}}
+  x.fillStyle=shade(col,-.18);for(let i=0;i<=cols;i++)x.fillRect(i*tw-2,0,4,N);for(let j=0;j<=rows;j++)x.fillRect(0,j*th-2,N,4);y.fillStyle='#4a4a4a';rep=type==='tile60'?N/(cols*600)*1000/1000*0+2.4/2.4*(1/(.6*cols))*1:1/(1.2*cols)*1;rep=1/(.6*cols);if(type==='tile120')rep=1/(1.2*cols)}
+ else if(type==='concrete'){x.fillStyle=col;x.fillRect(0,0,N,N);for(let k=0;k<9000;k++){x.fillStyle=shade(col,(r()-.5)*.12)+'22';const s=r()*30;x.fillRect(r()*N,r()*N,s,s)}rep=1.2}
+ else {x.fillStyle=col;x.fillRect(0,0,N,N);const ch=['#ffffff','#3a3633','#a8835e','#8f8a84','#c9bba8'];for(let k=0;k<5000;k++){x.fillStyle=ch[k%5]+'cc';x.beginPath();const s=1+r()*5;x.ellipse(r()*N,r()*N,s,s*(.5+r()*.6),r()*3,0,7);x.fill()}rep=1}
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=R.capabilities.getMaxAnisotropy();t.userData.rep=rep;return t}
+function woodCab(col){const N=512,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d'),r=rnd(3);x.fillStyle=col;x.fillRect(0,0,N,N);for(let i=0;i<500;i++){x.strokeStyle=shade(col,(r()-.5)*.16)+'66';x.lineWidth=r()*2;x.beginPath();const xx=r()*N;x.moveTo(xx,0);for(let k=0;k<=10;k++)x.lineTo(xx+Math.sin(k*.7+r())*3,N*k/10);x.stroke()}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
+let FLOOR=null,CABM=[];
+function cabMat(){const f=pref.cbF,col=pref.cbC;const m=new THREE.MeshPhysicalMaterial({color:f==='wood'?'#ffffff':col,map:f==='wood'?woodCab(col):null,roughness:f==='gloss'?.08:f==='satin'?.32:f==='wood'?.55:.62,clearcoat:f==='gloss'?1:f==='satin'?.35:.1,clearcoatRoughness:f==='gloss'?.03:.3,envMapIntensity:f==='gloss'?1.2:.8});CABM.push(m);return m}
+function applyFloor(){if(!FLOOR)return;const t=floorTex(pref.flT,pref.flC),[w,h]=FLOOR.userData.size;t.repeat.set(w*t.userData.rep,h*t.userData.rep);const m=FLOOR.material;m.map&&m.map.dispose();m.map=t;m.color.set('#ffffff');const tile=/tile|terrazzo|concrete/.test(pref.flT);m.roughness=tile?.22:.48;m.clearcoat=tile?.6:.35;m.clearcoatRoughness=tile?.08:.25;m.needsUpdate=true}
+function applyCab(){const f=pref.cbF,col=pref.cbC;CABM.forEach(m=>{m.map&&m.map.dispose();m.map=f==='wood'?woodCab(col):null;m.color.set(f==='wood'?'#ffffff':col);m.roughness=f==='gloss'?.08:f==='satin'?.32:f==='wood'?.55:.62;m.clearcoat=f==='gloss'?1:f==='satin'?.35:.1;m.needsUpdate=true})}
 const root=new THREE.Group();scene.add(root);
 const mm=.001,TH=()=>Math.max(+sim.edge_mm||40,(+sim.thickness_cm||2)*10);
 function region(t,bw,bh,x,y,w,h,rot){const c=t.clone();c.needsUpdate=true;c.wrapS=c.wrapT=THREE.ClampToEdgeWrapping;
   // מיפוי אזור (x,y,w,h) בלוח (מ"מ, y למטה) לפאה; תמונת הלוח נמתחת על כל הלוח (כמו בתצוגת 2D)
   c.repeat.set(w/bw,h/bh);c.offset.set(x/bw,1-(y+h)/bh);if(rot){c.center.set(.5,.5);c.rotation=Math.PI/2}return c}
-async function build(){
+async function build(){CABM=[];
   $('#st8').textContent='';$('#ld').classList.remove('off');root.clear();
   const stone=stones.find(s=>String(s.id)===$('#st').value)||stones[0];sim.stone_id=stone.id;S.setSim(sim);
   $('#cred').textContent=stone.tile_path&&CR[stone.tile_path]?`צילום אבן: ${CR[stone.tile_path]} (Wikimedia Commons)`:stone.tile_path?'טקסטורה: ambientCG · CC0':'';
@@ -84,7 +110,7 @@ async function build(){
      }
     }else{const m=new THREE.Mesh(new THREE.BoxGeometry(Lm,thm,Wm),mats);m.position.y=top0+thm/2;m.castShadow=m.receiveShadow=true;G.add(m)}
     maxX=Math.max(maxX,x0+w);maxZ=Math.max(maxZ,z0+d);
-    if(cab.checked){const cm=new THREE.MeshPhysicalMaterial({color:'#efeae2',roughness:.45,clearcoat:.3}),g=new THREE.Group(),cl=b.L-30,cw=b.W-30; // חזית ארון 15 מ"מ מאחורי קצה המשטח — אגן כיור תחתון נשאר בתוך הארון
+    if(cab.checked){const cm=cabMat(),g=new THREE.Group(),cl=b.L-30,cw=b.W-30; // חזית ארון 15 מ"מ מאחורי קצה המשטח — אגן כיור תחתון נשאר בתוך הארון
      const hid=new THREE.MeshBasicMaterial({visible:false}),box=new THREE.Mesh(new THREE.BoxGeometry(cl*mm,.77,cw*mm),[cm,cm,hid,cm,cm,cm]);box.position.y=.1+.385;
      const kick=new THREE.Mesh(new THREE.BoxGeometry((cl-30)*mm,.1,(cw-50)*mm),new THREE.MeshStandardMaterial({color:'#2e2924',roughness:.8}));kick.position.y=.05;
      g.add(box,kick);const doors=Math.max(1,Math.round(cl/600)),hm=new THREE.MeshStandardMaterial({color:'#b8b2a8',metalness:1,roughness:.25});
@@ -93,11 +119,11 @@ async function build(){
      g.position.z=0; /* חזית ארון 15 מ"מ מאחורי קצה המשטח (היה -30 מ"מ נוספים → דופן הכיור בלטה מול הארון = הפס הכהה) */g.traverse(n=>{n.castShadow=n.receiveShadow=true});G.add(g)}
    }}
   // חדר: רצפת עץ, קיר אחורי וקיר צד, חיפוי
-  const W=maxX*mm,D=maxZ*mm,floor=new THREE.Mesh(new THREE.PlaneGeometry(W+6,D+6),new THREE.MeshPhysicalMaterial({color:'#b89a78',roughness:.55,clearcoat:.4,clearcoatRoughness:.3}));
+  const W=maxX*mm,D=maxZ*mm,floor=new THREE.Mesh(new THREE.PlaneGeometry(W+6,D+6),new THREE.MeshPhysicalMaterial({color:'#b89a78',roughness:.5,clearcoat:.4,clearcoatRoughness:.3}));floor.userData.size=[W+6,D+6];FLOOR=floor;applyFloor();
   floor.rotation.x=-Math.PI/2;floor.position.set(W/2,0,D/2+1.5);floor.receiveShadow=true;
   const wm=new THREE.MeshStandardMaterial({color:'#f3efe8',roughness:.95}),back=new THREE.Mesh(new THREE.PlaneGeometry(W+6,3),wm);back.position.set(W/2,1.5,-.001);back.receiveShadow=true;
   const sideW=new THREE.Mesh(new THREE.PlaneGeometry(D+6,3),wm);sideW.rotation.y=-Math.PI/2;sideW.position.set(W+.001,1.5,D/2+1.5);sideW.receiveShadow=true;root.add(floor,back,sideW);
-  if(cab.checked){const up=new THREE.Mesh(new THREE.BoxGeometry(W*.7,.7,.35),new THREE.MeshPhysicalMaterial({color:'#efeae2',roughness:.45}));up.position.set(W*.35,1.95,.175);up.castShadow=true;root.add(up)}
+  if(cab.checked){const up=new THREE.Mesh(new THREE.BoxGeometry(W*.7,.7,.35),cabMat());up.position.set(W*.35,1.95,.175);up.castShadow=true;root.add(up)}
   sun.position.set(W*.2-1.5,4.5,D+3);sun.target.position.set(W/2,0,D/2);const sc=sun.shadow.camera;sc.left=sc.bottom=-Math.max(W,D);sc.right=sc.top=Math.max(W,D);sc.far=20;sc.updateProjectionMatrix();
   lamps.clear();if(cab.checked)for(let i=0;i<3;i++){const l=new THREE.PointLight('#ffe3b8',.0,3);l.position.set(W*(.2+i*.3),1.55,.25);lamps.add(l)}
   ctl.target.set(W/2,.8,D/2);if(!build.done){const k=Math.max(1,1.7/cam.aspect),f=Math.max(W,D)/4.2;cam.position.set(W/2-W*.15,(2.6+.4*k)*Math.max(1,f),D+3.2*k*Math.max(1,f));build.done=1}light();
@@ -113,10 +139,20 @@ function setView(v){document.querySelectorAll('.vb button').forEach(b=>b.classLi
  else go(new THREE.Vector3(W/2-W*.15,(2.6+.4*k)*f,D+3.2*k*f),new THREE.Vector3(W/2,.8,D/2))}
 function light(){const v=$('#lt').value;R.toneMappingExposure=v==='warm'?.85:1;sun.color.set(v==='warm'?'#ffc98f':'#ffffff');sun.intensity=v==='studio'?1.2:v==='warm'?1.4:2.2;
   hemi.intensity=v==='studio'?.9:.5;scene.background.set(v==='warm'?'#d9cbb8':'#e9e3da');lamps.children.forEach(l=>l.intensity=v==='warm'?1.6:.4)}
-function size(){const w=cv.clientWidth,h=cv.clientHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+let CMP=null;function mkComposer(){try{const c=new EffectComposer(R);c.addPass(new RenderPass(scene,cam));const ao=new GTAOPass(scene,cam,cv.clientWidth,cv.clientHeight);ao.updateGtaoMaterial({radius:.35,distanceExponent:1.5,thickness:1,scale:1.1});ao.blendIntensity=.9;c.addPass(ao);c.addPass(new OutputPass());return c}catch(e){console.warn('AO off',e);return null}}
+function draw3(){if(pref.hq&&CMP)CMP.render();else R.render(scene,cam)}
+function size(){const w=cv.clientWidth,h=cv.clientHeight;R.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();if(CMP)CMP.setSize(w,h)}
 addEventListener('resize',size);size();$('#st').onchange=build;cab.onchange=build;$('#lt').onchange=light;
 $('#shot').onclick=()=>{const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download='barstone-render.png';a.click()};
 await build();['vFront','vTop','vSink'].forEach(id=>$('#'+id).onclick=()=>setView(id));
-(function loop(){requestAnimationFrame(loop);if(tw)tw();ctl.update();R.render(scene,cam)})();
+// בוררי צבע: ריצוף + ארונות
+const sw=(el,list,get,set)=>{el.innerHTML=list.map(([c,n])=>`<button type="button" title="${n||c}" aria-label="${n||c}" data-c="${c}" style="background:${c}"></button>`).join('');const mark=()=>el.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.c===get()));mark();el.onclick=e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.c);mark();window.bsHaptic&&bsHaptic(8)};return mark};
+let mFl;const flSw=()=>{mFl=sw($('#flS'),FLP[pref.flT].map(c=>[c]),()=>pref.flC,c=>{pref.flC=c;$('#flC').value=c;savePref();applyFloor()})};
+$('#flT').value=pref.flT;$('#flC').value=pref.flC;flSw();$('#flT').onchange=()=>{pref.flT=$('#flT').value;pref.flC=FLP[pref.flT][0];$('#flC').value=pref.flC;savePref();flSw();applyFloor()};
+$('#flC').oninput=()=>{pref.flC=$('#flC').value;savePref();applyFloor();mFl()};
+const mCb=sw($('#cbS'),CBP,()=>pref.cbC,c=>{pref.cbC=c;$('#cbC').value=c;savePref();applyCab()});$('#cbC').value=pref.cbC;$('#cbF').value=pref.cbF;
+$('#cbC').oninput=()=>{pref.cbC=$('#cbC').value;savePref();applyCab();mCb()};$('#cbF').onchange=()=>{pref.cbF=$('#cbF').value;savePref();applyCab()};
+$('#hq').checked=pref.hq;$('#hq').onchange=()=>{pref.hq=$('#hq').checked;savePref();if(pref.hq&&!CMP){CMP=mkComposer();size()}};if(pref.hq){CMP=mkComposer();size()}
+(function loop(){requestAnimationFrame(loop);if(tw)tw();ctl.update();draw3()})();
 </script>
-<script src="js/flow.js?v=14"></script></body></html>
+<script src="js/flow.js?v=15"></script></body></html>
