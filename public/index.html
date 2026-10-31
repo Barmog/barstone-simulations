@@ -1,16 +1,11 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Barstone — הדמיות</title><link rel="stylesheet" href="css/app.css"></head><body>
-<header><h1>Barstone · הדמיות מטבח</h1><span id="status">טוען…</span></header>
-<main>
-<section class="card"><h2>1. מידות</h2>
-<form id="dims"><label>שם לקוח <input name="client_name" required></label>
-<label>אורך משטח (ס"מ) <input name="length_cm" type="number" required></label>
-<label>עומק (ס"מ) <input name="depth_cm" type="number" value="60" required></label>
-<label>עובי (ס"מ) <input name="thickness_cm" type="number" value="2"></label>
-<label>סוג אבן <select name="stone_id" id="stones"></select></label>
-<button>שמור הדמיה</button></form></section>
-<section class="card"><h2>2. פריסת שיש / תצוגה</h2><canvas id="preview" width="800" height="300"></canvas></section>
-<section class="card"><h2>3. הדמיות שמורות</h2><ul id="list"></ul></section>
-</main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js"></script><script type="module" src="js/app.js"></script></body></html>
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Barstone · הדמיות</title>
+<style>@import url(https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;600;700&display=swap);*{box-sizing:border-box}body{margin:0;font-family:Heebo,system-ui;background:linear-gradient(#f7f4ef,#ece6dc);color:#1d1b19;min-height:100vh;padding:40px 20px 110px}main{max-width:1000px;margin:auto}header{display:flex;align-items:center;gap:14px}header img{height:44px}h1{font-weight:300;font-size:40px;margin:28px 0 6px}p.sub{color:#6b625a;margin:0 0 28px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}.card{display:block;text-decoration:none;color:inherit;background:rgba(255,255,255,.75);backdrop-filter:blur(20px);border-radius:22px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.07),inset 0 0 0 .5px rgba(0,0,0,.06);transition:transform .2s}.card:hover{transform:translateY(-3px)}.n{font-size:13px;color:#8a7a62}.card h2{margin:6px 0;font-size:20px}.card small{color:#6b625a}h3{margin:36px 0 12px;font-weight:600}.links a{margin-left:14px;color:#8a6d3b}</style></head>
+<body><main><header><img src="logo.png" alt="Barstone"><strong>תוכנת ההדמיות</strong></header>
+<h1>הדמיית משטחי שיש</h1><p class="sub">מידות › פריסת שיש › רינדור › מסמך ללקוח</p>
+<div class="grid">
+<a class="card" href="dimensions.html"><div class="n">שלב 1</div><h2>מידות</h2><small>הזנת מידות ובחירת אבן</small></a>
+<a class="card" href="layout.html" id="lay"><div class="n">שלב 2</div><h2>פריסת שיש</h2><small>לוחות למעלה, תוכנית למטה, קנט רציף</small></a>
+<a class="card" href="render.html"><div class="n">שלב 3</div><h2>רינדור</h2><small>הדמיה ויזואלית (בפיתוח)</small></a>
+<a class="card" href="document/document.html"><div class="n">שלב 4</div><h2>מסמך ללקוח</h2><small>מותאם לטלפון · <span>PDF</span></small></a></div>
+<h3>מסכי מובייל</h3><div class="links"><a href="mobile/mobile.html">פריסה במובייל</a><a href="mobile/mobile-library.html">ספריית לוחות</a><a href="mobile/mobile-sink-edge.html">כיור וקנט</a><a href="document/document.pdf">מסמך PDF</a></div>
+</main><script>if(matchMedia('(max-width: 820px)').matches)document.getElementById('lay').href='mobile/mobile.html'</script><script src="js/flow.js"></script></body></html>

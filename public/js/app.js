@@ -34,3 +34,9 @@ $('#dims').addEventListener('submit', async (e) => {
   draw(d); listSims();
 });
 await loadStones(); listSims();
+// מעבר לשלב הבא במסלול
+$('#dims').addEventListener('submit', () => {
+  const d = Object.fromEntries(new FormData($('#dims')));
+  localStorage.setItem('currentSim', JSON.stringify(d));
+  setTimeout(() => (location.href = matchMedia('(max-width: 820px)').matches ? 'mobile/mobile.html' : 'layout.html'), 300);
+});
