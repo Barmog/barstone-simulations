@@ -41,9 +41,9 @@
         g.onpointerup = () => {
           g.onpointermove = g.onpointerup = null;
           if (Math.abs(dx) + Math.abs(dy) < 5) return;
-          const pc = res.pieces.find((p) => p.key === key), snap = (v) => Math.max(0, Math.round(v / 10) * 10);
-          planPos = { ...planPos, [key]: { x: snap(pc.plan.x + dx), y: snap(pc.plan.y + dy) } };
-          draw(); toast(`"${pc.name}" הוזז · החישוב עודכן`);
+          const pc = res.pieces.find((p) => p.key === key), r = StoneEngine.resolvePlan(res.pieces, key, pc.plan.x + dx, pc.plan.y + dy);
+          planPos = { ...planPos, [key]: { x: r.x, y: r.y } };
+          draw(); toast(r.reverted ? `אין מקום פנוי — "${pc.name}" חזר למקומו` : r.moved ? `"${pc.name}" הוסט כדי למנוע חפיפה · החישוב עודכן` : `"${pc.name}" הוזז · החישוב עודכן`);
         };
       };
     });

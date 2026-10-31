@@ -137,6 +137,28 @@
       warnings,
     };
   }
-  const api = { DEF, buildPieces, run };
+
+  // מניעת חפיפה בתוכנית: הצמדה (מגנט 60 מ"מ) לקצוות חלקים אחרים, ואם עדיין חופף — הזזה למיקום הפנוי הקרוב
+  function planRect(p, x, y) { return { x, y, w: p.rot ? p.W : p.L, h: p.rot ? p.L : p.W }; }
+  function resolvePlan(pieces, key, x, y, gap) {
+    gap = gap || 0; const me = pieces.find((p) => p.key === key); if (!me) return { x, y };
+    const others = pieces.filter((p) => p.plan && p.key !== key).map((p) => planRect(p, p.plan.x, p.plan.y));
+    const R = (x, y) => planRect(me, Math.max(0, Math.round(x / 10) * 10), Math.max(0, Math.round(y / 10) * 10));
+    const hit = (a) => others.some((o) => a.x < o.x + o.w + gap && o.x < a.x + a.w + gap && a.y < o.y + o.h + gap && o.y < a.y + a.h + gap);
+    let r = R(x, y); const M = 60;
+    for (const o of others) { // מגנט
+      for (const [a, b] of [[r.x, o.x + o.w], [r.x + r.w, o.x], [r.x, o.x], [r.x + r.w, o.x + o.w]]) if (Math.abs(a - b) < M) { r.x += b - a; break; }
+      for (const [a, b] of [[r.y, o.y + o.h], [r.y + r.h, o.y], [r.y, o.y], [r.y + r.h, o.y + o.h]]) if (Math.abs(a - b) < M) { r.y += b - a; break; }
+    }
+    r = planRect(me, Math.max(0, r.x), Math.max(0, r.y));
+    if (!hit(r)) return { x: r.x, y: r.y, moved: false };
+    const cand = [];
+    for (const o of others) for (const [cx, cy] of [[o.x - r.w - gap, r.y], [o.x + o.w + gap, r.y], [r.x, o.y - r.h - gap], [r.x, o.y + o.h + gap]]) {
+      const c = planRect(me, Math.max(0, cx), Math.max(0, cy)); if (!hit(c)) cand.push(c);
+    }
+    cand.sort((a, b) => Math.hypot(a.x - r.x, a.y - r.y) - Math.hypot(b.x - r.x, b.y - r.y));
+    return cand.length ? { x: cand[0].x, y: cand[0].y, moved: true } : { x: me.plan.x, y: me.plan.y, moved: true, reverted: true };
+  }
+  const api = { resolvePlan, planRect, DEF, buildPieces, run };
   root.StoneEngine = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);
