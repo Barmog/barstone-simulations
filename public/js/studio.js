@@ -11,7 +11,8 @@
   let sim = S.getSim() || {};
   if (qid) { const row = await S.loadRemote(qid); if (row && row.layout && row.layout.sim) sim = row.layout.sim; }
   for (const el of form.querySelectorAll('[name]')) if (sim[el.name] !== undefined) el.type === 'checkbox' ? (el.checked = !!sim[el.name]) : (el.value = sim[el.name]);
-  const read = () => { const o = {}; for (const el of form.querySelectorAll('[name]')) o[el.name] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? +el.value : el.value; return o; };
+  let planPos = sim.plan_pos || {};
+  const read = () => { const o = { plan_pos: planPos }; for (const el of form.querySelectorAll('[name]')) o[el.name] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? +el.value : el.value; return o; };
   let res;
   function draw() {
     sim = read(); S.setSim(sim);
@@ -27,6 +28,25 @@
     $('#metrics').innerHTML = [['לוחות', m.boards], ['ניצולת', m.utilization + '%'], ['צריכת אבן', m.consumed_m2 + ' מ"ר'], ['שטח חלקים', m.piece_m2 + ' מ"ר'], ['קנט', m.edge_m + ' מ\''], ['חיבורים', m.joints]].map(([a, b]) => `<div><small>${a}</small><b>${b}</b></div>`).join('');
     $('#warn').innerHTML = res.warnings.length ? `<div class="warn">${res.warnings.map(V.esc).join('<br>')}</div>` : '<div class="warn ok">אין חריגות · הקנט רציף מהלוח</div>';
     $('#parts').innerHTML = res.pieces.map((p) => `<li><span>${p.key} · ${V.esc(p.name)}</span><span>${p.L}×${p.W}</span></li>`).join('');
+    // גרירת חלקים בתוכנית → שמירת מיקום ב-sim.plan_pos וחישוב מחדש
+    const psvg = document.querySelector('svg.plan');
+    if (psvg) psvg.querySelectorAll('.pp').forEach((g) => {
+      g.style.touchAction = 'none';
+      g.onpointerdown = (e) => {
+        e.preventDefault(); g.setPointerCapture(e.pointerId); g.style.cursor = 'grabbing';
+        const r = psvg.getBoundingClientRect(), k = psvg.viewBox.baseVal.width / r.width, x0 = e.clientX, y0 = e.clientY;
+        const key = g.dataset.key, same = psvg.querySelectorAll(`.pp[data-key="${key}"]`);
+        let dx = 0, dy = 0;
+        g.onpointermove = (ev) => { dx = (ev.clientX - x0) * k; dy = (ev.clientY - y0) * k; same.forEach((n) => n.setAttribute('transform', `translate(${dx},${dy})`)); };
+        g.onpointerup = () => {
+          g.onpointermove = g.onpointerup = null;
+          if (Math.abs(dx) + Math.abs(dy) < 5) return;
+          const pc = res.pieces.find((p) => p.key === key), snap = (v) => Math.max(0, Math.round(v / 10) * 10);
+          planPos = { ...planPos, [key]: { x: snap(pc.plan.x + dx), y: snap(pc.plan.y + dy) } };
+          draw(); toast(`"${pc.name}" הוזז · החישוב עודכן`);
+        };
+      };
+    });
     // לחיצה על לוח = סימון פגם
     document.querySelectorAll('svg[data-board]').forEach((svg) => svg.onclick = (e) => {
       const id = svg.dataset.board, r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
@@ -56,5 +76,6 @@
   addEventListener('resize', () => { clearTimeout(t); t = setTimeout(draw, 200); });
   $('#save').onclick = async () => { try { const r = await S.saveRemote(sim, res); toast(r.local ? 'נשמר במכשיר' : 'נשמר בענן ✓'); } catch (e) { toast('שגיאה בשמירה: ' + e.message); } };
   $('#toDoc').onclick = () => (location.href = 'document/document.html');
+  $('#resetPos').onclick = () => { planPos = {}; draw(); toast('מיקומי התוכנית אופסו'); };
   renderStack(); draw();
 })();
