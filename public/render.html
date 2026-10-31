@@ -84,7 +84,7 @@ async function build(){
      }
     }else{const m=new THREE.Mesh(new THREE.BoxGeometry(Lm,thm,Wm),mats);m.position.y=top0+thm/2;m.castShadow=m.receiveShadow=true;G.add(m)}
     maxX=Math.max(maxX,x0+w);maxZ=Math.max(maxZ,z0+d);
-    if(cab.checked){const cm=new THREE.MeshPhysicalMaterial({color:'#efeae2',roughness:.45,clearcoat:.3}),g=new THREE.Group(),cl=b.L-30,cw=b.W-60;
+    if(cab.checked){const cm=new THREE.MeshPhysicalMaterial({color:'#efeae2',roughness:.45,clearcoat:.3}),g=new THREE.Group(),cl=b.L-30,cw=b.W-30; // חזית ארון 15 מ"מ מאחורי קצה המשטח — אגן כיור תחתון נשאר בתוך הארון
      const hid=new THREE.MeshBasicMaterial({visible:false}),box=new THREE.Mesh(new THREE.BoxGeometry(cl*mm,.77,cw*mm),[cm,cm,hid,cm,cm,cm]);box.position.y=.1+.385;
      const kick=new THREE.Mesh(new THREE.BoxGeometry((cl-30)*mm,.1,(cw-50)*mm),new THREE.MeshStandardMaterial({color:'#2e2924',roughness:.8}));kick.position.y=.05;
      g.add(box,kick);const doors=Math.max(1,Math.round(cl/600)),hm=new THREE.MeshStandardMaterial({color:'#b8b2a8',metalness:1,roughness:.25});
