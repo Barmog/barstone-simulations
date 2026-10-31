@@ -1,5 +1,5 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>פריסת שיש · Barstone</title><link rel="stylesheet" href="css/studio.css?v=9"></head><body>
+<title>פריסת שיש · Barstone</title><link rel="stylesheet" href="css/studio.css?v=10"></head><body>
 <header class="top"><img src="logo.png" alt="Barstone"><h1>פריסת שיש</h1><span class="sp"></span><span id="sb" style="font-size:12px;color:var(--mute)"></span>
 <button class="btn ghost" id="toDoc">מסמך ללקוח</button><button class="btn" id="save">שמירה</button></header>
 <div class="wrap">
@@ -22,6 +22,8 @@
     <label>כיור רוחב<input name="sink_w_cm" type="number" value="60"></label>
     <label>כיור עומק<input name="sink_d_cm" type="number" value="40"></label>
     <label>כיור גובה<input name="sink_h_cm" type="number" value="20"></label>
+    <label>מיקום כיור<select name="sink_piece"><option value="A">משטח ראשי</option><option value="B">משטח L</option><option value="C">אי</option></select></label>
+    <label>מרכז כיור מתחילת החלק (ס"מ)<input name="sink_x_cm" type="number" placeholder="אמצע" min="0"></label>
   </div>
   <h2 style="margin-top:18px">ערימת לוחות</h2>
   <div class="f">
@@ -46,5 +48,5 @@
 </aside></div>
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js"></script><script src="js/store.js?v=9"></script><script src="js/engine.js?v=9"></script><script src="js/views.js?v=9"></script><script src="js/studio.js?v=9"></script><script src="js/flow.js?v=9"></script>
+<script src="js/config.js"></script><script src="js/store.js?v=10"></script><script src="js/engine.js?v=10"></script><script src="js/views.js?v=10"></script><script src="js/studio.js?v=10"></script><script src="js/flow.js?v=10"></script>
 </body></html>

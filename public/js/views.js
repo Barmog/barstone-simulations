@@ -54,7 +54,7 @@
     }
     // פתח כיור על המשטח הראשי (מיקום מהמנוע — לא חוצה חיבור)
     const sk = window.StoneEngine && StoneEngine.sinkPlan ? StoneEngine.sinkPlan(res) : null;
-    if (sk) g += `<rect x="${sk.x}" y="${sk.y}" width="${sk.w}" height="${sk.d}" rx="40" fill="rgba(27,26,24,.18)" stroke="#1B1A18" stroke-width="8" stroke-dasharray="30 18"/><text x="${sk.x + sk.w / 2}" y="${sk.y + sk.d / 2}" font-size="60" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18">כיור</text>`;
+    if (sk) g += `<rect x="${sk.x}" y="${sk.y}" width="${sk.pw}" height="${sk.ph}" rx="40" fill="rgba(27,26,24,.18)" stroke="#1B1A18" stroke-width="8" stroke-dasharray="30 18"/><text x="${sk.x + sk.pw / 2}" y="${sk.y + sk.ph / 2}" font-size="60" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18">כיור</text>`;
     g += `<text x="0" y="${-40}" font-size="70" fill="#8C857B">${(maxX / 10).toFixed(0)} ס"מ</text>`;
     return g + '</svg>';
   }
