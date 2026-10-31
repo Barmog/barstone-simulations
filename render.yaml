@@ -1,0 +1,16 @@
+# טיוטה — לא נפרס! Render Static Site להדמיות. ליצור רק אחרי אישור בר ל-workspace.
+services:
+  - type: web
+    name: barstone-simulations
+    runtime: static
+    buildCommand: "node scripts/build-config.mjs"
+    staticPublishPath: ./public
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN

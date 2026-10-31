@@ -1,0 +1,3 @@
+{"name":"barstone-simulations","version":"0.1.0","private":true,"type":"module",
+ "scripts":{"dev":"npx --yes serve public -l 3000","build":"node scripts/build-config.mjs"},
+ "engines":{"node":">=20"}}
