@@ -159,6 +159,23 @@
     cand.sort((a, b) => Math.hypot(a.x - r.x, a.y - r.y) - Math.hypot(b.x - r.x, b.y - r.y));
     return cand.length ? { x: cand[0].x, y: cand[0].y, moved: true } : { x: me.plan.x, y: me.plan.y, moved: true, reverted: true };
   }
-  const api = { resolvePlan, planRect, DEF, buildPieces, run };
+
+  // מיקום פתח הכיור בתוכנית (מ"מ): ממורכז על המשטח הראשי (או sink_x_cm = מרכז מהקצה), לא חוצה חיבור ולא צמוד לקצה (מינ' 60 מ"מ)
+  function sinkPlan(res, sim) {
+    sim = sim || res.sim || {}; if (!sim.sink) return null;
+    const A = res.pieces.find((p) => p.key === 'A'); if (!A || !A.plan) return null;
+    const sw = Math.round((+sim.sink_w_cm || 60) * 10), sd = Math.round((+sim.sink_d_cm || 40) * 10), M = 60;
+    if (sw > A.L - 2 * M || sd > A.W - 2 * M) return { x: A.plan.x, y: A.plan.y, w: sw, d: sd, ok: false, note: 'הכיור גדול מהמשטח' };
+    const segs = []; for (const u of res.used) for (const p of u.place) if (p.block.piece.key === 'A') segs.push([p.block.offsetL, p.block.offsetL + p.block.L]);
+    segs.sort((a, b) => a[0] - b[0]);
+    let cx = sim.sink_x_cm ? +sim.sink_x_cm * 10 : A.L / 2, note = '';
+    const fits = (x) => segs.some(([a, b]) => x - sw / 2 >= a + M && x + sw / 2 <= b - M);
+    if (!fits(cx)) { // הזזה לקטע הקרוב שבו הכיור נכנס במלואו
+      let best = null; for (const [a, b] of segs) if (b - a >= sw + 2 * M) { const c = Math.min(Math.max(cx, a + M + sw / 2), b - M - sw / 2); if (best === null || Math.abs(c - cx) < Math.abs(best - cx)) best = c; }
+      if (best !== null) { note = 'הכיור הוזז כדי לא לחצות חיבור בין חלקים'; cx = best; } else note = 'הכיור חוצה חיבור — מומלץ לשנות מידות';
+    }
+    return { x: A.plan.x + Math.round(cx - sw / 2), y: A.plan.y + Math.round((A.W - sd) / 2), w: sw, d: sd, ok: true, note, localX: Math.round(cx - sw / 2), localY: Math.round((A.W - sd) / 2) };
+  }
+  const api = { sinkPlan, resolvePlan, planRect, DEF, buildPieces, run };
   root.StoneEngine = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

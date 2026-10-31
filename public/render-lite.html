@@ -1,4 +1,4 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=6">
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=9">
 <style>main{max-width:1100px;margin:auto;padding:16px}
 .stage{direction:ltr;perspective:2200px;perspective-origin:50% 20%;height:620px;overflow:hidden;border-radius:16px;background:linear-gradient(#efe9df 0,#e6ddcf 45%,#cbbfae 46%,#b9ab97 100%);position:relative}
 .world{position:absolute;left:50%;top:52%;transform-style:preserve-3d}
@@ -9,7 +9,7 @@
 <body><header class="top"><img src="logo.png" alt="Barstone"><h1>רינדור הדמיה</h1><span class="sp"></span><a class="btn ghost" href="layout.html" style="text-decoration:none">חזרה לפריסה</a><a class="btn" href="document/document.html" style="text-decoration:none">למסמך ›</a></header>
 <main><section class="panel"><h2>תצוגה פרספקטיבית מהפריסה שלך</h2><div class="ctl"><label>סיבוב <input type="range" id="rz" min="-60" max="60" value="-18"></label><label>זווית <input type="range" id="rx" min="20" max="75" value="58"></label><label>זום <input type="range" id="zm" min="50" max="160" value="100"></label><label><input type="checkbox" id="cab" checked> ארונות</label></div><div class="stage"><div class="world" id="w"><div class="floor" id="r"></div></div></div><div class="m" id="mm"></div>
 <p style="font-size:12px;color:var(--mute)">תצוגה זו נוצרת מהפריסה בפועל — הטקסטורה לכל חלק נלקחת מהמיקום שלו בלוח. המשטחים מוצגים בתלת-ממד (עובי, קנט רציף וארונות) — זה עדיין לא רינדור פוטוריאליסטי.</p></section></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=6"></script><script src="js/engine.js?v=6"></script><script src="js/views.js?v=6"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=9"></script><script src="js/engine.js?v=9"></script><script src="js/views.js?v=9"></script>
 <script>(async()=>{const S=SimStore,sim=S.getSim();if(!sim||!sim.length_cm){r.innerHTML='<p>אין עדיין הדמיה — <a href="dimensions.html">להתחלה</a></p>';return}
 const st=await S.stones(),stone=st.find(s=>String(s.id)===String(sim.stone_id))||st[0],tex=S.texture(stone);
 const res=StoneEngine.run(sim,S.getBoards(),{edgeH:sim.edge_mm||40,kerf:sim.kerf_mm||4});res.sim=sim;const m=res.metrics;
@@ -32,4 +32,4 @@ r.innerHTML=g;view()}
 function view(){r.style.width=VW*k+'px';w.style.transform=`scale(${zm.value/100}) rotateX(${rx.value}deg) rotateZ(${rz.value}deg) translate(${-VW*k/2}px,${-VH*k/2}px)`}
 [rx,rz,zm].forEach(e=>e.oninput=view);cab.onchange=build;build();
 mm.innerHTML=[['אבן',stone.name],['לוחות',m.boards],['ניצולת',m.utilization+'%'],['צריכה',m.consumed_m2+' מ"ר']].map(([a,b])=>`<div><small>${a}</small><b>${esc(b)}</b></div>`).join('')})()</script>
-<script src="js/flow.js?v=6"></script></body></html>
+<script src="js/flow.js?v=9"></script></body></html>

@@ -1,4 +1,4 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=7">
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=9">
 <style>main{max-width:1200px;margin:auto;padding:16px}#c{width:100%;height:640px;display:block;border-radius:16px;background:#e9e3da;touch-action:none}
 .ctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0;font-size:13px}.ctl select{padding:6px 10px;border-radius:10px;border:1px solid #ddd}.cr{font-size:11px;color:var(--mute);margin-top:8px}</style></head>
 <body><header class="top"><img src="logo.png" alt="Barstone"><h1>רינדור הדמיה</h1><span class="sp"></span><a class="btn ghost" href="layout.html" style="text-decoration:none">חזרה לפריסה</a><a class="btn" href="document/document.html" style="text-decoration:none">למסמך ›</a></header>
@@ -6,7 +6,7 @@
 <div class="ctl"><label>אבן <select id="st"></select></label><label><input type="checkbox" id="cab" checked> ארונות</label><label>תאורה <select id="lt"><option value="day">אור יום</option><option value="warm">חם (ערב)</option><option value="studio">סטודיו</option></select></label><button class="btn ghost" id="shot">צילום תמונה</button><span id="st8" style="color:var(--mute)">טוען…</span></div>
 <canvas id="c"></canvas><div class="m" id="mm"></div>
 <p class="cr">גררו לסיבוב · גלגלת/צביטה לזום. הטקסטורה של כל משטח וקנט נלקחת מהמיקום שלו בלוח (קנט רציף). תאורה והשתקפויות מחושבות בדפדפן (Three.js) — הדמיה, לא צילום.</p><p class="cr" id="cred"></p></section></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=7"></script><script src="js/engine.js?v=7"></script><script src="js/views.js?v=7"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=9"></script><script src="js/engine.js?v=9"></script><script src="js/views.js?v=9"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -33,7 +33,7 @@ async function build(){
   const stone=stones.find(s=>String(s.id)===$('#st').value)||stones[0];sim.stone_id=stone.id;S.setSim(sim);
   $('#cred').textContent=stone.tile_path&&CR[stone.tile_path]?`צילום אבן: ${CR[stone.tile_path]} (Wikimedia Commons)`:stone.tile_path?'טקסטורה: ambientCG · CC0':'';
   const res=StoneEngine.run(sim,S.getBoards(),{edgeH:sim.edge_mm||40,kerf:sim.kerf_mm||4}),o=res.opts,th=TH();
-  const base=await loadTex(S.texture(stone));let maxX=0,maxZ=0;
+  const base=await loadTex(S.texture(stone));let maxX=0,maxZ=0;const sk=StoneEngine.sinkPlan(res,sim);let sinkMsg='';
   for(const u of res.used){const bw=u.board.w||o.boardW,bh=u.board.h||o.boardH,bt=u.board.tex?await loadTex(u.board.tex):base;
    for(const p of u.place){const b=p.block,pc=b.piece;if(!pc.plan)continue;
     const rotPlan=!!pc.rot,x0=pc.plan.x+(rotPlan?0:b.offsetL),z0=pc.plan.y+(rotPlan?b.offsetL:0),w=rotPlan?b.W:b.L,d=rotPlan?b.L:b.W;
@@ -42,12 +42,28 @@ async function build(){
     const side=bt&&region(bt,bw,bh,p.x,p.y,o.edgeH,b.W,p.rot);
     // סדר פאות BoxGeometry: +x,-x,+y(עליון),-y,+z(חזית=קנט),-z
     const mats=[mat(side),mat(side),mat(top),mat(top),mat(edge),mat(edge)];
+    const cy=(cab.checked?.87:0)+th*mm/2,sinkHere=sk&&sk.ok&&pc.key==='A'&&!rotPlan&&sk.localX>=b.offsetL&&sk.localX+sk.w<=b.offsetL+b.L;
+    if(sinkHere){sinkMsg=sk.note;
+     const hx=sk.localX-b.offsetL,hy=sk.localY,r=40,sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(b.L,0);sh.lineTo(b.L,b.W);sh.lineTo(0,b.W);sh.lineTo(0,0);
+     const hole=new THREE.Path();hole.moveTo(hx+r,hy);hole.lineTo(hx+sk.w-r,hy);hole.quadraticCurveTo(hx+sk.w,hy,hx+sk.w,hy+r);hole.lineTo(hx+sk.w,hy+sk.d-r);hole.quadraticCurveTo(hx+sk.w,hy+sk.d,hx+sk.w-r,hy+sk.d);hole.lineTo(hx+r,hy+sk.d);hole.quadraticCurveTo(hx,hy+sk.d,hx,hy+sk.d-r);hole.lineTo(hx,hy+r);hole.quadraticCurveTo(hx,hy,hx+r,hy);sh.holes.push(hole);
+     const geo=new THREE.ExtrudeGeometry(sh,{depth:th,bevelEnabled:false,curveSegments:8}),P=geo.attributes.position,UV=geo.attributes.uv;
+     for(let i=0;i<P.count;i++){const lx=P.getX(i),ly=P.getY(i);let bx=p.x+lx,by=p.y+ly;if(p.rot){bx=p.x+b.H-ly;by=p.y+lx}UV.setXY(i,bx/bw,1-by/bh)}
+     geo.rotateX(Math.PI/2);geo.scale(mm,mm,mm);const sm=new THREE.MeshPhysicalMaterial({map:bt,roughness:.12,clearcoat:1,clearcoatRoughness:.06,envMapIntensity:1.1,side:THREE.DoubleSide});
+     const m=new THREE.Mesh(geo,sm);m.castShadow=m.receiveShadow=true;m.position.set(x0*mm,cy+th*mm/2,z0*mm);root.add(m);
+     const fe=new THREE.Mesh(new THREE.PlaneGeometry(b.L*mm,th*mm),mat(edge));fe.position.set((x0+w/2)*mm,cy,(z0+d)*mm+.0005);root.add(fe);
+     const t=(+sim.thickness_cm||2)*10*mm,bh2=(+sim.sink_h_cm||20)*10*mm,sw=sk.w*mm,sd=sk.d*mm,cx=(sk.x+sk.w/2)*mm,cz=(sk.y+sk.d/2)*mm,topY=cy+th*mm/2,bm=new THREE.MeshPhysicalMaterial({map:bt,roughness:.18,clearcoat:.8,envMapIntensity:.9});
+     const add=(gw,gh,gd,x,y,z)=>{const q=new THREE.Mesh(new THREE.BoxGeometry(gw,gh,gd),bm);q.position.set(x,y,z);q.castShadow=q.receiveShadow=true;root.add(q)};
+     add(sw,bh2,t,cx,topY-bh2/2,cz-sd/2+t/2);add(sw,bh2,t,cx,topY-bh2/2,cz+sd/2-t/2);add(t,bh2,sd,cx-sw/2+t/2,topY-bh2/2,cz);add(t,bh2,sd,cx+sw/2-t/2,topY-bh2/2,cz);add(sw,t,sd,cx,topY-bh2+t/2,cz);
+     const dr=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.003,24),new THREE.MeshStandardMaterial({color:'#bbb',metalness:1,roughness:.2}));dr.position.set(cx,topY-bh2+t+.002,cz);root.add(dr);
+     const ch=new THREE.MeshStandardMaterial({color:'#dcdcdc',metalness:1,roughness:.12}),fz=new THREE.Group(),c1=new THREE.Mesh(new THREE.CylinderGeometry(.018,.022,.32,24),ch);c1.position.y=.16;
+     const arc=new THREE.Mesh(new THREE.TorusGeometry(.11,.013,12,32,Math.PI),ch);arc.position.set(0,.32,.11);arc.rotation.y=Math.PI/2;const sp=new THREE.Mesh(new THREE.CylinderGeometry(.014,.014,.06,16),ch);sp.position.set(0,.29,.22);
+     fz.add(c1,arc,sp);fz.position.set(cx,topY,cz-sd/2-.06);fz.traverse(n=>n.castShadow=true);root.add(fz);
+    }else{
     const m=new THREE.Mesh(new THREE.BoxGeometry(b.L*mm,th*mm,b.W*mm),mats);m.castShadow=m.receiveShadow=true;
-    const cy=(cab.checked?.87:0)+th*mm/2;
     if(rotPlan){m.rotation.y=-Math.PI/2;m.position.set((x0+w/2)*mm,cy,(z0+d/2)*mm)}else m.position.set((x0+w/2)*mm,cy,(z0+d/2)*mm);
-    root.add(m);maxX=Math.max(maxX,x0+w);maxZ=Math.max(maxZ,z0+d);
+    root.add(m);}maxX=Math.max(maxX,x0+w);maxZ=Math.max(maxZ,z0+d);
     if(cab.checked){const cm=new THREE.MeshPhysicalMaterial({color:'#efeae2',roughness:.45,clearcoat:.3}),g=new THREE.Group();
-     const box=new THREE.Mesh(new THREE.BoxGeometry((w-30)*mm,.77,(d-60)*mm),cm);box.position.y=.1+.385;box.castShadow=box.receiveShadow=true;
+     const hid=new THREE.MeshBasicMaterial({visible:false}),box=new THREE.Mesh(new THREE.BoxGeometry((w-30)*mm,.77,(d-60)*mm),[cm,cm,hid,cm,cm,cm]);box.position.y=.1+.385;box.castShadow=box.receiveShadow=true;
      const kick=new THREE.Mesh(new THREE.BoxGeometry((w-60)*mm,.1,(d-110)*mm),new THREE.MeshStandardMaterial({color:'#2e2924',roughness:.8}));kick.position.y=.05;
      g.add(box,kick);const doors=Math.max(1,Math.round(w/600)),hm=new THREE.MeshStandardMaterial({color:'#b8b2a8',metalness:1,roughness:.25});
      for(let i=1;i<doors;i++){const s=new THREE.Mesh(new THREE.BoxGeometry(.004,.75,.004),new THREE.MeshStandardMaterial({color:'#9d968c'}));s.position.set((-(w-30)/2+i*(w-30)/doors)*mm,.485,(d-60)/2*mm+.002);g.add(s)}
@@ -62,9 +78,9 @@ async function build(){
   if(cab.checked){const up=new THREE.Mesh(new THREE.BoxGeometry(W*.7,.7,.35),new THREE.MeshPhysicalMaterial({color:'#efeae2',roughness:.45}));up.position.set(W*.35,1.95,.175);up.castShadow=true;root.add(up)}
   sun.position.set(W*.2-1.5,4.5,D+3);sun.target.position.set(W/2,0,D/2);const sc=sun.shadow.camera;sc.left=sc.bottom=-Math.max(W,D);sc.right=sc.top=Math.max(W,D);sc.far=20;sc.updateProjectionMatrix();
   lamps.clear();if(cab.checked)for(let i=0;i<3;i++){const l=new THREE.PointLight('#ffe3b8',.0,3);l.position.set(W*(.2+i*.3),1.55,.25);lamps.add(l)}
-  ctl.target.set(W/2,.8,D/2);if(!build.done){cam.position.set(W/2-W*.15,2.6,D+3.2);build.done=1}light();
+  ctl.target.set(W/2,.8,D/2);if(!build.done){const k=Math.max(1,1.7/cam.aspect),f=Math.max(W,D)/4.2;cam.position.set(W/2-W*.15,(2.6+.4*k)*Math.max(1,f),D+3.2*k*Math.max(1,f));build.done=1}light();
   const m=res.metrics;$('#mm').innerHTML=[['אבן',stone.name],['לוחות',m.boards],['ניצולת',m.utilization+'%'],['צריכה',m.consumed_m2+' מ"ר']].map(([a,b])=>`<div><small>${a}</small><b>${esc(b)}</b></div>`).join('');
-  $('#st8').textContent=base?'':'הטקסטורה לא נטענה';
+  $('#st8').textContent=(base?'':'הטקסטורה לא נטענה ')+(sinkMsg||'');
 }
 function light(){const v=$('#lt').value;R.toneMappingExposure=v==='warm'?.85:1;sun.color.set(v==='warm'?'#ffc98f':'#ffffff');sun.intensity=v==='studio'?1.2:v==='warm'?1.4:2.2;
   hemi.intensity=v==='studio'?.9:.5;scene.background.set(v==='warm'?'#d9cbb8':'#e9e3da');lamps.children.forEach(l=>l.intensity=v==='warm'?1.6:.4)}
@@ -73,4 +89,4 @@ addEventListener('resize',size);size();$('#st').onchange=build;cab.onchange=buil
 $('#shot').onclick=()=>{const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download='barstone-render.png';a.click()};
 await build();(function loop(){requestAnimationFrame(loop);ctl.update();R.render(scene,cam)})();window.__ready=1;
 </script>
-<script src="js/flow.js?v=7"></script></body></html>
+<script src="js/flow.js?v=9"></script></body></html>

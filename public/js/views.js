@@ -52,9 +52,9 @@
       if (q.b.seg > 0) g += `<line x1="${q.x}" y1="${q.y}" x2="${q.rot ? q.x + q.w : q.x}" y2="${q.rot ? q.y : q.y + q.h}" stroke="#2FB070" stroke-width="14" stroke-dasharray="40 20"/>`;
       g += `<text x="${q.x + q.w / 2}" y="${q.y + q.h / 2}" font-size="90" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18" font-weight="600" style="paint-order:stroke;stroke:rgba(255,255,255,.8);stroke-width:14px">${esc(q.pc.name)}</text></g>`;
     }
-    // פתח כיור על המשטח הראשי
-    const main = geo.find((q) => q.pc.key === 'A' && q.b.seg === 0), sim = res.sim || {};
-    if (main && sim.sink) { const sw = (sim.sink_w_cm || 60) * 10, sd = (sim.sink_d_cm || 40) * 10; g += `<rect x="${main.x + main.w / 2 - sw / 2}" y="${main.y + (main.h - sd) / 2}" width="${sw}" height="${sd}" rx="40" fill="rgba(255,255,255,.35)" stroke="#1B1A18" stroke-width="8" stroke-dasharray="30 18"/>`; }
+    // פתח כיור על המשטח הראשי (מיקום מהמנוע — לא חוצה חיבור)
+    const sk = window.StoneEngine && StoneEngine.sinkPlan ? StoneEngine.sinkPlan(res) : null;
+    if (sk) g += `<rect x="${sk.x}" y="${sk.y}" width="${sk.w}" height="${sk.d}" rx="40" fill="rgba(27,26,24,.18)" stroke="#1B1A18" stroke-width="8" stroke-dasharray="30 18"/><text x="${sk.x + sk.w / 2}" y="${sk.y + sk.d / 2}" font-size="60" text-anchor="middle" dominant-baseline="middle" fill="#1B1A18">כיור</text>`;
     g += `<text x="0" y="${-40}" font-size="70" fill="#8C857B">${(maxX / 10).toFixed(0)} ס"מ</text>`;
     return g + '</svg>';
   }
