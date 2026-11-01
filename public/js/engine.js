@@ -1,5 +1,8 @@
 // Barstone — מנוע פריסת שיש. יחידות: מ"מ. ללא תלות בדפדפן (נבדק גם ב-Node).
 (function (root) {
+  // ארון עליון (מ"מ): x מתחילת המשטח הראשי, l אורך, h גובה, d עומק, b גובה תחתית מהרצפה
+  function upperOf(sim, L) { const n = (v, d) => (v === '' || v == null || isNaN(+v) ? d : +v * 10); const l = Math.min(L, Math.max(300, n(sim.upper_l_cm, Math.round(L * .7 / 10) * 10))); const x = Math.min(L - l, Math.max(0, n(sim.upper_x_cm, 0)));
+    return { on: sim.upper_on !== false && sim.upper_on !== 'false', x, l, h: Math.max(300, n(sim.upper_h_cm, 700)), d: Math.max(200, n(sim.upper_d_cm, 350)), b: Math.max(1100, n(sim.upper_b_cm, 1500)) }; }
   const DEF = { boardW: 3200, boardH: 1600, kerf: 4, edgeH: 40, margin: 10, rotate: true };
 
   // בניית חלקים מתוך מידות ההדמיה
@@ -11,7 +14,9 @@
     if (L > 0) P.push({ key: 'A', name: 'משטח ראשי', L, W: D, edge, plan: { x: 0, y: 0 } });
     if (T(sim.l_length_cm) > 0) P.push({ key: 'B', name: 'משטח L', L: T(sim.l_length_cm), W: T(sim.l_depth_cm) || D, edge, rot: true, plan: { x: L - (T(sim.l_depth_cm) || D), y: D } } /* רגל L צמודה לקצה השמאלי-תחתון של המשטח, מתחת לפינה */);
     if (T(sim.island_l_cm) > 0) P.push({ key: 'C', name: 'אי', L: T(sim.island_l_cm), W: T(sim.island_w_cm || 90), edge, edgeBoth: true, plan: { x: Math.max(0, (L - T(sim.island_l_cm)) / 2), y: D + 1000 } } /* אי ממורכז, מעבר 100 ס"מ */);
-    if (T(sim.splash_h_cm) > 0) P.push({ key: 'D', name: 'חיפוי קיר', L, W: T(sim.splash_h_cm), edge: false, plan: null });
+    { const U = upperOf(sim, L); let dH = T(sim.splash_h_cm), dL = L, dx = 0;
+      if (dH > 0 && sim.clad_fit && U.on) { dH = Math.max(50, U.b - T(sim.counter_h_cm || 90)); dL = U.l; dx = U.x; } // חיפוי צמוד לארון העליון: גובה = מתחתית הארון עד המשטח, אורך = אורך הארון
+      if (dH > 0) P.push({ key: 'D', name: 'חיפוי קיר', L: dL, W: dH, dx, edge: false, plan: null }); }
     // מפל לאי: שני לוחות אנכיים מאותה אבן בקצות האי, עד הרצפה (גובה משטח 90 ס"מ פחות עובי)
     if (sim.island_waterfall && T(sim.island_l_cm) > 0) { const wh = Math.max(300, T(sim.counter_h_cm || 90) - T(sim.thickness_cm || 2)), iw = T(sim.island_w_cm || 90);
       P.push({ key: 'E1', name: 'מפל אי · צד ימין', L: iw, W: wh, edge: false, plan: null, wf: 1 }, { key: 'E2', name: 'מפל אי · צד שמאל', L: iw, W: wh, edge: false, plan: null, wf: 2 }); }
@@ -241,5 +246,5 @@
   // תאימות לאחור: הכיור בלבד
   function sinkPlan(res, sim) { return cutouts(res, sim).items.find((i) => i.type === 'sink') || null; }
   const api = { sinkPlan, cutouts, PIECE_HE, resolvePlan, planRect, DEF, buildPieces, run };
-  root.StoneEngine = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
+  api.upperOf = upperOf; root.StoneEngine = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -44,3 +44,6 @@ svg.plan>:not(.pp){pointer-events:none}svg.plan{user-select:none;-webkit-user-se
 .qk-sl{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 18px}.qk-sl label{display:flex;flex-direction:column;gap:4px;font-size:13px}.qk-sl label span{display:flex;justify-content:space-between}.qk-sl output{font-weight:600}.qk-sl input[type=range]{width:100%;accent-color:#1B1A18;height:28px}.qk-msg{margin-top:8px;font-size:13px}.qk-msg.bad{color:#b3261e}
 
 .qk-h{display:flex;align-items:center;gap:8px;flex:1 1 260px;font-size:13px}.qk-h input[type=range]{flex:1;accent-color:#1B1A18;height:28px;min-width:100px}.qk-h input[type=number]{width:70px;min-height:40px;border:1px solid rgba(27,26,24,.14);border-radius:10px;text-align:center;font:600 15px Heebo}.qk-h em{font-style:normal;color:#777}
+
+.qk-note{flex-basis:100%;color:#6b655c;font-size:12.5px;line-height:1.5}.qk-up{margin-top:10px;padding-top:12px;border-top:1px solid rgba(27,26,24,.08)}#qUpSl{margin-bottom:10px}
+svg.plan>g.upc.upc{pointer-events:auto;touch-action:none}
