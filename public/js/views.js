@@ -84,6 +84,10 @@
       g += `<g><circle cx="${lx}" cy="${ly}" r="46" fill="#2FB070" stroke="#fff" stroke-width="10"/><text x="${lx}" y="${ly + 4}" font-size="54" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="700">J</text>
       <text x="${lx}" y="${ly - 70}" font-size="50" text-anchor="middle" fill="#1F7A4D" style="paint-order:stroke;stroke:rgba(255,255,255,.9);stroke-width:12px">חיבור · ${(q.b.offsetL / 10).toFixed(0)} ס"מ</text></g>`; }
     g += `<text x="0" y="${-110}" font-size="56" fill="#8C857B">${(maxX / 10).toFixed(0)} ס"מ</text>`;
+    // חיפוי קיר (לאורך הקיר האחורי של המשטח הראשי) ומפל לאי — סימון בתוכנית
+    const pD = res.pieces.find((p) => p.key === 'D'), pA = res.pieces.find((p) => p.key === 'A'), pC = res.pieces.find((p) => p.key === 'C');
+    if (pD && pA && pA.plan) g += `<g class="clad" pointer-events="none"><rect x="${pA.plan.x}" y="-62" width="${pA.L}" height="46" rx="10" fill="#C9B28F" stroke="#8a6d3b" stroke-width="5" stroke-dasharray="18 10"/><text x="${pA.plan.x + pA.L / 2}" y="-30" font-size="34" text-anchor="middle" fill="#5b4330">חיפוי קיר · ${(pD.W / 10).toFixed(0)} ס"מ</text></g>`;
+    if (pC && pC.plan && res.pieces.some((p) => p.wf)) for (const x of [pC.plan.x - 40, pC.plan.x + pC.L]) g += `<g class="wf" pointer-events="none"><rect x="${x}" y="${pC.plan.y}" width="40" height="${pC.W}" fill="#8a6d3b"/><text x="${x + 20}" y="${pC.plan.y - 24}" font-size="34" text-anchor="middle" fill="#5b4330">מפל</text></g>`;
     return g + '</svg>';
   }
   window.StoneViews = { boardSVG, planSVG, esc };

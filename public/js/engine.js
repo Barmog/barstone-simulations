@@ -11,7 +11,10 @@
     if (L > 0) P.push({ key: 'A', name: 'משטח ראשי', L, W: D, edge, plan: { x: 0, y: 0 } });
     if (T(sim.l_length_cm) > 0) P.push({ key: 'B', name: 'משטח L', L: T(sim.l_length_cm), W: T(sim.l_depth_cm) || D, edge, rot: true, plan: { x: L - (T(sim.l_depth_cm) || D), y: D } } /* רגל L צמודה לקצה השמאלי-תחתון של המשטח, מתחת לפינה */);
     if (T(sim.island_l_cm) > 0) P.push({ key: 'C', name: 'אי', L: T(sim.island_l_cm), W: T(sim.island_w_cm || 90), edge, edgeBoth: true, plan: { x: Math.max(0, (L - T(sim.island_l_cm)) / 2), y: D + 1000 } } /* אי ממורכז, מעבר 100 ס"מ */);
-    if (T(sim.splash_h_cm) > 0) P.push({ key: 'D', name: 'חיפוי', L, W: T(sim.splash_h_cm), edge: false, plan: null });
+    if (T(sim.splash_h_cm) > 0) P.push({ key: 'D', name: 'חיפוי קיר', L, W: T(sim.splash_h_cm), edge: false, plan: null });
+    // מפל לאי: שני לוחות אנכיים מאותה אבן בקצות האי, עד הרצפה (גובה משטח 90 ס"מ פחות עובי)
+    if (sim.island_waterfall && T(sim.island_l_cm) > 0) { const wh = Math.max(300, T(sim.counter_h_cm || 90) - T(sim.thickness_cm || 2)), iw = T(sim.island_w_cm || 90);
+      P.push({ key: 'E1', name: 'מפל אי · צד ימין', L: iw, W: wh, edge: false, plan: null, wf: 1 }, { key: 'E2', name: 'מפל אי · צד שמאל', L: iw, W: wh, edge: false, plan: null, wf: 2 }); }
     if (sim.sink && sim.sink_type === 'stone') { // כיור בנוי מאבן: 4 דפנות + תחתית (כיור קנוי = פתח בלבד, בלי חלקי אבן)
       const sw = T(sim.sink_w_cm || 60), sd = T(sim.sink_d_cm || 40), sh = T(sim.sink_h_cm || 20), t = T(sim.thickness_cm || 2);
       P.push({ key: 'S1', name: 'כיור · תחתית', L: sw, W: sd, sink: true });
@@ -181,7 +184,7 @@
 
   // ===== פתחים במשטח: כיור (יחיד/כפול), חור ברז, כיריים =====
   // מערכת מקומית של חלק: localX לאורך החלק, localY לרוחבו מהקצה האחורי. M = מרווח מינימלי מקצה/חיבור.
-  const PIECE_HE = { A: 'משטח ראשי', B: 'משטח L', C: 'אי' };
+  const PIECE_HE = { A: 'משטח ראשי', B: 'משטח L', C: 'אי', D: 'חיפוי קיר', E1: 'מפל אי', E2: 'מפל אי' };
   function toPlan(P, lx, ly, w, d) { return P.rot ? { x: P.plan.x + (P.W - ly - d), y: P.plan.y + lx, pw: d, ph: w } : { x: P.plan.x + lx, y: P.plan.y + ly, pw: w, ph: d }; }
   function segsOf(res, key) { const s = []; for (const u of res.used) for (const p of u.place) if (p.block.piece.key === key) s.push([p.block.offsetL, p.block.offsetL + p.block.L]); return s.sort((a, b) => a[0] - b[0]); }
   // מציאת מרכז קרוב לרצוי: בתוך קטע אחד (לא חוצה חיבור), עם מרווח, ובלי לחפוף פתחים אחרים
