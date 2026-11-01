@@ -17,7 +17,7 @@
     ['#qHr', '#qHn'].forEach((q) => { const e = host.querySelector(q); if (document.activeElement !== e && h > 0) e.value = h; });
     host.querySelectorAll('#qCladH button').forEach((b) => b.classList.toggle('on', +b.dataset.h === h));
     const qw = host.querySelector('#qWf'); qw.classList.toggle('on', wf && isl > 0); qw.disabled = isl <= 0; qw.title = isl > 0 ? '' : 'אין אי — הגדירו אורך אי';
-    host.querySelectorAll('input[type=range]').forEach((r) => { const v = +F(r.dataset.n).value || 0; if (document.activeElement !== r) r.value = v; host.querySelector('#o_' + r.dataset.n).textContent = v ? v + ' ס"מ' : 'אין'; });
+    host.querySelectorAll('input[type=range][data-n]').forEach((r) => { const v = +F(r.dataset.n).value || 0; if (document.activeElement !== r) r.value = v; host.querySelector('#o_' + r.dataset.n).textContent = v ? v + ' ס"מ' : 'אין'; });
     setTimeout(() => { const w = document.getElementById('warn'), bad = w && /גדול מה|לא נכנס|אין מקום לכיור|אין מקום לכיריים|לא נמצא מקום/.test(w.innerText); const m = host.querySelector('#qMsg'); m.textContent = bad ? '⚠︎ במידות האלה פתח (כיור/כיריים) לא נכנס — ראו "לתשומת לב"' : ''; m.classList.toggle('bad', !!bad); }, 400);
   }
   host.querySelector('#qClad').onclick = () => { set('splash_h_cm', (+F('splash_h_cm').value || 0) > 0 ? 0 : 25); fire(); };
@@ -25,6 +25,6 @@
   const hv = (e) => { let v = +e.target.value; if (!(v > 0)) return; v = Math.min(120, Math.max(5, v)); set('splash_h_cm', v); fire(); };
   host.querySelector('#qHr').addEventListener('input', hv); host.querySelector('#qHn').addEventListener('input', hv);
   host.querySelector('#qWf').onclick = () => { set('island_waterfall', !F('island_waterfall').checked); fire(); };
-  host.querySelectorAll('input[type=range]').forEach((r) => r.addEventListener('input', () => { set(r.dataset.n, r.value); fire(); }));
+  host.querySelectorAll('input[type=range][data-n]').forEach((r) => r.addEventListener('input', () => { set(r.dataset.n, r.value); fire(); }));
   form.addEventListener('input', () => setTimeout(sync, 0)); sync();
 })();
