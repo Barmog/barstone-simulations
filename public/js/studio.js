@@ -58,6 +58,7 @@
     };
     // לחיצה על לוח = סימון פגם
     document.querySelectorAll('svg[data-board]').forEach((svg) => svg.onclick = (e) => {
+      if (!defMode) return; // פגם רק כתוספת מפורשת
       const id = svg.dataset.board, r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
       const x = ((e.clientX - r.left) / r.width) * vb.width, y = ((e.clientY - r.top) / r.height) * vb.height;
       let boards = S.getBoards(), b = boards.find((q) => q.id === id);
@@ -85,6 +86,11 @@
   addEventListener('resize', () => { clearTimeout(t); t = setTimeout(draw, 200); });
   $('#save').onclick = async () => { try { const r = await S.saveRemote(sim, res); toast(r.local ? 'נשמר במכשיר' : r.same ? 'כבר שמור בענן ✓ (ללא שינוי)' : 'נשמר בענן ✓'); } catch (e) { toast('שגיאה בשמירה: ' + e.message); } };
   $('#toDoc').onclick = () => (location.href = 'document/document.html');
+  // פגמים: כבויים כברירת מחדל; ניקוי חד-פעמי של פגמים ישנים שסומנו בלחיצה בטעות
+  if (!localStorage.getItem('defectsOptIn_v1')) { S.setBoards(S.getBoards().map((b) => ({ ...b, defects: [] }))); localStorage.setItem('defectsOptIn_v1', '1'); }
+  var defMode = false; const dm = $('#defMode');
+  if (dm) dm.onclick = () => { defMode = !defMode; dm.classList.toggle('on', defMode); document.body.classList.toggle('def-mode', defMode); toast(defMode ? 'מצב סימון פגם: לחצו על מקום בלוח' : 'סימון פגמים כובה'); };
+  const dc = $('#defClear'); if (dc) dc.onclick = () => { S.setBoards(S.getBoards().map((b) => ({ ...b, defects: [] }))); renderStack(); draw(); toast('כל הפגמים נוקו'); };
   $('#resetPos').onclick = () => { planPos = {}; draw(); toast('מיקומי התוכנית אופסו'); };
   // ===== תוכנית: צביטה לזום, גרירה עם שתי אצבעות / אצבע אחת כשמוגדל, כפתורי זום =====
   function applyZoom() { const sv = plan.querySelector('svg.plan'); if (sv) { sv.style.transformOrigin = '0 0'; sv.style.transform = `translate(${Z.x}px,${Z.y}px) scale(${Z.z})`; } plan.classList.toggle('zoomed', Z.z > 1.01); const zl = $('#zl'); if (zl) zl.textContent = Math.round(Z.z * 100) + '%'; }

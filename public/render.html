@@ -1,7 +1,9 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=19">
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>רינדור · Barstone</title><link rel="stylesheet" href="css/studio.css?v=20">
 <style>main{max-width:1200px;margin:auto;padding:16px}#c{width:100%;height:640px;display:block;border-radius:16px;background:#e9e3da;touch-action:none}
 .qk{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid rgba(27,26,24,.14);background:#fff;font:600 14px Heebo,system-ui;cursor:pointer}.qk.on{background:#1B1A18;color:#fff}.qk:disabled{opacity:.4}.pk{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 8px;border-radius:14px;background:rgba(255,255,255,.6)}.pk b{font-weight:600}.sws{display:inline-flex;gap:4px;flex-wrap:wrap}.sws button{width:28px;height:28px;min-width:28px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15);cursor:pointer;padding:0}.sws button.on{box-shadow:0 0 0 2px #1b1a18}.pk input[type=color]{width:32px;height:32px;border:none;background:none;padding:0;cursor:pointer}@media (max-width:820px){.sws button{width:36px;height:36px}.pk{width:100%}}
-.ctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0;font-size:13px}.ctl select{padding:6px 10px;border-radius:10px;border:1px solid #ddd}.cvw{position:relative}.ld{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;border-radius:16px;background:rgba(233,227,218,.92);color:#6b625a;font-size:14px;transition:opacity .4s}.ld.off{opacity:0;pointer-events:none}.ld i{width:28px;height:28px;border-radius:50%;border:3px solid #d8cfc2;border-top-color:#1B1A18;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+.gal{margin:18px 0 6px;padding:16px;border-radius:18px;background:rgba(255,255,255,.7);border:1px solid rgba(27,26,24,.08)}.gh{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}.gh h3{margin:0;font-size:17px}.gh small{display:block;font-weight:400;color:#777;font-size:12.5px;margin-top:2px}.gb{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.gst{font-size:13px;color:#6b655c}.gst.stale{color:#b06a00}
+.gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:14px}.gi{border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.06)}.gi img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;cursor:zoom-in}.gi .gc{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:13px}.gi a{color:#8a6d3b;font-weight:600;text-decoration:none;min-height:36px;display:inline-flex;align-items:center}
+.gi.ph img{opacity:.25}.ctl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:10px 0;font-size:13px}.ctl select{padding:6px 10px;border-radius:10px;border:1px solid #ddd}.cvw{position:relative}.ld{position:absolute;inset:0;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;border-radius:16px;background:rgba(233,227,218,.92);color:#6b625a;font-size:14px;transition:opacity .4s}.ld.off{opacity:0;pointer-events:none}.ld i{width:28px;height:28px;border-radius:50%;border:3px solid #d8cfc2;border-top-color:#1B1A18;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
 .vb{position:absolute;top:12px;right:12px;display:flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 20px rgba(0,0,0,.12)}.vb button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:36px;font:500 13px Heebo,system-ui;color:#3a3530;cursor:pointer;white-space:nowrap}.vb button.on{background:#1B1A18;color:#fff}@media(max-width:600px){.vb{right:8px;left:8px;justify-content:center}.vb button{flex:1;min-height:40px}}
 @media(max-width:820px){main{padding:10px}#c{height:calc(100svh - 250px)!important;min-height:360px;border-radius:20px}.panel>h2{font-size:15px}}
 .cr{font-size:11px;color:var(--mute);margin-top:8px}</style></head>
@@ -10,9 +12,10 @@
 <div class="ctl" data-sheet="הגדרות הדמיה" data-fab="⚙︎ אבן, תאורה וצילום"><label>אבן <select id="st"></select></label><label><input type="checkbox" id="cab" checked> ארונות</label><button type="button" class="qk" id="rClad">▦ חיפוי קיר</button><button type="button" class="qk" id="rWf">◫ מפל לאי</button><span class="pk"><b>ריצוף</b><select id="flT"><option value="wood">פרקט אלון</option><option value="tile60">פורצלן 60×60</option><option value="tile120">פורצלן 120×60</option><option value="concrete">בטון מוחלק</option><option value="terrazzo">טראצו</option></select><span class="sws" id="flS"></span><input type="color" id="flC" title="צבע מותאם לריצוף"></span>
 <span class="pk"><b>ארונות</b><span class="sws" id="cbS"></span><input type="color" id="cbC" title="צבע מותאם לארונות"><select id="cbF"><option value="matte">מט</option><option value="satin">סאטן</option><option value="gloss">מבריק</option><option value="wood">עץ</option></select></span>
 <label><input type="checkbox" id="hq" checked> איכות גבוהה</label><label>תאורה <select id="lt"><option value="day">אור יום</option><option value="warm">חם (ערב)</option><option value="studio">סטודיו</option></select></label><button class="btn ghost" id="shot">צילום תמונה</button><button class="btn ghost" id="shot4k" title="תמונה ב-3840 פיקסל רוחב">צילום 4K</button><span id="st8" style="color:var(--mute)">טוען…</span></div>
-<div class="cvw"><canvas id="c"></canvas><div id="ld" class="ld"><i></i><span>טוען הדמיה…</span></div><div class="vb"><button id="vFront" class="on">פרספקטיבה</button><button id="vTop">מלמעלה</button><button id="vSink">כיור</button></div></div><div class="m" id="mm"></div>
+<div class="cvw"><canvas id="c"></canvas><div id="ld" class="ld"><i></i><span>טוען הדמיה…</span></div><div class="vb"><button id="vFront" class="on">פרספקטיבה</button><button id="vTop">מלמעלה</button><button id="vSink">כיור</button></div></div><section class="gal" id="gal"><div class="gh"><h3>תמונות 4K מכמה זוויות <small>סטילס ברזולוציה 3840×2160 עם הצללה, השתקפויות והחלקת קצוות מוגברות — לוקח מעט זמן</small></h3>
+<div class="gb"><button class="btn" id="gGo">צור תמונות 4K</button><button class="btn ghost" id="gAll" disabled>הורד הכל</button><span id="gSt" class="gst"></span></div></div><div class="gg" id="gg"></div></section><div class="m" id="mm"></div>
 <p class="cr">גררו לסיבוב · גלגלת/צביטה לזום. הטקסטורה של כל משטח וקנט נלקחת מהמיקום שלו בלוח (קנט רציף). תאורה והשתקפויות מחושבות בדפדפן (Three.js) — הדמיה, לא צילום.</p><p class="cr" id="cred"></p></section></main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=19"></script><script src="js/engine.js?v=19"></script><script src="js/views.js?v=19"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="js/config.js"></script><script src="js/store.js?v=20"></script><script src="js/engine.js?v=20"></script><script src="js/views.js?v=20"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';import {GTAOPass} from 'three/addons/postprocessing/GTAOPass.js';import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
@@ -57,11 +60,11 @@ const mm=.001,TH=()=>Math.max(+sim.edge_mm||40,(+sim.thickness_cm||2)*10);
 function region(t,bw,bh,x,y,w,h,rot){const c=t.clone();c.needsUpdate=true;c.wrapS=c.wrapT=THREE.ClampToEdgeWrapping;
   // מיפוי אזור (x,y,w,h) בלוח (מ"מ, y למטה) לפאה; תמונת הלוח נמתחת על כל הלוח (כמו בתצוגת 2D)
   c.repeat.set(w/bw,h/bh);c.offset.set(x/bw,1-(y+h)/bh);if(rot){c.center.set(.5,.5);c.rotation=Math.PI/2}return c}
-let UPM=null;async function build(){CABM=[];UPM=null;
+let UPM=null,LASTRES=null;async function build(){CABM=[];UPM=null;
   $('#st8').textContent='';$('#ld').classList.remove('off');root.clear();
   const stone=stones.find(s=>String(s.id)===$('#st').value)||stones[0];sim.stone_id=stone.id;S.setSim(sim);
   $('#cred').textContent=stone.tile_path&&CR[stone.tile_path]?`צילום אבן: ${CR[stone.tile_path]} (Wikimedia Commons)`:stone.tile_path?'טקסטורה: ambientCG · CC0':'';
-  const res=StoneEngine.run(sim,S.getBoards(),{edgeH:sim.edge_mm||40,kerf:sim.kerf_mm||4}),o=res.opts,th=TH();
+  const res=StoneEngine.run(sim,S.getBoards(),{edgeH:sim.edge_mm||40,kerf:sim.kerf_mm||4}),o=res.opts,th=TH();LASTRES=res;
   const base=await loadTex(S.texture(stone));let maxX=0,maxZ=0;const sk=StoneEngine.sinkPlan(res,sim),cuts=StoneEngine.cutouts?StoneEngine.cutouts(res,sim).items:[];let sinkMsg='';const cutMsg=[];
   // חיפוי קיר (D) ומפל לאי (E1/E2): לוחות אנכיים מאותה אבן, הטקסטורה מהמיקום שלהם בלוח
   const pA=res.pieces.find(q=>q.key==='A'),pC=res.pieces.find(q=>q.key==='C'),T0=cab.checked?.87:0,TT=th*mm,tS=Math.max(12,(+sim.thickness_cm||2)*10)*mm;
@@ -159,6 +162,34 @@ window.shot4k=async()=>{const w0=cv.clientWidth,h0=cv.clientHeight,W4=3840,H4=Ma
  const url=cv.toDataURL('image/png');window.__last4k={w:cv.width,h:cv.height,len:url.length};const a=document.createElement('a');a.href=url;a.download='barstone-render-4k.png';a.click()}
  finally{R.setPixelRatio(pr);cv.style.width='';cv.style.height='';size();if(CMP){CMP.setPixelRatio&&CMP.setPixelRatio(pr);CMP.setSize(w0,h0)}btn.disabled=false;btn.textContent='צילום 4K'}};
 $('#shot4k').onclick=()=>shot4k();
+// ===== גלריית סטילס 4K: זוויות קבועות, מסלול איכות מוגבר (צל 8192, AO צפוף, MSAA, סופר-דגימה) =====
+const ANG=()=>{const {W,D}=BOX,M=Math.max(W,D),c=new THREE.Vector3(W/2,.8,D/2),V=(x,y,z)=>new THREE.Vector3(x,y,z),f=Math.max(1,M/4.2),fv=Math.tan(cam.fov*Math.PI/360),A=16/9,L=[];
+ L.push(['hero','פרספקטיבה ראשית',V(W/2-W*.15,2.7*f,D+3.4*f),c]);
+ L.push(['diagR','אלכסון ימין (3/4)',V(W+1.6*f,2.1*f,D+2.6*f),V(W*.45,.8,D*.4)]);
+ L.push(['diagL','אלכסון שמאל (3/4)',V(-1.4*f,2.0*f,D+2.8*f),V(W*.55,.8,D*.4)]);
+ L.push(['front','חזית (מבט ישר)',V(W/2,1.55,D+(W*.6)/(fv*A)+.4),V(W/2,1.05,D*.3)]);
+ L.push(['top','מלמעלה',V(W/2,M*1.15/ (fv*2.2)+1,D/2+.01),V(W/2,0,D/2)]);
+ if(SK){const k=V((SK.x+SK.pw/2)*mm,.9,(SK.y+SK.ph/2)*mm);L.push(['sink','תקריב כיור',k.clone().add(V(-.3,.75,.85)),k])}
+ const pC=LASTRES&&LASTRES.pieces.find(q=>q.key==='C'&&q.plan);if(pC){const ic=V((pC.plan.x+pC.L/2)*mm,.7,(pC.plan.y+pC.W/2)*mm);L.push(['island',sim.island_waterfall?'אי ומפל':'אי',ic.clone().add(V(-(pC.L*mm)*.9-.8,.9,(pC.W*mm)+1.6)),ic])}
+ return L};
+const GAL=[];let galSig='';const sigNow=()=>JSON.stringify([sim,pref,$('#st').value,$('#lt').value,cab.checked]);
+async function still(pos,tgt,W4,H4,ss){const w=W4*ss,h=H4*ss;cam.position.copy(pos);cam.lookAt(tgt);cam.aspect=W4/H4;cam.updateProjectionMatrix();R.setPixelRatio(1);R.setSize(w,h,false);
+ const rt=new THREE.WebGLRenderTarget(w,h,{type:THREE.HalfFloatType,samples:4}),c=new EffectComposer(R,rt);c.addPass(new RenderPass(scene,cam));let ao=null;try{ao=new GTAOPass(scene,cam,w,h);ao.updateGtaoMaterial({radius:.4,distanceExponent:1.6,thickness:1.2,scale:1.15,samples:24});try{ao.updatePdMaterial({samples:16,rings:3,radius:8})}catch(e){}ao.blendIntensity=1;c.addPass(ao)}catch(e){}c.addPass(new OutputPass());c.setPixelRatio&&c.setPixelRatio(1);c.setSize(w,h);c.render();
+ let out=cv;if(ss>1){out=document.createElement('canvas');out.width=W4;out.height=H4;const x=out.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(cv,0,0,W4,H4)}
+ const blob=await new Promise(r=>out.toBlob(r,'image/png')),th=document.createElement('canvas');th.width=640;th.height=360;th.getContext('2d').drawImage(out,0,0,640,360);
+ c.dispose&&c.dispose();rt.dispose();ao&&ao.dispose&&ao.dispose();return {blob,thumb:th.toDataURL('image/jpeg',.85)}}
+async function gallery(opt={}){if(window.__still)return;const W4=opt.w||3840,H4=Math.round(W4*9/16),ss=opt.ss||(MOB?1:1.5),btn=$('#gGo');btn.disabled=true;window.__still=1;const st=$('#gSt');st.classList.remove('stale');
+ const p0=cam.position.clone(),t0=ctl.target.clone(),pr=R.getPixelRatio(),ms=sun.shadow.mapSize.x,rad=sun.shadow.radius,ex=R.toneMappingExposure,L=ANG();
+ GAL.forEach(g=>URL.revokeObjectURL(g.url));GAL.length=0;$('#gg').innerHTML=L.map(([id,n])=>`<div class="gi ph" id="g_${id}"><img alt="${n}" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><div class="gc"><b>${n}</b><span>ממתין…</span></div></div>`).join('');
+ try{const big=MOB?2048:8192;sun.shadow.mapSize.set(big,big);sun.shadow.radius=6;if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null}
+  for(let i=0;i<L.length;i++){const [id,n,pos,tgt]=L[i];st.textContent=`מרנדר ${i+1}/${L.length}: ${n}…`;await new Promise(r=>setTimeout(r,30));const t=performance.now(),r=await still(pos,tgt,W4,H4,ss),url=URL.createObjectURL(r.blob),fn=`barstone-4k-${i+1}-${id}.png`;
+   GAL.push({id,n,url,fn,size:r.blob.size,ms:Math.round(performance.now()-t),w:W4,h:H4});const el=$('#g_'+id);el.classList.remove('ph');el.querySelector('img').src=r.thumb;el.querySelector('img').onclick=()=>open(url,'_blank');el.querySelector('.gc span').innerHTML=`<a href="${url}" download="${fn}">הורדה · ${(r.blob.size/1048576).toFixed(1)}MB</a>`}
+  galSig=sigNow();st.textContent=`${L.length} תמונות ${W4}×${H4} מוכנות`;$('#gAll').disabled=false}
+ catch(e){console.warn(e);st.textContent='שגיאה ביצירת התמונות: '+e.message}
+ finally{sun.shadow.mapSize.set(ms,ms);sun.shadow.radius=rad;if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null}R.toneMappingExposure=ex;R.setPixelRatio(pr);size();if(CMP){CMP.setPixelRatio&&CMP.setPixelRatio(pr);CMP.setSize(cv.clientWidth,cv.clientHeight)}cam.position.copy(p0);ctl.target.copy(t0);ctl.update();window.__still=0;btn.disabled=false;window.__gal=GAL.map(({id,n,fn,size,ms,w,h})=>({id,n,fn,size,ms,w,h}))}}
+window.gallery=gallery;$('#gGo').onclick=()=>gallery();
+$('#gAll').onclick=async()=>{for(const g of GAL){const a=document.createElement('a');a.href=g.url;a.download=g.fn;document.body.appendChild(a);a.click();a.remove();await new Promise(r=>setTimeout(r,400))}};
+setInterval(()=>{if(GAL.length&&!window.__still&&sigNow()!==galSig){const st=$('#gSt');st.textContent='העיצוב השתנה — לחצו "צור תמונות 4K" לעדכון';st.classList.add('stale')}},1500);
 await build();['vFront','vTop','vSink'].forEach(id=>$('#'+id).onclick=()=>setView(id));
 // בוררי צבע: ריצוף + ארונות
 const sw=(el,list,get,set)=>{el.innerHTML=list.map(([c,n])=>`<button type="button" title="${n||c}" aria-label="${n||c}" data-c="${c}" style="background:${c}"></button>`).join('');const mark=()=>el.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.c===get()));mark();el.onclick=e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.c);mark();window.bsHaptic&&bsHaptic(8)};return mark};
@@ -170,6 +201,6 @@ $('#cbC').oninput=()=>{pref.cbC=$('#cbC').value;savePref();applyCab();mCb()};$('
 const tg=()=>{$('#rClad').classList.toggle('on',+sim.splash_h_cm>0);$('#rWf').classList.toggle('on',!!sim.island_waterfall&&+sim.island_l_cm>0);$('#rWf').disabled=!(+sim.island_l_cm>0)};tg();
 $('#rClad').onclick=async()=>{sim.splash_h_cm=+sim.splash_h_cm>0?0:25;S.setSim(sim);tg();await build()};$('#rWf').onclick=async()=>{sim.island_waterfall=!sim.island_waterfall;S.setSim(sim);tg();await build()};
 $('#hq').checked=pref.hq;$('#hq').onchange=()=>{pref.hq=$('#hq').checked;savePref();if(pref.hq&&!CMP){CMP=mkComposer();size()}};if(pref.hq){CMP=mkComposer();size()}
-(function loop(){requestAnimationFrame(loop);if(tw)tw();ctl.update();draw3()})();
+(function loop(){requestAnimationFrame(loop);if(window.__still)return;if(tw)tw();ctl.update();draw3()})();
 </script>
-<script src="js/flow.js?v=19"></script></body></html>
+<script src="js/flow.js?v=20"></script></body></html>
