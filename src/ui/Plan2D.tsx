@@ -1,7 +1,7 @@
 // עורך התוכנית: מבט על חי. גרירת חלקים ופתחים, ידיות לשינוי מידות, מידות שנערכות ישירות על השרטוט.
 import { PointerEvent as RPE, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CUT_HE, Cutout, Piece, Project, Side, bounds, hostEdge, isVertical, letter, longIsX } from '../core/model';
-import { segLocal, slabToLocalMatrix } from '../core/nesting';
+import { CUT_HE, Cutout, Piece, Project, Side, bounds, corners, hostEdge, isVertical, letter, longIsX } from '../core/model';
+import { isBody, segLocal, slabToLocalMatrix } from '../core/nesting';
 import { useStore } from '../store';
 import { Icon } from './icons';
 import { cm, parseCm, useStone } from './util';
@@ -121,7 +121,7 @@ export function Plan2D() {
   }
   const openEdit = (d: Dim, e: React.MouseEvent) => { if (!d.set) return; e.stopPropagation(); const r = wrap.current!.getBoundingClientRect(); setEdit({ px: e.clientX - r.left, py: e.clientY - r.top, text: cm(d.value), set: d.set }); };
 
-  const fs = 12.5 * k, placements = (id: string) => (nest?.slabs.flatMap((s) => s.placements) || []).filter((pl) => pl.pieceId === id && !pl.stripOf);
+  const fs = 12.5 * k, placements = (id: string) => (nest?.slabs.flatMap((s) => s.placements) || []).filter((pl) => pl.pieceId === id && isBody(pl));
   const sideLine = (p: Piece, s: Side, inset: number) => { const e = hostEdge(p, s); return { x1: e.x - e.nx * inset, y1: e.y - e.ny * inset, x2: e.x + e.dx * e.len - e.nx * inset, y2: e.y + e.dy * e.len - e.ny * inset }; };
   const handle = (p: Piece, s: Side) => { const e = hostEdge(p, s); return { x: e.x + (e.dx * e.len) / 2, y: e.y + (e.dy * e.len) / 2, horiz: e.dx === 1 }; };
 
@@ -149,7 +149,7 @@ export function Plan2D() {
               <path d={path(p)} fill="rgba(0,0,0,.18)" transform={`translate(0,${7 * k})`} style={{ filter: `blur(${5 * k}px)` }} />
               <g clipPath={`url(#o-${p.id})`} onPointerDown={(e) => { select({ type: 'piece', id: p.id }); down(e, { kind: 'piece', id: p.id, ...(() => { const m = toMm(e); return { mx: m.x, my: m.y }; })(), ox: p.x, oy: p.y, moved: false }); }} style={{ cursor: 'move' }}>
                 <path d={path(p)} fill="#e9e4da" />
-                {pls.map((pl) => <g key={pl.seg} clipPath={`url(#s-${p.id}-${pl.seg})`}><image href={stone.url} width={project.slabW} height={project.slabH} preserveAspectRatio="none" transform={slabToLocalMatrix(p, pl)} /></g>)}
+                {pls.map((pl) => <g key={pl.seg} clipPath={`url(#s-${p.id}-${pl.seg})`}><image href={stone.url} width={project.slabW} height={project.slabH} preserveAspectRatio="none" transform={slabToLocalMatrix(p, pl) + (project.bookmatch === 'yes' && pl.slab % 2 ? ` translate(${project.slabW},0) scale(-1,1)` : '')} /></g>)}
                 {!pls.length && <path d={path(p)} fill="rgba(229,72,77,.25)" />}
               </g>
               {/* חיבורים */}
@@ -167,6 +167,9 @@ export function Plan2D() {
             </g>
           );
         })}
+
+        {/* חיבורי פינה */}
+        {corners(project).map((c) => <line key={`cr-${c.b.id}`} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--cut)" strokeWidth={2.2 * k} strokeDasharray={`${7 * k} ${5 * k}`} pointerEvents="none" />)}
 
         {/* קנטים */}
         {project.apronH > 0 && flat.flatMap((p) => p.aprons.map((s) => { const l = sideLine(p, s, 2.2 * k); return <line key={`${p.id}-${s}`} {...l} stroke="var(--edge)" strokeWidth={3 * k} strokeLinecap="round" pointerEvents="none" />; }))}
@@ -218,7 +221,8 @@ function CutoutShape({ c, k, on, bad, onDown }: { c: Cutout; k: number; on: bool
   const g = `g-${c.id}`;
   return <g {...common}>
     <defs><linearGradient id={g} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#f4f5f6" /><stop offset="1" stopColor="#b9bdc2" /></linearGradient></defs>
-    <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={c.kind === 'sink' ? 26 : 6} fill={c.kind === 'sink' ? `url(#${g})` : 'rgba(255,255,255,.6)'} stroke={stroke} strokeWidth={sw} strokeDasharray={c.kind === 'hole' ? `${5 * k} ${4 * k}` : undefined} />
+    <rect x={c.x} y={c.y} width={c.w} height={c.h} rx={c.kind === 'sink' ? 26 : 6} fill={c.kind === 'sink' ? (c.built ? '#d9d2c4' : `url(#${g})`) : 'rgba(255,255,255,.6)'} stroke={stroke} strokeWidth={sw} strokeDasharray={c.kind === 'hole' ? `${5 * k} ${4 * k}` : undefined} />
+    {c.kind === 'sink' && c.bowls && c.bowls !== 'single' && (c.w >= c.h ? <line x1={c.x + c.w * (c.bowls === 'even' ? 0.5 : 0.6)} y1={c.y + 6} x2={c.x + c.w * (c.bowls === 'even' ? 0.5 : 0.6)} y2={c.y + c.h - 6} stroke="#6d7177" strokeWidth={14} /> : <line x1={c.x + 6} y1={c.y + c.h * (c.bowls === 'even' ? 0.5 : 0.6)} x2={c.x + c.w - 6} y2={c.y + c.h * (c.bowls === 'even' ? 0.5 : 0.6)} stroke="#6d7177" strokeWidth={14} />)}
     {c.kind === 'sink' && <><rect x={c.x + 22} y={c.y + 22} width={Math.max(1, c.w - 44)} height={Math.max(1, c.h - 44)} rx={18} fill="none" stroke="rgba(0,0,0,.18)" strokeWidth={Math.max(2, k)} /><circle cx={c.x + c.w / 2} cy={c.y + c.h / 2} r={24} fill="#8d9197" /></>}
     {c.w > 70 * k && <text x={c.x + c.w / 2} y={c.y + c.h / 2 + (c.kind === 'sink' ? 62 : 4 * k)} textAnchor="middle" fontSize={10.5 * k} fill={c.kind === 'sink' ? '#5a5e63' : 'var(--ink2)'} pointerEvents="none">{c.name || CUT_HE[c.kind]}</text>}
   </g>;

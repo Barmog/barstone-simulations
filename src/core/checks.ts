@@ -1,5 +1,5 @@
 // הבודק החכם: כללי מקצוע דטרמיניסטיים. כל ממצא מסביר מה הבעיה, ואם אפשר — מציע תיקון בלחיצה.
-import { CUT_HE, Cutout, Piece, Project, isVertical, longIsX, pieceLen, pieceWid, piece as mkPiece, SIDE_HE, Side } from './model';
+import { CUT_HE, Cutout, Piece, Project, corners as cornersOf, isVertical, longIsX, pieceLen, pieceWid, piece as mkPiece, SIDE_HE, Side } from './model';
 import { NestResult } from './nesting';
 
 export interface Issue {
@@ -57,10 +57,11 @@ export function check(p: Project, nest: NestResult): Issue[] {
     if (a0 < END || a0 + aLen > len - END) out.push({ id: `end-${c.id}`, level: 'warn', cutoutId: c.id, pieceId: q.id, title: `ה${name} קרוב מדי לקצה המשטח`, detail: `נשארים פחות מ-${END / 10} ס"מ אבן בצד — נקודת שבר בהובלה ובהתקנה.`, fix: { label: `הזז ל-${END / 10} ס"מ מהקצה`, apply: patchCut(c.id, () => setAlong(clamp(a0, END, len - aLen - END))) } });
     const front = wid - b0 - bLen;
     if (b0 < RIM || front < RIM) out.push({ id: `rim-${c.id}`, level: 'warn', cutoutId: c.id, pieceId: q.id, title: `רצועת אבן צרה ליד ה${name}`, detail: `נשארים ${Math.round(Math.min(b0, front))} מ"מ בלבד ${b0 < front ? 'מאחורי' : 'לפני'} הפתח. מומלץ לפחות ${RIM} מ"מ, אחרת הרצועה נשברת.`, fix: bLen + 2 * RIM <= wid ? { label: 'מרכז את הפתח', apply: patchCut(c.id, () => setAcross((wid - bLen) / 2)) } : undefined });
-    // חיבור שעובר דרך פתח
+    // חיבור שעובר דרך פתח: במרכז הכיור/הכיריים זה החיבור המועדף (הכי קצר); בכל מקום אחר זו טעות
     for (const j of nest.joints.filter((j) => j.pieceId === q.id)) if (j.at > a0 - END && j.at < a0 + aLen + END) {
-      const left = j.at - aLen - END, right = j.at + END, can = [left, right].filter((v) => v >= END && v + aLen <= len - END).sort((m, n) => Math.abs(m - a0) - Math.abs(n - a0));
-      out.push({ id: `joint-${c.id}`, level: 'error', cutoutId: c.id, pieceId: q.id, title: `חיבור עובר דרך ה${name}`, detail: `המשטח ארוך מהלוח ולכן יש חיבור ב-${Math.round(j.at / 10)} ס"מ, בדיוק באזור הפתח. חיבור ליד פתח נחלש ונראה לעין.`, fix: can.length ? { label: `הזז את ה${name} ${can[0] < a0 ? 'ימינה' : 'שמאלה'} מהחיבור`, apply: patchCut(c.id, () => setAlong(can[0])) } : undefined });
+      const centered = Math.abs(j.at - (a0 + aLen / 2)) < 6, kind = c.kind as 'sink' | 'cooktop';
+      if (centered) { out.push({ id: `jc-${c.id}`, level: 'tip', cutoutId: c.id, pieceId: q.id, title: `החיבור במרכז ה${name}`, detail: `נשארים רק ${Math.round((wid - bLen) / 10)} ס"מ של חיבור נראה (לפני ואחרי הפתח) — זו הבחירה המועדפת כשחייבים חיבור.` }); continue; }
+      out.push({ id: `joint-${c.id}`, level: 'error', cutoutId: c.id, pieceId: q.id, title: `חיבור עובר בצד ה${name}`, detail: `החלק ארוך מהלוח, והחיבור יוצא ב-${Math.round(j.at / 10)} ס"מ — בתוך אזור הפתח אבל לא במרכזו. עדיף להעביר אותו בדיוק למרכז ה${name}.`, fix: { label: `העבר את החיבור למרכז ה${name}`, apply: patchPiece(q.id, () => ({ joint: kind })) } });
     }
   }
 
@@ -86,9 +87,12 @@ export function check(p: Project, nest: NestResult): Issue[] {
   // --- חיבורים ---
   for (const j of nest.joints) {
     const q = byId[j.pieceId]; if (!q) continue;
-    if (out.some((i) => i.id.startsWith('joint-') && i.pieceId === q.id)) continue;
-    out.push({ id: `j-${q.id}-${j.at}`, level: 'tip', pieceId: q.id, title: `חיבור ב"${q.name}"`, detail: `החלק (${pieceLen(q) / 10} ס"מ) ארוך מהלוח, ולכן יהיה חיבור ב-${Math.round(j.at / 10)} ס"מ. שני המקטעים נחתכים ברצף מאותו גיד כדי שהחיבור כמעט לא ייראה.` });
+    if (out.some((i) => (i.id.startsWith('joint-') || i.id.startsWith('jc-')) && i.pieceId === q.id)) continue;
+    const opt = (['sink', 'cooktop'] as const).find((k) => p.cutouts.some((c) => c.pieceId === q.id && c.kind === k));
+    out.push({ id: `j-${q.id}-${j.at}`, level: 'tip', pieceId: q.id, title: `חיבור ב"${q.name}"`, detail: `החלק (${pieceLen(q) / 10} ס"מ) ארוך מהלוח, ולכן יש חיבור ב-${Math.round(j.at / 10)} ס"מ. ${opt ? `בדרך כלל עדיף חיבור במרכז ה${CUT_HE[opt]} — שם הוא הכי קצר.` : 'שני המקטעים נחתכים ברצף מאותו לוח.'}`, fix: opt ? { label: `חיבור במרכז ה${CUT_HE[opt]}`, apply: patchPiece(q.id, () => ({ joint: opt })) } : undefined });
   }
+  for (const c of cornersOf(p)) out.push({ id: `corner-${c.b.id}`, level: 'tip', pieceId: c.b.id, title: `חיבור פינה ${c.miter ? 'בגרונג 45°' : 'ישר'} · "${c.b.name}"`, detail: c.miter ? 'החיבור יוצא באלכסון מהפינה הפנימית לחיצונית. נראה יוקרתי וממשיך את הגיד סביב הפינה, אבל צורך יותר אבן.' : 'החיבור ישר לאורך קצה המשטח. חסכוני ופשוט; באבן עם גיד בולט שווה לשקול 45°.', fix: { label: c.miter ? 'החלף לחיבור ישר' : 'החלף ל-45°', apply: patchPiece(c.b.id, () => ({ corner: c.miter ? 'butt' : 'miter' })) } });
+  if (p.pieces.length && (p.bookmatch || 'unknown') === 'unknown' && (nest.joints.length || nest.slabs.length > 1)) out.push({ id: 'bm', level: 'tip', title: 'לוודא: האם הדגם בוק־מאץ׳?', detail: 'יש חיבורים או יותר מלוח אחד. אם הדגם מגיע בוק־מאץ׳ אפשר להתאים גידים בין הלוחות. מסמנים בשלב "אבן".' });
 
   // --- הצעות עיצוב ---
   for (const isl of flat.filter((q) => q.kind === 'island')) {

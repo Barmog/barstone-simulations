@@ -33,6 +33,16 @@ describe('נסטינג', () => {
     const p = fromTemplate('straight'); p.pieces[0].w = 4563; p.cutouts[2].x = 2100; const r = nest(p), j = r.joints[0].at, c = p.cutouts[2];
     expect(j <= c.x - 60 || j >= c.x + c.w + 60).toBe(true);
   });
+  it('אפשר לבחור חיבור במרכז הכיור או הכיריים; כיור בנוי מוסיף חלקים; 45° מאריך את הרגל', () => {
+    const p = fromTemplate('straight'); p.pieces[0].w = 4563; p.pieces[0].joint = 'sink';
+    const sink = p.cutouts[0]; sink.x = 1900; p.cutouts[2].x = 3300; let r = nest(p);
+    expect(r.joints[0].at).toBe(Math.round(sink.x + sink.w / 2));
+    expect(check(p, r).some((i) => i.id.startsWith('jc-'))).toBe(true); expect(check(p, r).some((i) => i.level === 'error')).toBe(false);
+    const before = r.slabs.flatMap((s) => s.placements).length; sink.built = true; r = nest(p);
+    expect(r.slabs.flatMap((s) => s.placements).filter((x) => x.extra).length).toBe(5); expect(r.slabs.flatMap((s) => s.placements).length).toBe(before + 5);
+    const l = fromTemplate('l'), leg = l.pieces[1], plain = nest(l).slabs.flatMap((s) => s.placements).find((x) => x.pieceId === leg.id && !x.stripOf)!.len;
+    leg.corner = 'miter'; expect(nest(l).slabs.flatMap((s) => s.placements).find((x) => x.pieceId === leg.id && !x.stripOf)!.len).toBe(plain + leg.w);
+  });
   it('גיד נעול: החלק לא מסתובב; קנט ארוך צמוד לחלק', () => {
     const p = fromTemplate('straight'), r = nest(p), pl = r.slabs.flatMap((s) => s.placements).find((x) => x.pieceId === p.pieces[0].id)!;
     expect(pl.rot).toBe(false); expect(pl.strips).toHaveLength(1);

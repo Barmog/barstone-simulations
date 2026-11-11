@@ -21,7 +21,11 @@ export interface Placement {
   strips: Strip[];
   /** פס קנט עצמאי (צד קצר) — לא גוף של חלק. */
   stripOf?: Side;
+  /** חלק נלווה (למשל דופן של כיור בנוי) — לא גוף של חלק. */
+  extra?: string;
 }
+/** האם השיבוץ הוא גוף החלק עצמו (ולא קנט או חלק נלווה). */
+export const isBody = (pl: Placement) => !pl.stripOf && !pl.extra;
 export interface Joint { pieceId: string; at: number }
 export interface NestResult {
   slabs: { w: number; h: number; placements: Placement[]; used: number }[];
@@ -30,7 +34,7 @@ export interface NestResult {
   metrics: { slabs: number; utilization: number; pieceArea: number; slabArea: number; apronLen: number; joints: number };
 }
 
-interface Block { pieceId: string; L: number; H: number; wid: number; seg: number; segs: number; off: number; lock: boolean; stripsBefore: Side[]; stripsAfter: Side[]; stripOf?: Side }
+interface Block { pieceId: string; L: number; H: number; wid: number; seg: number; segs: number; off: number; lock: boolean; stripsBefore: Side[]; stripsAfter: Side[]; stripOf?: Side; extra?: string }
 interface Opts { W: number; H: number; kerf: number; margin: number; apronH: number }
 
 const hit = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -41,14 +45,20 @@ function keepZones(p: Piece, cutouts: Cutout[]): [number, number][] {
   return cutouts.filter((c) => c.pieceId === p.id).map((c) => (lx ? [c.x - 60, c.x + c.w + 60] : [c.y - 60, c.y + c.h + 60]) as [number, number]);
 }
 
-export function splitPoints(len: number, maxL: number, keep: [number, number][]): number[] {
+export function splitPoints(len: number, maxL: number, keep: [number, number][], prefer: number[] = []): number[] {
   const segs = Math.ceil(len / maxL);
   const cuts: number[] = [];
   for (let i = 1; i < segs; i++) cuts.push(Math.round((len * i) / segs));
-  for (let i = 0; i < cuts.length; i++) for (const [a, b] of keep) if (cuts[i] > a && cuts[i] < b) {
+  for (let i = 0; i < cuts.length; i++) {
     const prev = i ? cuts[i - 1] : 0, next = i < cuts.length - 1 ? cuts[i + 1] : len;
-    const opts = [a, b].filter((c) => c > prev && c < next && c - prev <= maxL && next - c <= maxL).sort((x, y) => Math.abs(x - cuts[i]) - Math.abs(y - cuts[i]));
-    if (opts.length) cuts[i] = Math.round(opts[0]);
+    const fits = (c: number) => c > prev && c < next && c - prev <= maxL && next - c <= maxL;
+    // חיבור מועדף (מרכז כיור / כיריים): שם החיבור הכי קצר והכי פחות נראה
+    const want = prefer.filter(fits).sort((x, y) => Math.abs(x - cuts[i]) - Math.abs(y - cuts[i]));
+    if (want.length) { cuts[i] = Math.round(want[0]); continue; }
+    for (const [a, b] of keep) if (cuts[i] > a && cuts[i] < b) {
+      const opts = [a, b].filter(fits).sort((x, y) => Math.abs(x - cuts[i]) - Math.abs(y - cuts[i]));
+      if (opts.length) cuts[i] = Math.round(opts[0]);
+    }
   }
   return [0, ...cuts, len];
 }
@@ -57,11 +67,12 @@ function toBlocks(project: Project, o: Opts): Block[] {
   const blocks: Block[] = [];
   const maxL = o.W - 2 * o.margin;
   for (const p of project.pieces) {
-    const len = pieceLen(p), wid = pieceWid(p), lx = longIsX(p);
+    const wid = pieceWid(p), lx = longIsX(p), len = pieceLen(p) + (p.corner === 'miter' ? wid : 0); // גרונג 45°: החלק ארוך יותר בעומק המשטח
     const longSides: Side[] = lx ? ['back', 'front'] : ['left', 'right'];
     const aprons = o.apronH > 0 ? p.aprons : [];
     const before = aprons.filter((s) => s === longSides[0]), after = aprons.filter((s) => s === longSides[1]);
-    const pts = splitPoints(len, maxL, keepZones(p, project.cutouts));
+    const prefer = p.joint === 'sink' || p.joint === 'cooktop' ? project.cutouts.filter((c) => c.pieceId === p.id && c.kind === p.joint).map((c) => (lx ? c.x + c.w / 2 : c.y + c.h / 2)) : [];
+    const pts = splitPoints(len, maxL, keepZones(p, project.cutouts), prefer);
     const segs = pts.length - 1;
     for (let i = 0; i < segs; i++) {
       const L = pts[i + 1] - pts[i];
@@ -69,6 +80,12 @@ function toBlocks(project: Project, o: Opts): Block[] {
     }
     // קנט בצדדים הקצרים: פס נפרד
     for (const s of aprons.filter((s) => !longSides.includes(s))) blocks.push({ pieceId: p.id, L: wid, wid: o.apronH, H: o.apronH, seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], stripOf: s });
+  }
+  // כיור בנוי מאבן: תחתית + 4 דפנות (ובכיור כפול גם מחיצה) נחתכים מהלוח
+  for (const c of project.cutouts.filter((c) => c.kind === 'sink' && c.built)) {
+    const t = project.thickness, D = 200, parts: [string, number, number][] = [['כיור · תחתית', c.w, c.h], ['כיור · דופן', c.w, D], ['כיור · דופן', c.w, D], ['כיור · דופן', c.h - 2 * t, D], ['כיור · דופן', c.h - 2 * t, D]];
+    if (c.bowls && c.bowls !== 'single') parts.push(['כיור · מחיצה', c.h - 2 * t, D - 20]);
+    for (const [name, a, b] of parts) blocks.push({ pieceId: c.pieceId, L: Math.max(a, b), wid: Math.min(a, b), H: Math.min(a, b), seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], extra: name });
   }
   return blocks;
 }
@@ -115,7 +132,7 @@ function place(bl: Block, r: Rect & { rot: boolean }, slab: number, o: Opts): Pl
     bl.stripsBefore.forEach((s, i) => strips.push({ side: s, rect: { x: r.x + i * step, y: r.y, w: o.apronH, h: bl.L } }));
     bl.stripsAfter.forEach((s, i) => strips.push({ side: s, rect: { x: body.x + bl.wid + o.kerf + i * step, y: r.y, w: o.apronH, h: bl.L } }));
   }
-  return { pieceId: bl.pieceId, slab, body, block: { x: r.x, y: r.y, w: r.w, h: r.h }, rot: r.rot, seg: bl.seg, segs: bl.segs, off: bl.off, len: bl.L, strips, stripOf: bl.stripOf };
+  return { pieceId: bl.pieceId, slab, body, block: { x: r.x, y: r.y, w: r.w, h: r.h }, rot: r.rot, seg: bl.seg, segs: bl.segs, off: bl.off, len: bl.L, strips, stripOf: bl.stripOf, extra: bl.extra };
 }
 
 function pack(blocks: Block[], o: Opts) {
@@ -158,7 +175,7 @@ export function nest(project: Project): NestResult {
   const slabArea = res.slabs.length * o.W * o.H;
   const usedArea = res.slabs.reduce((s, sl) => s + sl.placements.reduce((t, p) => t + p.block.w * p.block.h, 0), 0);
   const pieceArea = project.pieces.reduce((s, p) => s + p.w * p.h, 0);
-  const joints: Joint[] = blocks.filter((b) => b.segs > 1 && b.seg > 0 && !b.stripOf).map((b) => ({ pieceId: b.pieceId, at: b.off }));
+  const joints: Joint[] = blocks.filter((b) => b.segs > 1 && b.seg > 0 && !b.stripOf && !b.extra).map((b) => ({ pieceId: b.pieceId, at: b.off }));
   const apronLen = o.apronH > 0 ? project.pieces.reduce((s, p) => s + p.aprons.reduce((t, sd) => t + (sd === 'front' || sd === 'back' ? p.w : p.h), 0), 0) : 0;
   return {
     slabs: res.slabs.map((s) => ({ w: o.W, h: o.H, placements: s.placements, used: Math.round((s.placements.reduce((t, p) => t + p.block.w * p.block.h, 0) / (o.W * o.H)) * 100) })),
@@ -170,8 +187,8 @@ export function nest(project: Project): NestResult {
 
 /** מלבן המקטע בקואורדינטות המקומיות של החלק (בתוך w×h). */
 export function segLocal(p: Piece, pl: Placement): Rect {
-  const wid = pieceWid(p);
-  return longIsX(p) ? { x: pl.off, y: 0, w: pl.len, h: wid } : { x: 0, y: pl.off, w: wid, h: pl.len };
+  const wid = pieceWid(p), len = Math.max(1, Math.min(pl.len, pieceLen(p) - pl.off)); // גרונג 45° מאריך את השיבוץ מעבר לחלק
+  return longIsX(p) ? { x: pl.off, y: 0, w: len, h: wid } : { x: 0, y: pl.off, w: wid, h: len };
 }
 
 /** נקודה מקומית בחלק → נקודה על הלוח (למיפוי טקסטורה מדויק = רצף גידים אמיתי). */

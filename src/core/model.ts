@@ -25,6 +25,10 @@ export interface Piece {
   aprons: Side[];
   /** נעילת כיוון גיד: true = החלק לא מסתובב על הלוח. */
   grainLock: boolean;
+  /** היכן לשים חיבור כשהחלק ארוך מהלוח: אוטומטי (רחוק מפתחים), במרכז הכיור או במרכז הכיריים. */
+  joint?: 'auto' | 'sink' | 'cooktop';
+  /** חיבור הפינה עם המשטח הסמוך: ישר או גרונג 45°. */
+  corner?: 'butt' | 'miter';
   /** מתאר מדויק (מ-DXF), בקואורדינטות מקומיות בתוך w×h. ריק = מלבן. */
   outline?: Pt[];
 }
@@ -42,6 +46,12 @@ export interface Cutout {
   round?: boolean;
   /** כיור: התקנה תחתונה / שטוחה / עליונה. */
   mount?: 'under' | 'flush' | 'top';
+  /** כיור בנוי מאבן (נחתך מהלוח) או כיור קנוי. */
+  built?: boolean;
+  /** רוחב ארון הכיור במ"מ (600 / 700 / 800 / 900). */
+  cabinet?: number;
+  /** קערה אחת, כפול חצי-חצי, או כפול גדול + קטן. */
+  bowls?: 'single' | 'even' | 'ls';
 }
 
 export interface Project {
@@ -63,6 +73,14 @@ export interface Project {
   floor: string;
   pieces: Piece[];
   cutouts: Cutout[];
+  /** האם הדגם מגיע בוק־מאץ' (לוחות במראה) — מאפשר התאמת גידים בין לוחות. */
+  bookmatch?: 'yes' | 'no' | 'unknown';
+  light?: 'day' | 'evening';
+  kelvin?: 3000 | 4000 | 6000;
+  disposal?: boolean;
+  water?: boolean;
+  /** הצגת פנים הארונות (שקוף) — לראות טוחן ומערכת מים. */
+  xray?: boolean;
   notes: string;
   source: 'manual' | 'dxf' | 'plan' | 'template';
 }
@@ -172,4 +190,25 @@ export function fromLegacy(sim: Record<string, any>): Project {
   }
   if (sim.cooktop) { const host = byKey[sim.cooktop_piece] || main, w = T(sim.cooktop_w_cm, 56), d = T(sim.cooktop_d_cm, 49); put(host, 'cooktop', along(host, sim.cooktop_x_cm, w), w, d); }
   return p;
+}
+
+/** נטו משוער של כיור לפי רוחב הארון (פלוס־מינוס; תלוי בדגם ובפרזול). */
+export function sinkNet(cabinet: number, built: boolean, thickness: number) {
+  const w = built ? cabinet - 36 - 2 * thickness - 4 : cabinet - 100;
+  return { w: Math.max(250, Math.round(w)), h: 400 };
+}
+
+/** פינות: חלק שנפגש עם חלק אחר בצלע משותפת. מחזיר את קו החיבור (ישר או אלכסון 45°). */
+export function corners(p: Project): { a: Piece; b: Piece; x1: number; y1: number; x2: number; y2: number; miter: boolean }[] {
+  const flat = p.pieces.filter((q) => !isVertical(q) && q.kind !== 'panel'), out = [];
+  for (const b of flat) for (const a of flat) {
+    if (a === b || b.h <= b.w) continue; // b = הרגל (ארוכה לאורך y)
+    const below = Math.abs(b.y - (a.y + a.h)) < 3, above = Math.abs(b.y + b.h - a.y) < 3;
+    if (!(below || above) || b.x < a.x - 3 || b.x + b.w > a.x + a.w + 3) continue;
+    const ey = below ? a.y + a.h : a.y, miter = b.corner === 'miter';
+    if (!miter) { out.push({ a, b, x1: b.x, y1: ey, x2: b.x + b.w, y2: ey, miter }); continue; }
+    const outerRight = b.x + b.w / 2 > a.x + a.w / 2, oy = below ? a.y : a.y + a.h;
+    out.push({ a, b, x1: outerRight ? b.x : b.x + b.w, y1: ey, x2: outerRight ? b.x + b.w : b.x, y2: oy, miter });
+  }
+  return out;
 }

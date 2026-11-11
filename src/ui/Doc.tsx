@@ -1,5 +1,5 @@
 // מסמך ללקוח: סיכום ההזמנה להדפסה / שמירה כ-PDF.
-import { CUT_HE, isVertical, letter } from '../core/model';
+import { CUT_HE, corners, isVertical, letter } from '../core/model';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
 import { asset } from './util';
@@ -32,6 +32,17 @@ export function Doc({ id }: { id: string }) {
               <td>{project.cutouts.filter((c) => c.pieceId === p.id).map((c) => `${c.name || CUT_HE[c.kind]} ${c.round ? `Ø${cm(c.w)}` : `${cm(c.w)}×${cm(c.h)}`}`).join(' · ') || '—'}</td><td>{isVertical(p) || !p.aprons.length || !project.apronH ? '—' : `${p.aprons.length} צדדים`}</td></tr>)}
           </tbody></table>
           <div><span className="cap">פריסה על הלוחות</span><div className="docslabs" style={{ marginTop: 8 }}><Slabs /></div></div>
+          <div><span className="cap">חיבורים ומוצרים נלווים</span>
+            <ul style={{ margin: '8px 0 0', paddingInlineStart: 18, fontSize: 13.5, lineHeight: 1.7 }}>
+              {(nest?.joints || []).map((j, n) => { const q = project.pieces.find((x) => x.id === j.pieceId); return <li key={n}>חיבור ב"{q?.name}" — {Math.round(j.at / 10)} ס"מ מתחילת החלק{q?.joint === 'sink' ? ' (במרכז הכיור)' : q?.joint === 'cooktop' ? ' (במרכז הכיריים)' : ''}</li>; })}
+              {corners(project).map((c) => <li key={c.b.id}>חיבור פינה {c.miter ? 'בגרונג 45°' : 'ישר'} — "{c.b.name}"</li>)}
+              {!nest?.joints.length && !corners(project).length && <li>אין חיבורים</li>}
+              <li>בוק־מאץ׳: {project.bookmatch === 'yes' ? 'כן' : project.bookmatch === 'no' ? 'לא' : 'לא נקבע'}</li>
+              {project.cutouts.filter((c) => c.kind === 'sink').map((c) => <li key={c.id}>כיור {c.built ? 'בנוי מאבן' : 'קנוי'}{c.bowls === 'even' ? ', כפול חצי־חצי' : c.bowls === 'ls' ? ', כפול גדול + קטן' : ''}{c.cabinet ? `, ארון ${c.cabinet / 10}` : ''} — נטו משוער {cm(c.w)}×{cm(c.h)} ס"מ</li>)}
+              {project.disposal && <li>טוחן אשפה</li>}{project.water && <li>מערכת מים</li>}
+            </ul>
+          </div>
+          <div className="note"><b>אין התחייבות לגידים.</b> מיקום, כיוון וגוון הגידים בפועל משתנים מלוח ללוח, וההדמיה היא המחשה בלבד.</div>
           <p className="mute" style={{ fontSize: 12 }}>ההדמיה להמחשה בלבד. גוון וגידים באבן טבעית ובפורצלן משתנים מלוח ללוח; המידות הסופיות ייקבעו במדידה בשטח.</p>
         </div>
       </main>
