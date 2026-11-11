@@ -1,0 +1,146 @@
+// בניית סצנת התלת־ממד מתוך מודל המטבח. יחידות: מטר. x בתוכנית → x, y בתוכנית → z, גובה → y.
+import * as THREE from 'three';
+import { Cutout, Piece, Project, Side, hostEdge, isVertical } from '../core/model';
+import { NestResult, Placement, localToSlab, segLocal } from '../core/nesting';
+
+const S = 0.001;
+const FLOORS: Record<string, [string, string]> = { oak: ['#c9a57a', '#b8946a'], walnut: ['#6e4f39', '#5d4230'], light: ['#e3d5bf', '#d8c8ae'], concrete: ['#b9b6b0', '#aeaba5'] };
+export const FLOOR_HE: Record<string, string> = { oak: 'אלון', walnut: 'אגוז', light: 'בהיר', concrete: 'בטון' };
+
+function floorTexture(kind: string) {
+  const [a, b] = FLOORS[kind] || FLOORS.oak, c = document.createElement('canvas'); c.width = c.height = 1024;
+  const g = c.getContext('2d')!; g.fillStyle = a; g.fillRect(0, 0, 1024, 1024);
+  if (kind !== 'concrete') for (let row = 0; row < 8; row++) {
+    let x = -((row * 173) % 300), n = row * 7;
+    while (x < 1024) {
+      const w = 340 + ((n * 61) % 180), shade = ((n * 37) % 9) / 100;
+      g.fillStyle = n % 3 ? a : b; g.fillRect(x, row * 128, w, 128);
+      g.fillStyle = `rgba(0,0,0,${shade})`; g.fillRect(x, row * 128, w, 128);
+      g.fillStyle = 'rgba(60,40,20,.28)'; g.fillRect(x + w - 2, row * 128, 2, 128); x += w; n++;
+    }
+    g.fillStyle = 'rgba(60,40,20,.28)'; g.fillRect(0, row * 128, 1024, 2);
+  }
+  for (let i = 0; i < 1800; i++) { g.fillStyle = `rgba(${i % 2 ? 255 : 0},${i % 2 ? 255 : 0},${i % 2 ? 255 : 0},.03)`; g.fillRect((i * 7919) % 1024, (i * 104729) % 1024, kind === 'concrete' ? 3 : 60, 1.2); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+
+export interface Built { group: THREE.Group; center: THREE.Vector3; radius: number }
+
+export function buildKitchen(project: Project, nest: NestResult | null, stoneTex: THREE.Texture | null): Built {
+  const group = new THREE.Group(), H = project.counterH, T = project.thickness;
+  const stone = new THREE.MeshPhysicalMaterial({ map: stoneTex, color: stoneTex ? 0xffffff : 0xe6e1d8, roughness: 0.26, clearcoat: 0.4, clearcoatRoughness: 0.22, envMapIntensity: 0.95 });
+  const cab = new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1f1e1c, roughness: 0.5, metalness: 0.3 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0xc3c7cc, roughness: 0.28, metalness: 0.95 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xf2ede5, roughness: 0.96 });
+  const flat = project.pieces.filter((p) => !isVertical(p)), byId = new Map(project.pieces.map((p) => [p.id, p]));
+  const plsOf = (id: string) => (nest?.slabs.flatMap((s) => s.placements) || []).filter((pl) => pl.pieceId === id && !pl.stripOf);
+
+  const add = (m: THREE.Object3D, shadow = true) => { m.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = shadow; o.receiveShadow = true; } }); group.add(m); return m; };
+  const box = (w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, h * S, d * S), mat); m.position.set(x * S, y * S, z * S); return add(m); };
+  /** UV לפי המיקום האמיתי של החלק על הלוח — כך הגיד בהדמיה הוא הגיד שייחתך. */
+  const uvAt = (p: Piece, pls: Placement[], lx: number, ly: number): [number, number] => {
+    if (!pls.length) return [lx / project.slabW, 1 - ly / project.slabH];
+    const pl = pls.find((q) => { const s = segLocal(p, q); return lx >= s.x - 0.5 && lx <= s.x + s.w + 0.5 && ly >= s.y - 0.5 && ly <= s.y + s.h + 0.5; }) || pls[0], s = segLocal(p, pl);
+    const pt = localToSlab(p, pl, Math.max(s.x, Math.min(s.x + s.w, lx)), Math.max(s.y, Math.min(s.y + s.h, ly)));
+    return [pt.x / project.slabW, 1 - pt.y / project.slabH];
+  };
+  const hole = (c: Cutout) => {
+    const h = new THREE.Path();
+    if (c.round) h.absellipse(c.x + c.w / 2, c.y + c.h / 2, c.w / 2, c.h / 2, 0, Math.PI * 2, true);
+    else { const r = Math.min(c.kind === 'sink' ? 26 : 8, c.w / 2, c.h / 2), x = c.x, y = c.y, w = c.w, hh = c.h; h.moveTo(x + r, y); h.lineTo(x + w - r, y); h.quadraticCurveTo(x + w, y, x + w, y + r); h.lineTo(x + w, y + hh - r); h.quadraticCurveTo(x + w, y + hh, x + w - r, y + hh); h.lineTo(x + r, y + hh); h.quadraticCurveTo(x, y + hh, x, y + hh - r); h.lineTo(x, y + r); h.quadraticCurveTo(x, y, x + r, y); }
+    return h;
+  };
+
+  for (const p of flat) {
+    const pls = plsOf(p.id), cuts = project.cutouts.filter((c) => c.pieceId === p.id);
+    const segs = p.outline || pls.length < 2 ? [{ x: 0, y: 0, w: p.w, h: p.h }] : pls.map((pl) => segLocal(p, pl));
+    // --- המשטח עצמו, עם פתחים אמיתיים ---
+    for (const s of segs) {
+      const shape = new THREE.Shape();
+      if (p.outline && segs.length === 1) p.outline.forEach((q, i) => (i ? shape.lineTo(q.x, q.y) : shape.moveTo(q.x, q.y)));
+      else { shape.moveTo(s.x, s.y); shape.lineTo(s.x + s.w, s.y); shape.lineTo(s.x + s.w, s.y + s.h); shape.lineTo(s.x, s.y + s.h); }
+      for (const c of cuts) { const cx = c.x + c.w / 2, cy = c.y + c.h / 2; if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h && c.x > s.x + 1 && c.y > s.y + 1 && c.x + c.w < s.x + s.w - 1 && c.y + c.h < s.y + s.h - 1) shape.holes.push(hole(c)); }
+      const g = new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false, curveSegments: 10 });
+      const pos = g.attributes.position, uv = new Float32Array(pos.count * 2);
+      for (let i = 0; i < pos.count; i++) { const [u, v] = uvAt(p, pls, pos.getX(i), pos.getY(i)); uv[i * 2] = u; uv[i * 2 + 1] = v; }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.rotateX(Math.PI / 2); g.scale(S, S, S);
+      const m = new THREE.Mesh(g, stone); m.position.set(p.x * S, H * S, p.y * S); add(m);
+    }
+    // --- קנט ---
+    if (project.apronH > T) for (const side of p.aprons) {
+      const e = hostEdge(p, side), ah = project.apronH - T, n = Math.max(1, Math.ceil(e.len / 120));
+      const g = new THREE.BoxGeometry(e.len, ah, T, n, 1, 1), pos = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) { const a = pos.getX(i) + e.len / 2, lx = e.x - p.x + e.dx * a, ly = e.y - p.y + e.dy * a, [u, v] = uvAt(p, pls, lx, ly); uv.setXY(i, u, v - ((ah / 2 - pos.getY(i)) / project.slabH) * 0.6); }
+      g.scale(S, S, S);
+      const m = new THREE.Mesh(g, stone); m.position.set((e.x + (e.dx * e.len) / 2 - (e.nx * T) / 2) * S, (H - T - ah / 2) * S, (e.y + (e.dy * e.len) / 2 - (e.ny * T) / 2) * S); if (e.dy) m.rotation.y = -Math.PI / 2; add(m);
+    }
+    // --- ארונות תחתונים ---
+    if (project.cabinets && p.kind !== 'panel') {
+      const front: Side = p.wall === 'back' ? 'front' : p.wall === 'front' ? 'back' : p.wall === 'left' ? 'right' : p.wall === 'right' ? 'left' : p.w >= p.h ? 'front' : 'right';
+      const ins = (s: Side) => (p.wall === s ? 0 : s === front ? 30 : p.kind === 'island' ? 30 : 4) + (project.pieces.some((w) => w.kind === 'waterfall' && w.host === p.id && w.side === s) ? T : 0);
+      const x0 = p.x + ins('left'), x1 = p.x + p.w - ins('right'), z0 = p.y + ins('back'), z1 = p.y + p.h - ins('front'), toe = 100, ch = H - T - toe;
+      box(x1 - x0, ch, z1 - z0, cab, (x0 + x1) / 2, toe + ch / 2, (z0 + z1) / 2);
+      const e = hostEdge({ ...p, x: x0, y: z0, w: x1 - x0, h: z1 - z0 }, front);
+      box(e.dx ? x1 - x0 : x1 - x0 - 70, toe, e.dx ? z1 - z0 - 70 : z1 - z0, dark, (x0 + x1) / 2 - (e.dx ? 0 : e.nx * 35), toe / 2, (z0 + z1) / 2 - (e.dx ? e.ny * 35 : 0));
+      const doors = Math.max(1, Math.round(e.len / 600)), dw = e.len / doors;
+      for (let i = 0; i < doors; i++) {
+        const a = dw * (i + 0.5), cx = e.x + e.dx * a + e.nx * 9, cz = e.y + e.dy * a + e.ny * 9;
+        box(e.dx ? dw - 5 : 18, ch - 6, e.dx ? 18 : dw - 5, cab, cx, toe + ch / 2, cz);
+        box(e.dx ? 150 : 10, 10, e.dx ? 10 : 150, dark, cx + e.nx * 16, toe + ch - 48, cz + e.ny * 16);
+      }
+    }
+    // --- קיר וארונות עליונים ---
+    if (p.wall) {
+      const e = hostEdge(p, p.wall), wh = 2500, wt = 100, cx = e.x + (e.dx * e.len) / 2 + (e.nx * wt) / 2, cz = e.y + (e.dy * e.len) / 2 + (e.ny * wt) / 2;
+      const w = box(e.dx ? e.len + 900 : wt, wh, e.dx ? wt : e.len + 900, wallMat, cx, wh / 2, cz); w.traverse((o) => (o.castShadow = false));
+      if (project.uppers && p.kind === 'counter' && e.len > 900) {
+        const d = 350, uh = 700, ub = 1500, ux = e.x + (e.dx * e.len) / 2 - (e.nx * d) / 2, uz = e.y + (e.dy * e.len) / 2 - (e.ny * d) / 2;
+        box(e.dx ? e.len : d, uh, e.dx ? d : e.len, cab, ux, ub + uh / 2, uz);
+        const n = Math.max(1, Math.round(e.len / 600));
+        for (let i = 1; i < n; i++) { const a = (e.len / n) * i; box(e.dx ? 3 : 4, uh - 4, e.dx ? 4 : 3, dark, e.x + e.dx * a - e.nx * (d + 1), ub + uh / 2, e.y + e.dy * a - e.ny * (d + 1)); }
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry((e.dx ? e.len - 80 : 14) * S, 6 * S, (e.dx ? 14 : e.len - 80) * S), new THREE.MeshBasicMaterial({ color: 0xfff1d6 })); lamp.position.set((ux - e.nx * 60) * S, (ub - 4) * S, (uz - e.ny * 60) * S); group.add(lamp);
+      }
+    }
+    // --- כיור, ברז, כיריים ---
+    for (const c of cuts) {
+      const cx = p.x + c.x + c.w / 2, cz = p.y + c.y + c.h / 2;
+      if (c.kind === 'sink') {
+        const depth = 210, g = new THREE.BoxGeometry((c.w - 2) * S, depth * S, (c.h - 2) * S);
+        const basin = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xb4b8bd, roughness: 0.3, metalness: 0.92, side: THREE.BackSide })); basin.position.set(cx * S, (H - T - depth / 2 + 1) * S, cz * S); basin.receiveShadow = true; group.add(basin);
+        const drain = new THREE.Mesh(new THREE.CylinderGeometry(28 * S, 28 * S, 4 * S, 24), dark); drain.position.set(cx * S, (H - T - depth + 4) * S, cz * S); group.add(drain);
+      } else if (c.kind === 'cooktop') {
+        box(c.w + 24, 6, c.h + 24, new THREE.MeshPhysicalMaterial({ color: 0x0c0c0e, roughness: 0.08, clearcoat: 1 }), cx, H + 3, cz);
+        for (const [fx, fy, r] of [[0.28, 0.3, 0.8], [0.72, 0.3, 1], [0.28, 0.72, 1], [0.72, 0.72, 0.8]]) { const ring = new THREE.Mesh(new THREE.RingGeometry(Math.min(c.w, c.h) * 0.15 * r * S, Math.min(c.w, c.h) * 0.165 * r * S, 40), new THREE.MeshBasicMaterial({ color: 0x77777c })); ring.rotation.x = -Math.PI / 2; ring.position.set((p.x + c.x + c.w * fx) * S, (H + 6.4) * S, (p.y + c.y + c.h * fy) * S); group.add(ring); }
+      } else if (c.kind === 'faucet') {
+        const sink = cuts.find((q) => q.kind === 'sink'), tx = sink ? p.x + sink.x + sink.w / 2 - cx : 0, tz = sink ? p.y + sink.y + sink.h / 2 - cz : 150, len = Math.hypot(tx, tz) || 1, dx = tx / len, dz = tz / len, reach = Math.min(190, len * 0.75);
+        const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 250, 0), new THREE.Vector3(dx * reach * 0.35, 330, dz * reach * 0.35), new THREE.Vector3(dx * reach * 0.85, 320, dz * reach * 0.85), new THREE.Vector3(dx * reach, 250, dz * reach)].map((q) => q.multiplyScalar(S)));
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 11 * S, 14), steel); tube.position.set(cx * S, H * S, cz * S); add(tube);
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(23 * S, 25 * S, 40 * S, 24), steel); base.position.set(cx * S, (H + 20) * S, cz * S); add(base);
+      }
+    }
+  }
+
+  // --- חיפוי קיר ומפלים ---
+  for (const q of project.pieces.filter(isVertical)) {
+    const host = q.host ? byId.get(q.host) : undefined; if (!host || !q.side) continue;
+    const e = hostEdge(host, q.side), pls = plsOf(q.id), len = Math.min(q.w, e.len), splash = q.kind === 'splash', n = Math.max(1, Math.ceil(len / 200));
+    const g = new THREE.BoxGeometry(len, q.h, T, n, 1, 1), pos = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) { const [u, v] = uvAt(q, pls, pos.getX(i) + len / 2, q.h / 2 - pos.getY(i)); uv.setXY(i, u, v); }
+    g.scale(S, S, S);
+    const m = new THREE.Mesh(g, stone), y0 = splash ? H : 0, hh = splash ? q.h : Math.min(q.h, H - T);
+    m.position.set((e.x + (e.dx * len) / 2 - (e.nx * T) / 2) * S, (y0 + hh / 2) * S, (e.y + (e.dy * len) / 2 - (e.ny * T) / 2) * S); if (!splash) m.scale.y = hh / q.h; if (e.dy) m.rotation.y = -Math.PI / 2; add(m);
+  }
+
+  // --- רצפה ---
+  const xs = flat.flatMap((p) => [p.x, p.x + p.w]), zs = flat.flatMap((p) => [p.y, p.y + p.h]);
+  const bx0 = Math.min(0, ...xs), bx1 = Math.max(1000, ...xs), bz0 = Math.min(0, ...zs), bz1 = Math.max(600, ...zs);
+  const center = new THREE.Vector3(((bx0 + bx1) / 2) * S, 0.75, ((bz0 + bz1) / 2) * S), radius = (Math.hypot(bx1 - bx0, bz1 - bz0) / 2) * S;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: floorTexture(project.floor), roughness: 0.55 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(center.x, 0, center.z); floor.receiveShadow = true; group.add(floor);
+  return { group, center, radius };
+}
+
+export function disposeGroup(g: THREE.Object3D) {
+  g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.geometry.dispose(); const mats = Array.isArray(m.material) ? m.material : [m.material]; mats.forEach((mat) => { const mm = mat as THREE.MeshStandardMaterial; if (mm.map && (mm.map as THREE.CanvasTexture).isCanvasTexture) mm.map.dispose(); mat.dispose(); }); } });
+}
