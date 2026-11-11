@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Customer, Order, STATUS_HE, isLocal, repo } from '../data/repo';
 import { Project, TEMPLATES, TemplateId, emptyProject, fromTemplate } from '../core/model';
 import { DxfInfo, parseDxf } from '../core/dxf';
@@ -14,11 +15,11 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('he-IL', { day: 'n
 
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => { const f = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); addEventListener('keydown', f); return () => removeEventListener('keydown', f); }, [onClose]);
-  return (
+  // דרך portal: חלון קופץ שנפתח מתוך פאנל "זכוכית" היה נכלא בתוכו
+  return createPortal(
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}><h2>{title}</h2>{children}</div>
-    </div>
-  );
+    </div>, document.body);
 }
 
 export function Home({ customerId, admin, email }: { customerId?: string; admin: boolean; email?: string }) {
@@ -53,6 +54,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
         <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} />
         <span className="sp" />
         {isLocal && <span className="badge sand">מצב הדגמה · נשמר בדפדפן הזה בלבד</span>}
+        {admin && !isLocal && <button className="btn sm" onClick={() => go('/catalog')}><Icon.grid />קטלוג ומלאי</button>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/team')}><Icon.team />צוות</button>}
         {email && <button className="btn sm" title={email} onClick={signOut}><Icon.out />יציאה</button>}
       </header>
@@ -132,7 +134,7 @@ const SHAPES: Record<TemplateId, string> = {
 };
 
 function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => void }) {
-  const [way, setWay] = useState<'template' | 'dxf' | 'plan'>('template');
+  const [way, setWay] = useState<'template' | 'dxf' | 'plan' | 'photo'>('template');
   const [tpl, setTpl] = useState<TemplateId>('straight');
   const [title, setTitle] = useState('מטבח'), [no, setNo] = useState('');
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
@@ -149,6 +151,8 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
       try { const text = await f.text(); setDxf({ text, name: f.name, ...parseDxf(text, title) }); if (title === 'מטבח') setTitle(f.name.replace(/\.dxf$/i, '')); } catch (e) { setDxf(null); setErr((e as Error).message); }
     } else setPlan(f);
   }
+  function pickWay(w: typeof way) { setWay(w); setPlan(null); setErr('');
+  }
   const rescale = (scale: number) => { if (dxf) try { setDxf({ ...dxf, ...parseDxf(dxf.text, title, scale || undefined) }); } catch (e) { setErr((e as Error).message); } };
 
   async function create() {
@@ -159,12 +163,13 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
       else if (way === 'dxf') { if (!dxf) throw new Error('בחרו קובץ DXF.'); project = { ...dxf.project, name: title }; }
       else {
         if (!plan) throw new Error('בחרו צילום או PDF של התוכנית.');
-        const r = await ai.fromPlan(plan);
-        if (!r.draft?.pieces?.length) throw new Error(r.reply || 'לא הצלחתי לזהות משטחים בתוכנית.');
+        const r = await ai.fromPlan(plan, way === 'photo');
+        if (!r.draft?.pieces?.length) throw new Error(r.reply || 'לא הצלחתי לזהות משטחים.');
         project = { ...applyDraft(emptyProject(title), r.draft), source: 'plan', notes: [r.reply, ...(r.assumptions || []).map((a) => `• ${a}`)].filter(Boolean).join('\n') };
       }
       const o = await repo.createOrder({ customer_id: customer.id, title: title.trim() || 'מטבח', order_no: no.trim() || undefined, project });
-      if (way === 'plan') setToast('התוכנית זוהתה — כדאי לעבור על המידות וההנחות בצד');
+      if (way === 'plan') setToast('התוכנית זוהתה — כדאי לעבור על המידות');
+      if (way === 'photo') setToast('המידות מהצילום משוערות — חובה לאמת במדידה');
       go(`/o/${o.id}`);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   }
@@ -176,9 +181,10 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
         <label className="field">מספר הזמנה (לא חובה)<input dir="ltr" value={no} onChange={(e) => setNo(e.target.value)} /></label>
       </div>
       <div className="ways">
-        <button className={`way ${way === 'template' ? 'on' : ''}`} onClick={() => setWay('template')}><Icon.grid /><b>התחלה מתבנית</b><small>בוחרים צורה ומשנים מידות בגרירה</small></button>
-        <button className={`way ${way === 'dxf' ? 'on' : ''}`} onClick={() => setWay('dxf')}><Icon.file /><b>מדידה קיימת · DXF</b><small>כל המידות והפתחים נקראים מהקובץ, ישר לנסטינג</small></button>
-        <button className={`way ${way === 'plan' ? 'on' : ''}`} onClick={() => setWay('plan')}><Icon.camera /><b>צילום תוכנית</b><small>מצלמים תוכנית או דף מדידה, והמטבח נבנה לבד</small></button>
+        <button className={`way ${way === 'template' ? 'on' : ''}`} onClick={() => pickWay('template')}><Icon.grid /><b>התחלה מתבנית</b><small>בוחרים צורה ומשנים מידות בגרירה</small></button>
+        <button className={`way ${way === 'dxf' ? 'on' : ''}`} onClick={() => pickWay('dxf')}><Icon.file /><b>מדידה קיימת · DXF</b><small>כל המידות והפתחים נקראים מהקובץ, ישר לנסטינג</small></button>
+        <button className={`way ${way === 'plan' ? 'on' : ''}`} onClick={() => pickWay('plan')}><Icon.camera /><b>צילום תוכנית</b><small>מצלמים תוכנית או דף מדידה, והמטבח נבנה לבד</small></button>
+        <button className={`way ${way === 'photo' ? 'on' : ''}`} onClick={() => pickWay('photo')}><Icon.user /><b>צילום המטבח הקיים</b><small>הלקוח שולח תמונה, ומקבלים נקודת התחלה משוערת עוד לפני המדידה</small></button>
       </div>
       {way === 'template' && <div className="shapes">{TEMPLATES.map((t) => (
         <button key={t.id} className={`shape ${tpl === t.id ? 'on' : ''}`} onClick={() => setTpl(t.id)}><svg viewBox="0 0 54 40" fill="#D9C7A6" stroke="#8a744d" strokeWidth="1" dangerouslySetInnerHTML={{ __html: SHAPES[t.id] }} />{t.name}</button>
@@ -187,7 +193,7 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
         <>
           <input ref={input} type="file" hidden accept={way === 'dxf' ? '.dxf' : 'image/*,application/pdf'} onChange={(e) => pick(e.target.files?.[0])} />
           <div className={`drop ${over ? 'over' : ''}`} onClick={() => input.current?.click()} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files[0]); }}>
-            {way === 'dxf' ? (dxf ? <b>{dxf.name}</b> : <>גררו לכאן קובץ <b>DXF</b> או לחצו לבחירה</>) : plan ? <b>{plan.name}</b> : <>גררו לכאן <b>צילום או PDF</b> של התוכנית, או לחצו לבחירה</>}
+            {way === 'dxf' ? (dxf ? <b>{dxf.name}</b> : <>גררו לכאן קובץ <b>DXF</b> או לחצו לבחירה</>) : plan ? <b>{plan.name}</b> : way === 'photo' ? <>גררו לכאן <b>תמונה של המטבח הקיים</b>, או לחצו לבחירה</> : <>גררו לכאן <b>צילום או PDF</b> של התוכנית, או לחצו לבחירה</>}
           </div>
         </>
       )}
@@ -203,10 +209,11 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
           {dxf.info.warnings.map((w) => <div key={w} className="note">{w}</div>)}
         </div>
       )}
+      {way === 'photo' && <div className="note">מהתמונה מזהים את צורת המטבח ומעריכים מידות לפי גודל הארונות. זו הערכה בלבד (פלוס־מינוס 10–15 ס"מ) — חובה לאמת במדידה.</div>}
       {way === 'plan' && <div className="note">הזיהוי נעשה בבינה מלאכותית ונמשך כחצי דקה. תמיד עוברים על המידות אחרי — במיוחד בצילום של כתב יד.</div>}
       {err && <div className="note err">{err}</div>}
       <div className="row"><span className="sp" /><button className="btn" onClick={onClose}>ביטול</button>
-        <button className="btn primary" disabled={busy || (way === 'dxf' && !dxf?.info.pieces) || (way === 'plan' && !plan)} onClick={create}>{busy ? <><span className="spin" />{way === 'plan' ? 'מזהה את התוכנית…' : 'יוצר…'}</> : 'פתיחת הסטודיו'}</button></div>
+        <button className="btn primary" disabled={busy || (way === 'dxf' && !dxf?.info.pieces) || ((way === 'plan' || way === 'photo') && !plan)} onClick={create}>{busy ? <><span className="spin" />{way === 'plan' ? 'מזהה את התוכנית…' : way === 'photo' ? 'מנתח את התמונה…' : 'יוצר…'}</> : 'פתיחת הסטודיו'}</button></div>
     </Modal>
   );
 }

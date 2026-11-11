@@ -3,7 +3,9 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { CABINETS, FLOORS, Swatch, WALLS } from '../core/catalog';
 import { exportNestDxf } from '../core/dxf';
 import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SIDE_HE, Side, bounds, isVertical, letter, piece as mkPiece, sinkNet, uid } from '../core/model';
+import { upgrades } from '../core/upgrades';
 import { OrderStatus, STATUS_HE, isLocal } from '../data/repo';
+import { Compare } from './Compare';
 import { ai, applyDraft, localAssist } from '../ai';
 import { Step, go, useStore } from '../store';
 import { Icon } from './icons';
@@ -73,6 +75,7 @@ export function LeftPanel() {
   const project = useStore((s) => s.project)!, order = useStore((s) => s.order)!, sel = useStore((s) => s.sel), stones = useStore((s) => s.stones), step = useStore((s) => s.step), nest = useStore((s) => s.nest), issues = useStore((s) => s.issues);
   const { apply, select, patchOrder, setStep, flush } = useStore.getState();
   const stone = useStone(), set = (patch: Partial<Project>, key?: string) => apply((p) => ({ ...p, ...patch }), key);
+  const [cmp, setCmp] = useState(false);
   const flat = project.pieces.filter((p) => !isVertical(p)), i = STEPS.findIndex((s) => s.id === step), cur = STEPS[i], m = nest?.metrics;
   const errors = issues.filter((x) => x.level === 'error').length, warns = issues.filter((x) => x.level === 'warn').length;
   const dxf = () => { if (!nest) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportNestDxf(nest.slabs)], { type: 'application/dxf' })); a.download = `${order.title}-nesting.dxf`; a.click(); URL.revokeObjectURL(a.href); };
@@ -102,9 +105,12 @@ export function LeftPanel() {
   else if (step === 'stone') body = <>
     <section>
       <span className="cap">לוח</span>
-      <select className="input" value={String(stone.id)} onChange={(e) => { const s = stones.find((x) => String(x.id) === e.target.value); set({ stoneId: s ? s.id : null }); }}>{stones.map((s) => <option key={s.id} value={String(s.id)}>{s.name}{s.slab ? '' : ' (אריח)'}</option>)}</select>
+      <select className="input" value={String(stone.id)} onChange={(e) => { const s = stones.find((x) => String(x.id) === e.target.value); set({ stoneId: s ? s.id : null }); }}>{stones.map((s) => <option key={s.id} value={String(s.id)}>{s.name}{s.stock === 'no' ? ' · אין במלאי' : ''}{s.hasImage ? '' : ' · בלי תמונה'}</option>)}</select>
       <div style={{ height: 120, borderRadius: 14, background: `#ddd url("${stone.url}") center/cover`, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.2)' }} />
-      {isLocal && <div className="note">במצב הדגמה יש אבן אחת לדוגמה. באתר המחובר מופיעים כל לוחות Barstone.</div>}
+      {stone.stock === 'no' && <div className="note err">הדגם הזה מסומן "אין במלאי". כדאי להציע ללקוח דגם דומה.</div>}
+      {!stone.hasImage && <div className="note">לדגם הזה אין עדיין תמונת לוח, ולכן ההדמיה מציגה אבן כללית.</div>}
+      <button className="btn sm" onClick={() => setCmp(true)}><Icon.grid />השוואת דגמים זה לצד זה</button>
+      {isLocal && <div className="note">במצב הדגמה יש שלוש אבנים לדוגמה. באתר המחובר מופיע כל הקטלוג של Barstone.</div>}
     </section>
     <section>
       <span className="cap">האם הדגם בוק־מאץ׳?</span>
@@ -194,6 +200,16 @@ export function LeftPanel() {
       <label className="field">הערות<textarea rows={3} value={project.notes} onChange={(e) => set({ notes: e.target.value }, 'notes')} /></label>
     </section>
     <section>
+      <span className="cap">הצעות שדרוג ללקוח</span>
+      {nest && upgrades(project, nest).map((u) => (
+        <div key={u.id} className={`upg ${u.active ? 'on' : ''}`}>
+          <div className="row"><b>{u.title}</b><span className="sp" /><button className={`btn sm ${u.active ? '' : 'primary'}`} onClick={() => apply(u.apply)}>{u.active ? 'הסר' : 'הוסף'}</button></div>
+          <p>{u.pitch}</p>
+          <span className="mute mono" style={{ fontSize: 11.5 }}>{u.dArea ? `${u.dArea > 0 ? '+' : ''}${u.dArea} מ"ר אבן` : 'בלי אבן נוספת'}{u.dSlabs ? ` · ${u.dSlabs > 0 ? '+' : ''}${u.dSlabs} לוח` : u.dArea > 0 ? ' · בלי לוח נוסף' : ''}</span>
+        </div>
+      ))}
+    </section>
+    <section>
       <span className="cap">סיכום</span>
       <div className="metrics">
         <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>שטח · מ"ר</small><b>{m2(m?.pieceArea || 0)}</b></div>
@@ -206,6 +222,7 @@ export function LeftPanel() {
 
   return (
     <aside className="panel glass">
+      {cmp && <Compare onClose={() => setCmp(false)} />}
       <div className="stephead"><span className="cap">שלב {i + 1} מתוך {STEPS.length}</span><h2>{cur.name}</h2><p>{cur.hint}</p></div>
       {body}
       <span className="sp" />

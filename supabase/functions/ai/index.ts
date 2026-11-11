@@ -71,6 +71,7 @@ const SYSTEM = `אתה מומחה לתכנון וייצור משטחי אבן ו
 
 ## המשימות
 - mode=plan: מצורף צילום או PDF של תוכנית מטבח או דף מדידה (לפעמים בכתב יד). קרא את המידות בדיוק כפי שכתובות, המר ליחידות מ"מ (שים לב אם המקור בס"מ או במטרים), ובנה draft מלא עם settings סבירים (uppers true, cabinets true, cabinetColor #f4f3ef, wallColor #f4f2ee, floor oak, light day, kelvin 4000, bookmatch unknown, והשאר false). אל תמציא מידה שלא מופיעה: אם חסרה, השתמש במידה טיפוסית וציין זאת ב-assumptions. ציין ב-assumptions גם כל מספר שקשה לקרוא. אם התמונה אינה תוכנית מטבח, החזר draft=null והסבר ב-reply.
+- mode=photo: מצורפת תמונה של מטבח קיים (לא תוכנית). זהה את צורת המטבח (ישר, L, U, אי), היכן הכיור והכיריים, והערך מידות לפי אמות מידה נראות: דלת ארון תחתון רגילה ברוחב 600, מדיח 600, כיריים 600, מקרר 700–900, עומק משטח 600–650, גובה משטח 900. בנה draft מלא עם settings כמו ב-mode=plan. כל המידות הן הערכה: כתוב ב-assumptions כל מידה משוערת ואת רמת הביטחון, וכתוב ב-reply משפט אחד שמבהיר שחובה לאמת במדידה. אם התמונה אינה מטבח, החזר draft=null.
 - mode=chat: שיחה עם איש המכירות. מצורפים המטבח הנוכחי, ממצאי הבדיקה והנסטינג, וההודעות הקודמות. אם הוא מבקש שינוי (להוסיף, להזיז, לשנות מידה, למחוק, לשנות צבע, ריצוף, תאורה, כיור, חיבור וכדומה) — החזר ב-draft את המטבח המלא אחרי השינוי: שנה רק את מה שהתבקש, שמור על כל השאר ועל ה-ref הקיימים, וכתוב ב-reply משפט אחד על מה שנעשה. אפשר לבצע כמה שינויים בבקשה אחת. אם הוא שואל שאלה או מבקש עצה — החזר draft=null וענה ב-reply בקצרה ובמספרים. "שמאלה" = x קטן יותר, "ימינה" = x גדול יותר, "קדימה" = y גדול יותר, "אחורה" = y קטן יותר. מידות שהמשתמש נותן בס"מ או במטרים — המר למ"מ. אם הבקשה לא ברורה, החזר draft=null ושאל שאלה אחת. אם ביקשו משהו שהמודל הזה לא יכול לייצג (מוצר, צורה או אפשרות שלא קיימים בשדות), בצע את מה שכן אפשר, הסבר ב-reply מה לא נכנס, וכתוב ב-missing תיאור קצר של מה שחסר.
 - mode=advise: מצורפים המטבח וממצאי הבדיקה והנסטינג. החזר draft=null, וב-reply חוות דעת מקצועית קצרה (עד 6 נקודות): מה חשוב לתקן לפני ייצור, היכן כדאי לשים חיבורים (מרכז כיור או כיריים, פינה ישרה או 45°), איך לשפר את המראה (מפל, חיפוי, כיוון גיד), ואיך לחסוך לוחות. היה קונקרטי עם מספרים; אל תחזור על הממצאים כלשונם.
 
@@ -87,15 +88,15 @@ Deno.serve(async (req) => {
     if (!Deno.env.get("ANTHROPIC_API_KEY")) return json({ error: "יכולות ה-AI עוד לא הופעלו: צריך להגדיר את הסוד ANTHROPIC_API_KEY ב-Supabase (Edge Functions › Secrets)." }, 503);
 
     const body = await req.json();
-    const mode = body.mode as "plan" | "chat" | "edit" | "advise";
+    const mode = body.mode as "plan" | "photo" | "chat" | "edit" | "advise";
     const content: Anthropic.Beta.BetaContentBlockParam[] = [];
-    if (mode === "plan") {
+    if (mode === "plan" || mode === "photo") {
       const data = String(body.data || ""), media = String(body.media_type || "");
       if (!data || data.length > 17_000_000) return json({ error: "הקובץ חסר או גדול מדי." }, 400);
-      if (media === "application/pdf") content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data } });
+      if (media === "application/pdf" && mode === "plan") content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data } });
       else if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(media)) content.push({ type: "image", source: { type: "base64", media_type: media as "image/jpeg", data } });
       else return json({ error: "סוג קובץ לא נתמך. אפשר JPG, PNG, WEBP או PDF." }, 400);
-      content.push({ type: "text", text: "mode=plan\nבנה את המטבח מהתוכנית המצורפת." });
+      content.push({ type: "text", text: mode === "photo" ? "mode=photo\nהערך את המטבח מהתמונה המצורפת." : "mode=plan\nבנה את המטבח מהתוכנית המצורפת." });
     } else if (mode === "chat" || mode === "edit") {
       const text = String(body.text || "").slice(0, 2000);
       if (!text.trim() || !body.draft) return json({ error: "חסרה בקשה." }, 400);
@@ -113,7 +114,7 @@ Deno.serve(async (req) => {
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default", // אם המודל מסרב מסיבת מדיניות, הבקשה ממשיכה אוטומטית במודל חלופי
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      output_config: { effort: mode === "plan" ? "medium" : "low", format: betaZodOutputFormat(Reply) },
+      output_config: { effort: mode === "plan" || mode === "photo" ? "medium" : "low", format: betaZodOutputFormat(Reply) },
       messages: [{ role: "user", content }],
     });
     if (res.stop_reason === "refusal") return json({ error: "המודל לא יכול היה לטפל בבקשה הזו." }, 422);

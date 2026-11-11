@@ -11,7 +11,7 @@ export interface Customer { id: string; name: string; phone?: string | null; ema
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
 export interface OrderMetrics { slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
 export interface Order { id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
-export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean }
+export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null }
 export const STATUS_HE: Record<OrderStatus, string> = { draft: 'טיוטה', review: 'לעיון הלקוח', approved: 'אושר', production: 'בייצור', done: 'הושלם' };
 
 const J = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) || '') ?? d; } catch { return d; } };
@@ -22,7 +22,7 @@ const ok = <T,>(r: { data: T | null; error: { message: string } | null }): T => 
 
 const STONE_FALLBACK = import.meta.env.BASE_URL + 'stone.jpg';
 const LOCAL_STONES: Stone[] = [
-  { id: 'l1', name: 'אבן לדוגמה (מצב הדגמה)', url: STONE_FALLBACK, slab: true },
+  { id: 'l1', name: 'אבן בהירה (דוגמה)', url: STONE_FALLBACK, slab: true, stock: 'yes', hasImage: true },
 ];
 
 /** מצב הדגמה: בפתיחה הראשונה נוצרים לקוח והזמנות לדוגמה, כדי שיהיה במה לשחק. */
@@ -40,14 +40,40 @@ function seedDemo() {
 }
 try { seedDemo(); } catch { /* אחסון חסום — ממשיכים בלי דוגמה */ }
 
+/** מצב הדגמה: שלוש אבנים (האבן לדוגמה ועוד שני גוונים שנוצרים ממנה), כדי שאפשר יהיה להשוות דגמים. */
+let demoCache: Promise<Stone[]> | null = null;
+function demoStones(): Promise<Stone[]> {
+  demoCache ||= new Promise<Stone[]>((res) => {
+    const img = new Image();
+    img.onload = () => {
+      const mk = (filter: string) => { const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const g = c.getContext('2d')!; g.filter = filter; g.drawImage(img, 0, 0); return c.toDataURL('image/jpeg', 0.85); };
+      try { res([...LOCAL_STONES, { id: 'l2', name: 'אבן כהה (דוגמה)', url: mk('invert(1) brightness(.75) contrast(1.15)'), slab: true, stock: 'yes', hasImage: true }, { id: 'l3', name: 'אבן חמה (דוגמה)', url: mk('sepia(.75) saturate(1.5) brightness(.93)'), slab: true, stock: 'no', hasImage: true }]); } catch { res(LOCAL_STONES); }
+    };
+    img.onerror = () => res(LOCAL_STONES); img.src = STONE_FALLBACK;
+  });
+  return demoCache;
+}
+
 export const repo = {
   async stones(): Promise<Stone[]> {
-    if (!sb) return LOCAL_STONES;
-    const { data, error } = await sb.from('stones').select('id,name,color,tile_path,slab_path,supplier').order('name');
+    if (!sb) return demoStones();
+    let { data, error } = await sb.from('stones').select('id,name,color,tile_path,slab_path,supplier,in_stock,bookmatch').order('name');
+    if (error) ({ data, error } = await sb.from('stones').select('id,name,color,tile_path,slab_path,supplier').order('name') as any); // לפני עדכון הקטלוג
     if (error || !data?.length) return LOCAL_STONES;
+    const rank = { yes: 0, unknown: 1, no: 2 };
     return data
-      .map((s: any): Stone => ({ id: s.id, name: s.name, color: s.color, slab: !!s.slab_path, url: s.slab_path ? sb.storage.from('slabs').getPublicUrl(s.slab_path).data.publicUrl : s.tile_path ? sb.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : STONE_FALLBACK }))
-      .sort((a, b) => Number(b.slab) - Number(a.slab) || a.name.localeCompare(b.name));
+      .map((s: any): Stone => ({ id: s.id, name: s.name, color: s.color, slab: !!s.slab_path, stock: s.in_stock || 'unknown', hasImage: !!(s.slab_path || s.tile_path), bookmatch: s.bookmatch, url: s.slab_path ? sb.storage.from('slabs').getPublicUrl(s.slab_path).data.publicUrl : s.tile_path ? sb.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : STONE_FALLBACK }))
+      .sort((a, b) => Number(b.hasImage) - Number(a.hasImage) || rank[a.stock] - rank[b.stock] || a.name.localeCompare(b.name, 'he'));
+  },
+  async updateStone(sid: number | string, patch: { in_stock?: string; bookmatch?: boolean | null; name?: string }) { if (sb) ok(await sb.from('stones').update(patch).eq('id', sid).select('id')); },
+  async addStone(name: string): Promise<number | null> { if (!sb) return null; return ok<{ id: number }>(await sb.from('stones').insert({ name, supplier: 'Barstone' }).select('id').single()).id; },
+  /** העלאת תמונת לוח לדגם (מנהל הקטלוג). */
+  async uploadSlab(sid: number | string, file: File) {
+    if (!sb) throw new Error('העלאה פועלת באתר המחובר.');
+    const path = `barstone/${sid}-${Date.now()}.${(file.name.split('.').pop() || 'jpg').toLowerCase()}`;
+    const up = await sb.storage.from('slabs').upload(path, file, { contentType: file.type || 'image/jpeg' });
+    if (up.error) throw new Error(up.error.message);
+    ok(await sb.from('stones').update({ slab_path: path }).eq('id', sid).select('id'));
   },
 
   async customers(): Promise<Customer[]> {

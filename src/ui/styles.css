@@ -99,7 +99,7 @@ h1, h2, h3, p { margin: 0; }
 .modal.wide { width: min(760px, 100%); }
 .modal h2 { font-size: 21px; font-weight: 600; letter-spacing: -.01em; }
 @keyframes fade { from { opacity: 0; } } @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.97); } }
-.ways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ways { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .way { border: 0; cursor: pointer; text-align: start; padding: 16px 14px; border-radius: var(--r3); background: #fff; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.12); display: flex; flex-direction: column; gap: 6px; transition: .18s; }
 .way:hover, .way.on { box-shadow: inset 0 0 0 1.5px var(--sand), 0 8px 24px rgba(60,48,30,.1); transform: translateY(-2px); }
 .way svg { width: 26px; height: 26px; color: var(--sand); } .way b { font-weight: 600; } .way small { color: var(--mute); font-size: 12px; line-height: 1.35; }
@@ -177,6 +177,12 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 .start:hover { transform: translateY(-3px); box-shadow: var(--sh2); } .start.dark { background: linear-gradient(160deg, #3a3835, #151413); color: #fff; }
 .start svg { width: 28px; height: 28px; color: var(--sand); } .start b { font-size: 19px; font-weight: 600; } .start small { font-size: 13px; opacity: .7; }
 @media (max-width: 820px) { .starts { grid-template-columns: 1fr; } }
+
+.compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; } .cmp { display: flex; flex-direction: column; gap: 8px; min-width: 0; } .cmpview { height: 250px; border-radius: 16px; overflow: hidden; }
+.modal.wide:has(.compare) { width: min(1180px, 100%); }
+.upg { background: #fff; border-radius: var(--r2); padding: 10px 12px; display: flex; flex-direction: column; gap: 5px; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.08); } .upg.on { box-shadow: inset 0 0 0 1.5px var(--cut); }
+.upg b { font-weight: 600; font-size: 13.5px; } .upg p { font-size: 12.5px; color: var(--ink2); line-height: 1.4; }
+@media (max-width: 900px) { .compare { grid-template-columns: 1fr; } }
 
 /* מסמך ללקוח */
 .doc { max-width: 900px; margin: 0 auto; padding: 10px 22px 70px; display: flex; flex-direction: column; gap: 18px; }

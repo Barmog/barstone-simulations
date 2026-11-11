@@ -7,6 +7,7 @@ import { Home } from './Home';
 import { Studio } from './Studio';
 import { Doc } from './Doc';
 import { Team } from './Team';
+import { Catalog } from './Catalog';
 
 export type Access = 'admin' | 'sales' | 'pending' | 'loading';
 
@@ -38,6 +39,7 @@ export function App() {
   else if (route.name === 'studio') body = <Studio key={route.id} id={route.id} />;
   else if (route.name === 'doc') body = <Doc key={route.id} id={route.id} />;
   else if (route.name === 'team' && access === 'admin') body = <Team me={userId || ''} />;
+  else if (route.name === 'catalog' && access === 'admin' && !isLocal) body = <Catalog />;
   else body = <Home customerId={route.name === 'home' ? route.customer : undefined} admin={access === 'admin'} email={session?.user.email} />;
 
   return <>{body}{toast && <div className="toast" role="status">{toast}</div>}</>;

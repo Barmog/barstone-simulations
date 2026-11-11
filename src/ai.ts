@@ -74,9 +74,9 @@ const fileB64 = (f: File) => new Promise<string>((res, rej) => { const r = new F
 
 export const ai = {
   /** צילום / PDF של תוכנית או דף מדידה → מטבח. */
-  async fromPlan(file: File): Promise<AiReply> {
+  async fromPlan(file: File, photo = false): Promise<AiReply> {
     if (file.size > 12 * 1024 * 1024) throw new Error('הקובץ גדול מדי (עד 12MB).');
-    return call({ mode: 'plan', media_type: file.type || 'image/jpeg', data: await fileB64(file) });
+    return call({ mode: photo ? 'photo' : 'plan', media_type: file.type || 'image/jpeg', data: await fileB64(file) });
   },
   /** צ'אט: שאלה, בקשה לשינוי או להזזה. history = ההודעות הקודמות בשיחה. */
   chat: (p: Project, text: string, history: { role: 'user' | 'ai'; text: string }[], facts: Record<string, unknown>) => call({ mode: 'chat', text, history: history.slice(-10), draft: toDraft(p), facts }),
