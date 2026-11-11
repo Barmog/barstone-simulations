@@ -51,7 +51,20 @@ export function Plan2D() {
   const snap = (val: number, targets: number[], step = 10) => { const t = targets.find((t) => Math.abs(t - val) < 9 * k); return t ?? Math.round(val / step) * step; };
 
   function down(e: RPE, d: Drag) { e.stopPropagation(); svg.current!.setPointerCapture(e.pointerId); drag.current = d; setEdit(null); }
+  // צביטה בשתי אצבעות = זום (טלפון וטאבלט)
+  const pts = useRef(new Map<number, { x: number; y: number }>()), pinch = useRef<{ d: number; v: View; mx: number; my: number } | null>(null);
+  const spread = () => { const [a, b] = [...pts.current.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  function touchDown(e: RPE) {
+    pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.current.size !== 2) return;
+    const [a, b] = [...pts.current.values()], m = toMm({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+    drag.current = null; pinch.current = { d: spread(), v, mx: m.x, my: m.y };
+  }
+  function touchUp(e: RPE) { pts.current.delete(e.pointerId); if (pts.current.size < 2) pinch.current = null; }
   function move(e: RPE) {
+    if (pts.current.has(e.pointerId)) pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pz = pinch.current;
+    if (pz && pts.current.size === 2) { const w = Math.min(60000, Math.max(500, pz.v.w * pz.d / Math.max(spread(), 1))), r = w / pz.v.w; return setView({ w, x: pz.mx - (pz.mx - pz.v.x) * r, y: pz.my - (pz.my - pz.v.y) * r }); }
     const d = drag.current; if (!d) return;
     if (d.kind === 'pan') return setView({ ...d.v, x: d.v.x - (e.clientX - d.sx) * k, y: d.v.y - (e.clientY - d.sy) * k });
     const m = toMm(e), dx = m.x - d.mx, dy = m.y - d.my;
@@ -129,7 +142,7 @@ export function Plan2D() {
     <div className="view" ref={wrap}>
       <span className="tag badge">שרטוט · מבט על</span>
       <div className="tools"><div className="pill"><button title="הקטנה" onClick={() => zoom(1.25)}>−</button><button title="התאמה למסך" onClick={fit}><Icon.fit /></button><button title="הגדלה" onClick={() => zoom(0.8)}>+</button></div></div>
-      <svg ref={svg} viewBox={`${v.x} ${v.y} ${v.w} ${vh}`} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onWheel={wheel}
+      <svg ref={svg} viewBox={`${v.x} ${v.y} ${v.w} ${vh}`} onPointerDownCapture={touchDown} onPointerMove={move} onPointerUp={(e) => { touchUp(e); up(); }} onPointerCancel={(e) => { touchUp(e); up(); }} onWheel={wheel}
         onPointerDown={(e) => { select(null); setEdit(null); svg.current!.setPointerCapture(e.pointerId); drag.current = { kind: 'pan', sx: e.clientX, sy: e.clientY, v }; }} style={{ cursor: 'grab' }}>
         <defs>
           <pattern id="dots" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r={1.1 * k} fill="rgba(27,26,24,.22)" /></pattern>

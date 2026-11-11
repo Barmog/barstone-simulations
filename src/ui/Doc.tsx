@@ -15,12 +15,12 @@ export function Doc({ id }: { id: string }) {
   if (!order || !project) return <div className="login"><div className="spin dark" /></div>;
   return (
     <>
-      <header className="top noprint"><img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" /><button className="btn primary" onClick={() => print()}><Icon.download />שמירה כ-PDF / הדפסה</button></header>
+      <header className="top noprint doctop"><img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" /><button className="btn primary" onClick={() => print()}><Icon.download /><span>שמירה כ-PDF / הדפסה</span></button></header>
       <main className="doc">
         <div className="sheet">
           <div className="row"><img src={asset('logo.png')} alt="Barstone" style={{ height: 22 }} /><span className="sp" /><span className="cap">הדמיית משטח אבן</span></div>
           <div><h1>{order.title}</h1><p className="mute" style={{ fontSize: 16 }}>{[customer?.name, customer?.address].filter(Boolean).join(' · ')}</p></div>
-          <div style={{ height: 420, borderRadius: 20, overflow: 'hidden' }}><View3D still /></div>
+          <div className="docshot"><View3D still /></div>
           <div className="facts">
             <div><small>תאריך</small><b>{new Date().toLocaleDateString('he-IL')}</b></div><div><small>מספר הזמנה</small><b>{order.order_no || '—'}</b></div>
             <div><small>אבן</small><b>{stone.name || '—'}</b></div><div><small>עובי · קנט</small><b>{project.thickness} · {project.apronH || 'בלי'} מ"מ</b></div>

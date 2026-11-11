@@ -287,7 +287,7 @@ function Inspector() {
 
 const QUICK = ['תזיז את הכיור 20 ס"מ שמאלה', 'תוסיף אי של 2 מטר', 'תאורת ערב', 'חיפוי עד התקרה', 'בלי ארונות עליונים'];
 
-export function RightPanel() {
+export function RightPanel({ onClose }: { onClose?: () => void }) {
   const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), issues = useStore((s) => s.issues), chat = useStore((s) => s.chat);
   const { apply, select, setToast, say } = useStore.getState();
   const [text, setText] = useState(''), [busy, setBusy] = useState(false);
@@ -312,6 +312,7 @@ export function RightPanel() {
 
   return (
     <aside className="panel glass right">
+      {onClose && <button className="grab" aria-label="סגירה" onClick={onClose}><i /></button>}
       <section className="ai">
         <div className="row"><span className="spark"><Icon.spark /></span><b style={{ fontWeight: 600 }}>העוזר</b><span className="sp" /><button className="link" style={{ fontSize: 12.5 }} disabled={busy} onClick={() => send('', true)}>חוות דעת מקצועית</button></div>
         <div className="chatlog" ref={log}>

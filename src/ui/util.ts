@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import { useStore } from '../store';
 
 /** נתיב לקובץ סטטי, יחסי לבסיס האתר. */
@@ -13,3 +13,7 @@ export function useStone() {
   const stones = useStore((s) => s.stones), id = useStore((s) => s.project?.stoneId);
   return useMemo(() => stones.find((s) => String(s.id) === String(id)) || stones[0] || { id: 'x', name: '', url: asset('stone.jpg'), slab: true, stock: 'unknown' as const, hasImage: true }, [stones, id]);
 }
+
+/** מסך צר (טלפון): הסטודיו עובר לפריסת מובייל. */
+const mq = typeof matchMedia === 'function' ? matchMedia('(max-width: 820px)') : null;
+export const useMobile = () => useSyncExternalStore((f) => { mq?.addEventListener('change', f); return () => mq?.removeEventListener('change', f); }, () => !!mq?.matches);
