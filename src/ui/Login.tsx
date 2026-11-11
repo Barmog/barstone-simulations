@@ -1,3 +1,4 @@
+import { asset } from './util';
 import { FormEvent, useState } from 'react';
 import { sb } from '../data/repo';
 
@@ -29,7 +30,7 @@ export function Login() {
   return (
     <div className="login">
       <form className="box glass" onSubmit={submit}>
-        <img src="/logo.png" alt="Barstone" />
+        <img src={asset('logo.png')} alt="Barstone" />
         <div><h1>{mode === 'in' ? 'ברוכים הבאים' : 'יצירת חשבון'}</h1><p className="mute">סטודיו ההדמיות של Barstone</p></div>
         <label className="field">אימייל<input type="email" required autoComplete="email" dir="ltr" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label className="field">סיסמה<input type="password" required minLength={8} autoComplete={mode === 'in' ? 'current-password' : 'new-password'} dir="ltr" value={pass} onChange={(e) => setPass(e.target.value)} /></label>
@@ -49,7 +50,7 @@ export function Pending({ email }: { email: string }) {
   return (
     <div className="login">
       <div className="box glass">
-        <img src="/logo.png" alt="Barstone" />
+        <img src={asset('logo.png')} alt="Barstone" />
         <div><h1>ממתין לאישור</h1><p className="mute">החשבון <span className="mono">{email}</span> נוצר, אבל עדיין לא צורף לצוות.</p></div>
         <div className="note">מנהל המערכת צריך להוסיף את האימייל שלכם במסך "צוות". אחרי זה רעננו את הדף.</div>
         <div className="row"><button className="btn primary" onClick={() => location.reload()}>רענון</button><button className="btn" onClick={() => sb?.auth.signOut()}>יציאה</button></div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { repo } from '../data/repo';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
+import { asset } from './util';
 
 export function Team({ me }: { me: string }) {
   const [data, setData] = useState<Awaited<ReturnType<typeof repo.team>>>({ staff: [], invites: [] });
@@ -13,7 +14,7 @@ export function Team({ me }: { me: string }) {
 
   return (
     <>
-      <header className="top"><img className="logo" src="/logo.png" alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go('/')}>הזמנות</a><i>›</i><b>צוות</b></div></header>
+      <header className="top"><img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go('/')}>הזמנות</a><i>›</i><b>צוות</b></div></header>
       <main className="doc">
         <div className="sheet">
           <div><h1 style={{ fontSize: 26 }}>צוות והרשאות</h1><p className="mute">רק מי שמופיע כאן רואה לקוחות והזמנות. מוסיפים אימייל, והעובד נרשם באתר עם אותו אימייל.</p></div>

@@ -4,6 +4,7 @@ import { exportNestDxf } from '../core/dxf';
 import { Customer, repo } from '../data/repo';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
+import { asset } from './util';
 import { LeftPanel, RightPanel } from './Panels';
 import { Plan2D } from './Plan2D';
 import { Slabs } from './Slabs';
@@ -46,7 +47,7 @@ export function Studio({ id }: { id: string }) {
   return (
     <div className="studio">
       <header className="top">
-        <img className="logo" src="/logo.png" alt="Barstone" onClick={() => go('/')} />
+        <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} />
         <div className="crumb"><a onClick={() => go('/')}>הזמנות</a><i>›</i>{customer && <><a onClick={() => go(`/c/${customer.id}`)}>{customer.name}</a><i>›</i></>}<b>{order.title}</b></div>
         <span className={`savestate ${save}`}>{SAVE_HE[save]}</span>
         <span className="sp" />

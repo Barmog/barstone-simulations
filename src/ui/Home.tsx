@@ -5,6 +5,7 @@ import { DxfInfo, parseDxf } from '../core/dxf';
 import { ai, applyDraft } from '../ai';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
+import { asset } from './util';
 import { signOut } from './App';
 
 type OrderRow = Omit<Order, 'project'>;
@@ -49,7 +50,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
   return (
     <>
       <header className="top">
-        <img className="logo" src="/logo.png" alt="Barstone" onClick={() => go('/')} />
+        <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} />
         <span className="sp" />
         {isLocal && <span className="badge sand">מצב הדגמה · נשמר בדפדפן הזה בלבד</span>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/team')}><Icon.team />צוות</button>}

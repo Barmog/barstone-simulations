@@ -1,6 +1,6 @@
 // שכבת הנתונים: Supabase כשמוגדר, ואחרת מצב הדגמה מקומי (localStorage) — אותו ממשק בשני המצבים.
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Project } from '../core/model';
+import { Project, fromTemplate, piece } from '../core/model';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const KEY = import.meta.env.VITE_SUPABASE_KEY as string | undefined;
@@ -20,9 +20,25 @@ const now = () => new Date().toISOString();
 const id = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 const ok = <T,>(r: { data: T | null; error: { message: string } | null }): T => { if (r.error) throw new Error(r.error.message); return r.data as T; };
 
+const STONE_FALLBACK = import.meta.env.BASE_URL + 'stone.jpg';
 const LOCAL_STONES: Stone[] = [
-  { id: 'l1', name: 'אבן לדוגמה (מצב הדגמה)', url: '/stone.jpg', slab: true },
+  { id: 'l1', name: 'אבן לדוגמה (מצב הדגמה)', url: STONE_FALLBACK, slab: true },
 ];
+
+/** מצב הדגמה: בפתיחה הראשונה נוצרים לקוח והזמנות לדוגמה, כדי שיהיה במה לשחק. */
+function seedDemo() {
+  if (sb || localStorage.getItem('bs.seeded')) return;
+  localStorage.setItem('bs.seeded', '1');
+  if (J<Customer[]>('bs.customers', []).length) return;
+  const c: Customer = { id: id(), name: 'משפחת לוי (דוגמה)', phone: '050-0000000', address: 'רחוב הדוגמה 1', notes: 'לקוח לדוגמה — אפשר לשנות ולמחוק הכול.', created_at: now(), updated_at: now() };
+  const a = fromTemplate('l-island', 'מטבח L עם אי'), isl = a.pieces.find((q) => q.kind === 'island')!;
+  a.pieces.push(...(['left', 'right'] as const).map((s) => piece({ kind: 'waterfall', name: s === 'left' ? 'מפל · שמאל' : 'מפל · ימין', w: isl.h, h: a.counterH - a.thickness, host: isl.id, side: s })));
+  const b = fromTemplate('straight', 'מטבח ישר ארוך'); b.pieces[0].w = 4560; b.pieces[b.pieces.length - 1].w = 4560; b.cutouts[2].x = 2050;
+  const mk = (title: string, order_no: string, project: Project, metrics: OrderMetrics): Order => ({ id: id(), customer_id: c.id, title, order_no, status: 'draft', stone_id: null, project, metrics, created_at: now(), updated_at: now() });
+  W('bs.customers', [c]);
+  W('bs.orders', [mk('מטבח L עם אי', '1001', a, { slabs: 3, utilization: 58, area: 8.45 }), mk('מטבח ישר ארוך · חיבור ליד הכיריים', '1002', b, { slabs: 2, utilization: 60, area: 5.57 })]);
+}
+try { seedDemo(); } catch { /* אחסון חסום — ממשיכים בלי דוגמה */ }
 
 export const repo = {
   async stones(): Promise<Stone[]> {
@@ -30,7 +46,7 @@ export const repo = {
     const { data, error } = await sb.from('stones').select('id,name,color,tile_path,slab_path,supplier').order('name');
     if (error || !data?.length) return LOCAL_STONES;
     return data
-      .map((s: any): Stone => ({ id: s.id, name: s.name, color: s.color, slab: !!s.slab_path, url: s.slab_path ? sb.storage.from('slabs').getPublicUrl(s.slab_path).data.publicUrl : s.tile_path ? sb.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : '/stone.jpg' }))
+      .map((s: any): Stone => ({ id: s.id, name: s.name, color: s.color, slab: !!s.slab_path, url: s.slab_path ? sb.storage.from('slabs').getPublicUrl(s.slab_path).data.publicUrl : s.tile_path ? sb.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : STONE_FALLBACK }))
       .sort((a, b) => Number(b.slab) - Number(a.slab) || a.name.localeCompare(b.name));
   },
 
