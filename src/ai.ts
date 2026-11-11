@@ -66,8 +66,39 @@ export const ai = {
     if (file.size > 12 * 1024 * 1024) throw new Error('הקובץ גדול מדי (עד 12MB).');
     return call({ mode: 'plan', media_type: file.type || 'image/jpeg', data: await fileB64(file) });
   },
-  /** עריכה בשפה חופשית. */
-  edit: (p: Project, text: string) => call({ mode: 'edit', text, draft: toDraft(p) }),
+  /** צ'אט: שאלה, בקשה לשינוי או להזזה. history = ההודעות הקודמות בשיחה. */
+  chat: (p: Project, text: string, history: { role: 'user' | 'ai'; text: string }[], facts: Record<string, unknown>) => call({ mode: 'chat', text, history: history.slice(-10), draft: toDraft(p), facts }),
   /** חוות דעת מקצועית והצעות עיצוב על בסיס ממצאי הבודק. */
   advise: (p: Project, facts: Record<string, unknown>) => call({ mode: 'advise', draft: toDraft(p), facts }),
 };
+
+/** מצב הדגמה (בלי חיבור): מבין כמה בקשות נפוצות, כדי שאפשר יהיה להתרשם מהצ'אט. */
+export function localAssist(p: Project, text: string): { project?: Project; reply: string } {
+  const flat = p.pieces.filter((q) => q.kind === 'counter' || q.kind === 'island'), num = text.match(/(\d+(?:[.,]\d+)?)/), meters = /מטר|מ׳/.test(text);
+  const mm = num ? Math.round(parseFloat(num[1].replace(',', '.')) * (meters ? 1000 : 10)) : 0;
+  const mk = (q: Partial<Piece> & Pick<Piece, 'kind' | 'w' | 'h'>): Piece => ({ id: uid(), name: '', x: 0, y: 0, aprons: [], grainLock: true, ...q });
+  const mv = text.match(/(כיור|כיריים|ברז)/), dir = text.match(/(שמאלה|ימינה|קדימה|אחורה)/);
+  if (mv && dir && mm) {
+    const kind = mv[1] === 'כיור' ? 'sink' : mv[1] === 'כיריים' ? 'cooktop' : 'faucet', c = p.cutouts.find((x) => x.kind === kind), host = c && p.pieces.find((q) => q.id === c.pieceId);
+    if (!c || !host) return { reply: `לא מצאתי ${mv[1]} במטבח.` };
+    const dx = dir[1] === 'שמאלה' ? -mm : dir[1] === 'ימינה' ? mm : 0, dy = dir[1] === 'קדימה' ? mm : dir[1] === 'אחורה' ? -mm : 0;
+    const x = Math.max(0, Math.min(host.w - c.w, c.x + dx)), y = Math.max(0, Math.min(host.h - c.h, c.y + dy));
+    return { project: { ...p, cutouts: p.cutouts.map((q) => (q.id === c.id ? { ...q, x, y } : q)) }, reply: `הזזתי את ה${mv[1]} ${mm / 10} ס"מ ${dir[1]}.` };
+  }
+  if (/מפל/.test(text)) {
+    const isl = flat.find((q) => q.kind === 'island' && !p.pieces.some((w) => w.kind === 'waterfall' && w.host === q.id));
+    if (!isl) return { reply: 'אין אי בלי מפל. אפשר לבקש קודם "תוסיף אי".' };
+    const sides: Side[] = isl.w >= isl.h ? ['left', 'right'] : ['back', 'front'];
+    return { project: { ...p, pieces: [...p.pieces, ...sides.map((s) => mk({ kind: 'waterfall', name: 'מפל', w: Math.min(isl.w, isl.h), h: p.counterH - p.thickness, host: isl.id, side: s }))] }, reply: 'הוספתי מפל בשני צדי האי.' };
+  }
+  if (/חיפוי/.test(text)) {
+    const host = flat.find((q) => q.wall && !p.pieces.some((w) => w.kind === 'splash' && w.host === q.id));
+    if (!host) return { reply: 'לכל המשטחים שצמודים לקיר כבר יש חיפוי.' };
+    return { project: { ...p, pieces: [...p.pieces, mk({ kind: 'splash', name: 'חיפוי קיר', w: host.wall === 'back' || host.wall === 'front' ? host.w : host.h, h: mm && mm <= 1500 ? mm : 600, host: host.id, side: host.wall })] }, reply: `הוספתי חיפוי קיר מעל "${host.name}".` };
+  }
+  if (/אי(\s|$)/.test(text) && /(הוסף|תוסיף|להוסיף|רוצה)/.test(text)) {
+    const ys = flat.map((q) => q.y + q.h), xs = flat.map((q) => q.x), w = mm >= 800 && mm <= 3200 ? mm : 2000;
+    return { project: { ...p, pieces: [...p.pieces, mk({ kind: 'island', name: 'אי', x: xs.length ? Math.min(...xs) : 0, y: (ys.length ? Math.max(...ys) : 0) + 1050, w, h: 1000, aprons: ['front', 'back', 'left', 'right'] })] }, reply: `הוספתי אי באורך ${w / 10} ס"מ. אפשר לגרור אותו למקום.` };
+  }
+  return { reply: 'במצב הדגמה אני מבין בקשות בסיסיות בלבד, למשל: "תזיז את הכיור 20 ס"מ שמאלה", "תוסיף אי של 2 מטר", "תוסיף מפל", "תוסיף חיפוי". באתר המחובר אפשר לשאול ולבקש כל דבר בשפה חופשית.' };
+}

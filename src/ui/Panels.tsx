@@ -1,14 +1,22 @@
-// הפאנלים של הסטודיו: מבנה ההזמנה והחלקים (ימין), בדיקה ו-AI (שמאל).
-import { useState } from 'react';
+// הפאנלים של הסטודיו. ימין: השלב הנוכחי במסלול (מידות › אבן › עיצוב › בדיקה › סיכום). שמאל: צ'אט ובודק חכם.
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { CABINETS, FLOORS, Swatch, WALLS } from '../core/catalog';
+import { exportNestDxf } from '../core/dxf';
 import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SIDE_HE, Side, bounds, isVertical, letter, piece as mkPiece, uid } from '../core/model';
-import { OrderStatus, STATUS_HE } from '../data/repo';
-import { ai, applyDraft } from '../ai';
-import { useStore } from '../store';
-import { FLOOR_HE } from './scene';
+import { OrderStatus, STATUS_HE, isLocal } from '../data/repo';
+import { ai, applyDraft, localAssist } from '../ai';
+import { Step, go, useStore } from '../store';
 import { Icon } from './icons';
 import { cm, m2, parseCm, useStone } from './util';
 
 const SIDES: Side[] = ['back', 'front', 'left', 'right'];
+export const STEPS: { id: Step; name: string; hint: string }[] = [
+  { id: 'dims', name: 'מידות', hint: 'בודקים את המשטחים והפתחים. גוררים בשרטוט או מקלידים מידה.' },
+  { id: 'stone', name: 'אבן', hint: 'בוחרים לוח, עובי וקנט.' },
+  { id: 'design', name: 'עיצוב', hint: 'צבע ארונות, ריצוף וקיר — כדי שהלקוח יראה את המטבח שלו.' },
+  { id: 'check', name: 'בדיקה ונסטינג', hint: 'עוברים על ההתראות ועל פריסת החלקים בלוחות.' },
+  { id: 'summary', name: 'סיכום', hint: 'פרטי ההזמנה ומסמך ללקוח.' },
+];
 
 function Num({ label, value, onChange, unit = 'ס"מ', mm, min = 0 }: { label: string; value: number; onChange: (mm: number) => void; unit?: string; mm?: boolean; min?: number }) {
   const shown = mm ? String(value) : cm(value);
@@ -17,6 +25,9 @@ function Num({ label, value, onChange, unit = 'ס"מ', mm, min = 0 }: { label: s
       <input type="number" step={mm ? 1 : 0.1} key={shown} defaultValue={shown} onBlur={(e) => { const v = mm ? Math.round(+e.target.value) : parseCm(e.target.value); if (v != null && Number.isFinite(v) && v !== value) onChange(Math.max(min, v)); }} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} />
     </label>
   );
+}
+function Swatches({ items, value, onPick, big }: { items: Swatch[]; value: string; onPick: (hex: string) => void; big?: boolean }) {
+  return <div className={`swatches ${big ? 'big' : ''}`}>{items.map((c) => <button key={c.id} className={`sw ${value.toLowerCase() === c.hex.toLowerCase() ? 'on' : ''}`} title={c.name} onClick={() => onPick(c.hex)}><i style={{ background: c.hex }} /><span>{c.name}</span></button>)}</div>;
 }
 
 // ----- פעולות הוספה -----
@@ -49,58 +60,124 @@ function addCutout(kind: CutoutKind) {
 }
 
 export function LeftPanel() {
-  const project = useStore((s) => s.project)!, order = useStore((s) => s.order)!, sel = useStore((s) => s.sel), stones = useStore((s) => s.stones);
-  const { apply, select, patchOrder } = useStore.getState();
+  const project = useStore((s) => s.project)!, order = useStore((s) => s.order)!, sel = useStore((s) => s.sel), stones = useStore((s) => s.stones), step = useStore((s) => s.step), nest = useStore((s) => s.nest), issues = useStore((s) => s.issues);
+  const { apply, select, patchOrder, setStep, flush } = useStore.getState();
   const stone = useStone(), set = (patch: Partial<Project>, key?: string) => apply((p) => ({ ...p, ...patch }), key);
-  const flat = project.pieces.filter((p) => !isVertical(p));
+  const flat = project.pieces.filter((p) => !isVertical(p)), i = STEPS.findIndex((s) => s.id === step), cur = STEPS[i], m = nest?.metrics;
+  const errors = issues.filter((x) => x.level === 'error').length, warns = issues.filter((x) => x.level === 'warn').length;
+  const dxf = () => { if (!nest) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportNestDxf(nest.slabs)], { type: 'application/dxf' })); a.download = `${order.title}-nesting.dxf`; a.click(); URL.revokeObjectURL(a.href); };
+
+  let body: ReactNode;
+  if (step === 'dims') body = <>
+    <Inspector />
+    <section>
+      <div className="row"><span className="cap">חלקים</span><span className="sp" /><span className="mute mono" style={{ fontSize: 12 }}>{project.pieces.length}</span></div>
+      <div className="plist">
+        {flat.map((p) => [p, ...project.pieces.filter((q) => q.host === p.id)]).flat().concat(project.pieces.filter((q) => isVertical(q) && !flat.some((f) => f.id === q.host))).map((p) => (
+          <button key={p.id} className={`pitem ${sel?.type === 'piece' && sel.id === p.id ? 'on' : ''}`} style={isVertical(p) ? { paddingInlineStart: 22 } : undefined} onClick={() => select({ type: 'piece', id: p.id })}>
+            <i className={isVertical(p) ? 'sub' : ''}>{letter(project.pieces.indexOf(p))}</i><span>{p.name}</span><em>{cm(p.w)}×{cm(p.h)}</em>
+          </button>
+        ))}
+      </div>
+    </section>
+    <section>
+      <span className="cap">הוספה</span>
+      <div className="chips">
+        <button className="chip" onClick={() => addPiece('counter')}>+ משטח</button><button className="chip" onClick={() => addPiece('island')}>+ אי</button>
+        <button className="chip" onClick={() => addVertical('splash')}>+ חיפוי</button><button className="chip" onClick={() => addVertical('waterfall')}>+ מפל</button>
+        <button className="chip" onClick={() => addCutout('sink')}>+ כיור</button><button className="chip" onClick={() => addCutout('cooktop')}>+ כיריים</button><button className="chip" onClick={() => addCutout('faucet')}>+ ברז</button>
+      </div>
+    </section>
+  </>;
+  else if (step === 'stone') body = <>
+    <section>
+      <span className="cap">לוח</span>
+      <select className="input" value={String(stone.id)} onChange={(e) => { const s = stones.find((x) => String(x.id) === e.target.value); set({ stoneId: s ? s.id : null }); }}>{stones.map((s) => <option key={s.id} value={String(s.id)}>{s.name}{s.slab ? '' : ' (אריח)'}</option>)}</select>
+      <div style={{ height: 120, borderRadius: 14, background: `#ddd url("${stone.url}") center/cover`, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.2)' }} />
+      {isLocal && <div className="note">במצב הדגמה יש אבן אחת לדוגמה. באתר המחובר מופיעים כל לוחות Barstone.</div>}
+    </section>
+    <section>
+      <span className="cap">עובי וקנט</span>
+      <div className="chips">{[12, 20, 30].map((t) => <button key={t} className={`chip ${project.thickness === t ? 'on' : ''}`} onClick={() => set({ thickness: t })}>{t} מ"מ</button>)}</div>
+      <div className="field"><span>גובה הקנט הנראה</span><div className="chips">{[0, 30, 40, 60, 80].map((t) => <button key={t} className={`chip ${project.apronH === t ? 'on' : ''}`} onClick={() => set({ apronH: t })}>{t ? `${t} מ"מ` : 'בלי קנט'}</button>)}</div></div>
+    </section>
+    <section>
+      <span className="cap">מידת הלוח</span>
+      <div className="grid2"><Num label="אורך" value={project.slabW} min={500} onChange={(v) => set({ slabW: v })} /><Num label="רוחב" value={project.slabH} min={500} onChange={(v) => set({ slabH: v })} /></div>
+    </section>
+  </>;
+  else if (step === 'design') body = <>
+    <section>
+      <div className="row"><span className="cap">צבע ארונות</span><span className="sp" /><span className="mute" style={{ fontSize: 12 }}>{CABINETS.find((c) => c.hex.toLowerCase() === project.cabinetColor.toLowerCase())?.name || 'מותאם'}</span></div>
+      <Swatches items={CABINETS} value={project.cabinetColor} onPick={(hex) => set({ cabinetColor: hex })} />
+      <label className="row" style={{ fontSize: 12.5, color: 'var(--mute)' }}>גוון אחר<input type="color" value={project.cabinetColor} onChange={(e) => set({ cabinetColor: e.target.value }, 'cab')} style={{ width: 34, height: 26, border: 0, background: 'none', padding: 0 }} /></label>
+      <div className="chips">
+        <button className={`chip ${project.cabinets ? 'on' : ''}`} onClick={() => set({ cabinets: !project.cabinets })}>ארונות תחתונים</button>
+        <button className={`chip ${project.uppers ? 'on' : ''}`} onClick={() => set({ uppers: !project.uppers })}>ארונות עליונים</button>
+      </div>
+    </section>
+    <section>
+      <div className="row"><span className="cap">ריצוף</span><span className="sp" /><span className="mute" style={{ fontSize: 12 }}>{FLOORS.find((f) => f.id === project.floor)?.name}</span></div>
+      <div className="swatches">{FLOORS.map((f) => <button key={f.id} className={`sw ${project.floor === f.id ? 'on' : ''}`} title={f.name} onClick={() => set({ floor: f.id })}><i style={{ background: f.type === 'checker' ? `conic-gradient(${f.a} 25%, ${f.b} 0 50%, ${f.a} 0 75%, ${f.b} 0) 0 0/50% 50%` : f.type === 'plank' ? `repeating-linear-gradient(0deg, ${f.a} 0 7px, ${f.b} 7px 14px)` : f.type === 'tile' ? `linear-gradient(${f.line} 1px, transparent 1px) 0 0/50% 50%, linear-gradient(90deg, ${f.line} 1px, ${f.a} 1px) 0 0/50% 50%` : `radial-gradient(${f.b} 15%, ${f.a} 16%) 0 0/9px 9px` }} /><span>{f.name}</span></button>)}</div>
+    </section>
+    <section>
+      <span className="cap">צבע קיר</span>
+      <Swatches items={WALLS} value={project.wallColor || '#f4f2ee'} onPick={(hex) => set({ wallColor: hex })} />
+    </section>
+  </>;
+  else if (step === 'check') body = <>
+    <section>
+      <span className="cap">נסטינג</span>
+      <div className="metrics">
+        <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>ניצולת</small><b>{m?.utilization ?? 0}%</b></div>
+        <div className="metric"><small>חיבורים</small><b>{m?.joints ?? 0}</b></div><div className="metric"><small>קנט · מטר</small><b>{((m?.apronLen || 0) / 1000).toFixed(2)}</b></div>
+      </div>
+      {nest?.slabs.map((s, n) => <div key={n} className="row" style={{ fontSize: 13 }}><span>לוח {n + 1}</span><div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(27,26,24,.08)' }}><div style={{ width: `${s.used}%`, height: '100%', borderRadius: 3, background: s.used < 25 ? 'var(--warn)' : 'var(--cut)' }} /></div><span className="mono">{s.used}%</span></div>)}
+    </section>
+    <section>
+      <span className="cap">הגדרות חיתוך</span>
+      <div className="grid2"><Num label="עובי מסור" unit='מ"מ' mm value={project.kerf} onChange={(v) => set({ kerf: Math.min(20, v) })} /><Num label="שוליים בלוח" unit='מ"מ' mm value={project.margin} onChange={(v) => set({ margin: Math.min(100, v) })} /></div>
+      <div className="chips">
+        <button className="chip" onClick={() => set({ pieces: project.pieces.map((q) => ({ ...q, grainLock: true })) })}>נעל גיד בכל החלקים</button>
+        <button className="chip" onClick={() => set({ pieces: project.pieces.map((q) => ({ ...q, grainLock: false })) })}>שחרר גיד (חיסכון)</button>
+      </div>
+      <button className="btn sm" onClick={dxf}><Icon.download />ייצוא תוכנית החיתוך ל-DXF</button>
+    </section>
+    <section>
+      <span className="cap">מצב</span>
+      {errors ? <div className="note err">{errors} שגיאות שחייבים לתקן לפני ייצור — מפורטות בצד שמאל.</div> : warns ? <div className="note">{warns} אזהרות לבדיקה — מפורטות בצד שמאל.</div> : <div className="note" style={{ background: 'rgba(47,176,112,.12)', color: '#1f6e45' }}>אין שגיאות. אפשר להמשיך לסיכום.</div>}
+    </section>
+  </>;
+  else body = <>
+    <section>
+      <span className="cap">פרטי ההזמנה</span>
+      <label className="field">שם<input value={order.title} onChange={(e) => patchOrder({ title: e.target.value })} /></label>
+      <div className="grid2">
+        <label className="field">מס׳ הזמנה<input dir="ltr" value={order.order_no || ''} onChange={(e) => patchOrder({ order_no: e.target.value })} /></label>
+        <label className="field">סטטוס<select value={order.status} onChange={(e) => patchOrder({ status: e.target.value as OrderStatus })}>{Object.entries(STATUS_HE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+      </div>
+      <label className="field">הערות<textarea rows={3} value={project.notes} onChange={(e) => set({ notes: e.target.value }, 'notes')} /></label>
+    </section>
+    <section>
+      <span className="cap">סיכום</span>
+      <div className="metrics">
+        <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>שטח · מ"ר</small><b>{m2(m?.pieceArea || 0)}</b></div>
+        <div className="metric"><small>חלקים</small><b>{project.pieces.length}</b></div><div className="metric"><small>לבדיקה</small><b>{errors + warns}</b></div>
+      </div>
+      <div className="mute" style={{ fontSize: 13 }}>{stone.name} · {project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'בלי קנט'}</div>
+    </section>
+    <button className="btn primary" onClick={() => { flush(); go(`/o/${order.id}/doc`); }}><Icon.doc />מסמך ללקוח</button>
+  </>;
+
   return (
     <aside className="panel glass">
-      <Inspector />
-      <section>
-        <span className="cap">הזמנה</span>
-        <label className="field">שם<input value={order.title} onChange={(e) => patchOrder({ title: e.target.value })} /></label>
-        <div className="grid2">
-          <label className="field">מס׳ הזמנה<input dir="ltr" value={order.order_no || ''} onChange={(e) => patchOrder({ order_no: e.target.value })} /></label>
-          <label className="field">סטטוס<select value={order.status} onChange={(e) => patchOrder({ status: e.target.value as OrderStatus })}>{Object.entries(STATUS_HE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-        </div>
-      </section>
-      <section>
-        <span className="cap">אבן</span>
-        <select className="input" value={String(stone.id)} onChange={(e) => { const s = stones.find((x) => String(x.id) === e.target.value); set({ stoneId: s ? s.id : null }); }}>{stones.map((s) => <option key={s.id} value={String(s.id)}>{s.name}{s.slab ? '' : ' (אריח)'}</option>)}</select>
-        <div style={{ height: 62, borderRadius: 12, background: `#ddd url("${stone.url}") center/cover`, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.2)' }} />
-        <div className="grid2">
-          <Num label="עובי" unit='מ"מ' mm value={project.thickness} min={6} onChange={(v) => set({ thickness: v })} />
-          <Num label="גובה קנט" unit='מ"מ' mm value={project.apronH} onChange={(v) => set({ apronH: v })} />
-          <Num label="אורך לוח" value={project.slabW} min={500} onChange={(v) => set({ slabW: v })} />
-          <Num label="רוחב לוח" value={project.slabH} min={500} onChange={(v) => set({ slabH: v })} />
-        </div>
-      </section>
-      <section>
-        <div className="row"><span className="cap">חלקים</span><span className="sp" /><span className="mute mono" style={{ fontSize: 12 }}>{project.pieces.length}</span></div>
-        <div className="plist">
-          {flat.map((p) => [p, ...project.pieces.filter((q) => q.host === p.id)]).flat().concat(project.pieces.filter((q) => isVertical(q) && !flat.some((f) => f.id === q.host))).map((p) => (
-            <button key={p.id} className={`pitem ${sel?.type === 'piece' && sel.id === p.id ? 'on' : ''}`} style={isVertical(p) ? { paddingInlineStart: 22 } : undefined} onClick={() => select({ type: 'piece', id: p.id })}>
-              <i className={isVertical(p) ? 'sub' : ''}>{letter(project.pieces.indexOf(p))}</i><span>{p.name}</span><em>{cm(p.w)}×{cm(p.h)}</em>
-            </button>
-          ))}
-        </div>
-        <div className="chips">
-          <button className="chip" onClick={() => addPiece('counter')}>+ משטח</button><button className="chip" onClick={() => addPiece('island')}>+ אי</button>
-          <button className="chip" onClick={() => addVertical('splash')}>+ חיפוי</button><button className="chip" onClick={() => addVertical('waterfall')}>+ מפל</button>
-          <button className="chip" onClick={() => addCutout('sink')}>+ כיור</button><button className="chip" onClick={() => addCutout('cooktop')}>+ כיריים</button><button className="chip" onClick={() => addCutout('faucet')}>+ ברז</button>
-        </div>
-      </section>
-      <section>
-        <span className="cap">סביבה בהדמיה</span>
-        <div className="chips">
-          <button className={`chip ${project.cabinets ? 'on' : ''}`} onClick={() => set({ cabinets: !project.cabinets })}>ארונות תחתונים</button>
-          <button className={`chip ${project.uppers ? 'on' : ''}`} onClick={() => set({ uppers: !project.uppers })}>ארונות עליונים</button>
-        </div>
-        <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
-          {['#f2efe9', '#e4dccd', '#c9b79a', '#8c6f52', '#7d8b74', '#4d5a66', '#2c3440', '#1e1d1c'].map((c) => <button key={c} title="צבע ארונות" onClick={() => set({ cabinetColor: c })} style={{ width: 24, height: 24, borderRadius: '50%', border: 0, cursor: 'pointer', background: c, boxShadow: project.cabinetColor === c ? '0 0 0 2px #fff, 0 0 0 3.5px var(--ink)' : 'inset 0 0 0 .5px rgba(0,0,0,.25)' }} />)}
-        </div>
-        <label className="field">ריצוף<select value={project.floor} onChange={(e) => set({ floor: e.target.value })}>{Object.entries(FLOOR_HE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-      </section>
+      <div className="stephead"><span className="cap">שלב {i + 1} מתוך {STEPS.length}</span><h2>{cur.name}</h2><p>{cur.hint}</p></div>
+      {body}
+      <span className="sp" />
+      <div className="stepnav">
+        {i > 0 && <button className="btn" onClick={() => setStep(STEPS[i - 1].id)}>הקודם</button>}
+        {i < STEPS.length - 1 && <button className="btn primary" style={{ flex: 1 }} onClick={() => setStep(STEPS[i + 1].id)}>הבא · {STEPS[i + 1].name}</button>}
+      </div>
     </aside>
   );
 }
@@ -108,13 +185,14 @@ export function LeftPanel() {
 function Inspector() {
   const project = useStore((s) => s.project)!, sel = useStore((s) => s.sel);
   const { patchPiece, patchCutout, remove, apply } = useStore.getState();
-  if (!sel) return null;
+  if (!sel) return <div className="note">לחצו על חלק או על פתח בשרטוט כדי לשנות אותו.</div>;
+  const card = { background: '#fff', margin: '0 -4px', padding: 12, borderRadius: 16, boxShadow: 'var(--sh1), inset 0 0 0 1px var(--sand2)' };
   if (sel.type === 'piece') {
     const p = project.pieces.find((q) => q.id === sel.id); if (!p) return null;
     const vert = isVertical(p), up = (patch: Partial<Piece>) => patchPiece(p.id, patch);
     const resize = (patch: Partial<Piece>) => apply((pr) => ({ ...pr, pieces: pr.pieces.map((q) => (q.id === p.id ? { ...q, ...patch, outline: undefined } : q.host === p.id && q.side && q.w === (q.side === 'back' || q.side === 'front' ? p.w : p.h) ? { ...q, w: q.side === 'back' || q.side === 'front' ? patch.w ?? p.w : patch.h ?? p.h } : q)) }));
     return (
-      <section style={{ background: '#fff', margin: '0 -4px', padding: 12, borderRadius: 16, boxShadow: 'var(--sh1), inset 0 0 0 1px var(--sand2)' }}>
+      <section style={card}>
         <div className="row"><span className="cap">{KIND_HE[p.kind]} · {letter(project.pieces.indexOf(p))}</span><span className="sp" /><button className="btn sm icon danger" title="מחיקה" onClick={() => remove(sel)}><Icon.trash /></button></div>
         <label className="field">שם<input value={p.name} onChange={(e) => patchPiece(p.id, { name: e.target.value }, `nm-${p.id}`)} /></label>
         <div className="grid2"><Num label={vert ? 'אורך' : 'אורך (ימין-שמאל)'} value={p.w} min={30} onChange={(v) => resize({ w: v })} /><Num label={vert ? 'גובה' : 'עומק'} value={p.h} min={30} onChange={(v) => resize({ h: v })} /></div>
@@ -122,7 +200,7 @@ function Inspector() {
           {p.kind === 'counter' && <div className="field"><span>הצד שצמוד לקיר</span><div className="chips">{SIDES.map((s) => <button key={s} className={`chip ${p.wall === s ? 'on' : ''}`} onClick={() => up({ wall: p.wall === s ? undefined : s })}>{SIDE_HE[s]}</button>)}</div></div>}
           <div className="field"><span>קנט בצדדים</span><div className="chips">{SIDES.map((s) => <button key={s} className={`chip ${p.aprons.includes(s) ? 'on' : ''}`} onClick={() => up({ aprons: p.aprons.includes(s) ? p.aprons.filter((x) => x !== s) : [...p.aprons, s] })}>{SIDE_HE[s]}</button>)}</div></div>
         </>}
-        <div className="chips"><button className={`chip ${p.grainLock ? 'on' : ''}`} onClick={() => up({ grainLock: !p.grainLock })}><span className="row" style={{ gap: 5 }}>{p.grainLock ? 'כיוון גיד נעול' : 'גיד חופשי (מותר לסובב)'}</span></button></div>
+        <div className="chips"><button className={`chip ${p.grainLock ? 'on' : ''}`} onClick={() => up({ grainLock: !p.grainLock })}>{p.grainLock ? 'כיוון גיד נעול' : 'גיד חופשי (מותר לסובב)'}</button></div>
         {p.outline && <div className="note">החלק בצורה לא מלבנית (מה-DXF). שינוי מידות יהפוך אותו למלבן.</div>}
       </section>
     );
@@ -130,7 +208,7 @@ function Inspector() {
   const c = project.cutouts.find((q) => q.id === sel.id), host = c && project.pieces.find((q) => q.id === c.pieceId); if (!c || !host) return null;
   const up = (patch: Partial<Cutout>) => patchCutout(c.id, patch), cl = (v: number, max: number) => Math.max(0, Math.min(max, v));
   return (
-    <section style={{ background: '#fff', margin: '0 -4px', padding: 12, borderRadius: 16, boxShadow: 'var(--sh1), inset 0 0 0 1px var(--sand2)' }}>
+    <section style={card}>
       <div className="row"><span className="cap">{CUT_HE[c.kind]} · ב{host.name}</span><span className="sp" /><button className="btn sm icon danger" title="מחיקה" onClick={() => remove(sel)}><Icon.trash /></button></div>
       <div className="chips">{(['sink', 'cooktop', 'faucet', 'hole'] as CutoutKind[]).map((k) => <button key={k} className={`chip ${c.kind === k ? 'on' : ''}`} onClick={() => up({ kind: k, round: k === 'faucet' ? true : c.round && k === 'hole' ? true : undefined, mount: k === 'sink' ? 'under' : undefined })}>{CUT_HE[k]}</button>)}</div>
       <label className="field">דגם / תיאור<input value={c.name || ''} placeholder={c.kind === 'sink' ? 'לדוגמה: כיור בלנקו 76' : ''} onChange={(e) => patchCutout(c.id, { name: e.target.value }, `cn-${c.id}`)} /></label>
@@ -144,38 +222,42 @@ function Inspector() {
   );
 }
 
-export function RightPanel() {
-  const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), issues = useStore((s) => s.issues);
-  const { apply, select, setToast } = useStore.getState();
-  const [text, setText] = useState(''), [busy, setBusy] = useState<'' | 'edit' | 'advise'>(''), [reply, setReply] = useState('');
-  const m = nest?.metrics;
+const QUICK = ['תזיז את הכיור 20 ס"מ שמאלה', 'תוסיף אי של 2 מטר', 'תוסיף מפל', 'איך לחסוך לוח?'];
 
-  async function run(mode: 'edit' | 'advise') {
-    if (mode === 'edit' && !text.trim()) return;
-    setBusy(mode); setReply('');
+export function RightPanel() {
+  const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), issues = useStore((s) => s.issues), chat = useStore((s) => s.chat);
+  const { apply, select, setToast, say } = useStore.getState();
+  const [text, setText] = useState(''), [busy, setBusy] = useState(false);
+  const log = useRef<HTMLDivElement>(null);
+  useEffect(() => { log.current?.scrollTo({ top: 1e6 }); }, [chat.length, busy]);
+  const facts = () => ({ slabs: nest?.metrics.slabs, utilization: nest?.metrics.utilization, joints: nest?.joints, perSlab: nest?.slabs.map((s) => s.used), slab: [project.slabW, project.slabH], issues: issues.map((i) => ({ level: i.level, title: i.title, detail: i.detail })) });
+
+  async function send(raw: string, advise = false) {
+    const t = raw.trim(); if ((!t && !advise) || busy) return;
+    const history = useStore.getState().chat;
+    say({ role: 'user', text: advise ? 'חוות דעת מקצועית על המטבח' : t }); setText(''); setBusy(true);
     try {
-      const r = mode === 'edit' ? await ai.edit(project, text.trim()) : await ai.advise(project, { slabs: m?.slabs, utilization: m?.utilization, joints: nest?.joints, perSlab: nest?.slabs.map((s) => s.used), slab: [project.slabW, project.slabH], issues: issues.map((i) => ({ level: i.level, title: i.title, detail: i.detail })) });
-      if (r.draft && mode === 'edit') { apply((p) => applyDraft(p, r.draft!)); setText(''); setToast('השינוי בוצע · אפשר לבטל עם Ctrl+Z'); }
-      setReply([r.reply, ...(r.assumptions || []).map((a) => `• ${a}`)].filter(Boolean).join('\n'));
-    } catch (e) { setReply(`לא הצלחתי: ${(e as Error).message}`); }
-    setBusy('');
+      if (isLocal) { const r = advise ? { reply: 'חוות דעת מקצועית פועלת באתר המחובר. בינתיים הבודק החכם למטה מציג את כל הממצאים.' } : localAssist(project, t); if ('project' in r && r.project) apply(() => r.project!); say({ role: 'ai', text: r.reply }); }
+      else {
+        const r = advise ? await ai.advise(project, facts()) : await ai.chat(project, t, history, facts());
+        if (r.draft && !advise) { apply((p) => applyDraft(p, r.draft!)); setToast('השינוי בוצע · אפשר לבטל עם Ctrl+Z'); }
+        say({ role: 'ai', text: [r.reply, ...(r.assumptions || []).map((a) => `• ${a}`)].filter(Boolean).join('\n') });
+      }
+    } catch (e) { say({ role: 'ai', text: `לא הצלחתי: ${(e as Error).message}` }); }
+    setBusy(false);
   }
 
   return (
     <aside className="panel glass right">
-      <section>
-        <span className="cap">סיכום</span>
-        <div className="metrics">
-          <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>ניצולת</small><b>{m?.utilization ?? 0}%</b></div>
-          <div className="metric"><small>שטח חלקים · מ"ר</small><b>{m2(m?.pieceArea || 0)}</b></div><div className="metric"><small>קנט · מטר</small><b>{((m?.apronLen || 0) / 1000).toFixed(2)}</b></div>
-        </div>
-      </section>
       <section className="ai">
-        <div className="row"><span className="spark"><Icon.spark /></span><b style={{ fontWeight: 600 }}>עריכה בשפה חופשית</b></div>
-        <textarea value={text} placeholder={'כתבו מה לשנות, למשל:\n"תוסיף אי של 2 מטר עם מפל ותזיז את הכיור 20 ס"מ שמאלה"'} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) run('edit'); }} />
-        <div className="row"><button className="btn sm primary" disabled={!!busy || !text.trim()} onClick={() => run('edit')}>{busy === 'edit' ? <><span className="spin" />חושב…</> : 'בצע'}</button>
-          <button className="btn sm" disabled={!!busy} onClick={() => run('advise')}>{busy === 'advise' ? <><span className="spin dark" />בודק…</> : 'חוות דעת מקצועית'}</button></div>
-        {reply && <div className="reply">{reply}</div>}
+        <div className="row"><span className="spark"><Icon.spark /></span><b style={{ fontWeight: 600 }}>העוזר</b><span className="sp" /><button className="link" style={{ fontSize: 12.5 }} disabled={busy} onClick={() => send('', true)}>חוות דעת מקצועית</button></div>
+        <div className="chatlog" ref={log}>
+          {!chat.length && <div className="mute" style={{ fontSize: 13 }}>אפשר לשאול, לבקש שינוי או להזיז דברים — בשפה רגילה.</div>}
+          {chat.map((m, n) => <div key={n} className={`bubble ${m.role}`}>{m.text}</div>)}
+          {busy && <div className="bubble ai"><span className="spin dark" /></div>}
+        </div>
+        {!chat.length && <div className="chips">{QUICK.map((q) => <button key={q} className="chip" onClick={() => send(q)}>{q}</button>)}</div>}
+        <div className="chatin"><textarea rows={1} value={text} placeholder="כתבו כאן…" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} /><button className="btn sm primary icon" title="שליחה" disabled={busy || !text.trim()} onClick={() => send(text)}><Icon.back /></button></div>
       </section>
       <section>
         <div className="row"><span className="cap">בודק חכם</span><span className="sp" />{issues.some((i) => i.level === 'error') ? <span className="badge err">{issues.filter((i) => i.level === 'error').length} שגיאות</span> : issues.some((i) => i.level === 'warn') ? <span className="badge warn">{issues.filter((i) => i.level === 'warn').length} אזהרות</span> : <span className="badge ok">תקין</span>}</div>
@@ -187,7 +269,6 @@ export function RightPanel() {
           </div>
         ))}
       </section>
-      {project.notes && <section><span className="cap">הערות מהזיהוי</span><div className="note" style={{ whiteSpace: 'pre-wrap' }}>{project.notes}</div></section>}
     </aside>
   );
 }

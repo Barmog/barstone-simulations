@@ -59,6 +59,7 @@ export interface Project {
   cabinets: boolean;
   uppers: boolean;
   cabinetColor: string;
+  wallColor?: string;
   floor: string;
   pieces: Piece[];
   cutouts: Cutout[];
@@ -74,7 +75,7 @@ export const uid = (p = 'p') => `${p}${Date.now().toString(36)}${(seq++).toStrin
 export function emptyProject(name = 'הדמיה חדשה'): Project {
   return {
     v: 1, name, stoneId: null, thickness: 12, apronH: 40, kerf: 4, margin: 10, slabW: SLAB.w, slabH: SLAB.h,
-    counterH: 900, cabinets: true, uppers: true, cabinetColor: '#f2efe9', floor: 'oak',
+    counterH: 900, cabinets: true, uppers: true, cabinetColor: '#f4f3ef', wallColor: '#f4f2ee', floor: 'oak',
     pieces: [], cutouts: [], notes: '', source: 'manual',
   };
 }

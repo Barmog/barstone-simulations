@@ -55,7 +55,7 @@ const SYSTEM = `אתה מומחה לתכנון וייצור משטחי אבן ו
 
 ## המשימות
 - mode=plan: מצורף צילום או PDF של תוכנית מטבח או דף מדידה (לפעמים בכתב יד). קרא את המידות בדיוק כפי שכתובות, המר ליחידות מ"מ (שים לב אם המקור בס"מ או במטרים), ובנה draft מלא. אל תמציא מידה שלא מופיעה: אם חסרה, השתמש במידה טיפוסית וציין זאת ב-assumptions. ציין ב-assumptions גם כל מספר שקשה לקרוא. אם התמונה אינה תוכנית מטבח, החזר draft=null והסבר ב-reply.
-- mode=edit: המשתמש מבקש שינוי בשפה חופשית. החזר ב-draft את המטבח המלא אחרי השינוי: שנה רק את מה שהתבקש, שמור על כל השאר ועל ה-ref הקיימים. "שמאלה" = x קטן יותר, "ימינה" = x גדול יותר, "קדימה" = y גדול יותר. מידות שהמשתמש נותן בס"מ או במטרים — המר למ"מ. אם הבקשה לא ברורה או לא אפשרית, החזר draft=null ושאל שאלה אחת ב-reply.
+- mode=chat: שיחה עם איש המכירות. מצורפים המטבח הנוכחי, ממצאי הבדיקה והנסטינג, וההודעות הקודמות. אם הוא מבקש שינוי (להוסיף, להזיז, לשנות מידה, למחוק) — החזר ב-draft את המטבח המלא אחרי השינוי: שנה רק את מה שהתבקש, שמור על כל השאר ועל ה-ref הקיימים, וכתוב ב-reply משפט אחד על מה שנעשה. אם הוא שואל שאלה או מבקש עצה — החזר draft=null וענה ב-reply בקצרה ובמספרים. "שמאלה" = x קטן יותר, "ימינה" = x גדול יותר, "קדימה" = y גדול יותר, "אחורה" = y קטן יותר. מידות שהמשתמש נותן בס"מ או במטרים — המר למ"מ. אם הבקשה לא ברורה או לא אפשרית, החזר draft=null ושאל שאלה אחת.
 - mode=advise: מצורפים המטבח וממצאי הבדיקה והנסטינג. החזר draft=null, וב-reply חוות דעת מקצועית קצרה (עד 6 נקודות): מה חשוב לתקן לפני ייצור, איך לשפר את רצף הגידים והמראה (חיבורים, מפל, חיפוי, כיוון גיד), ואיך לחסוך לוחות. היה קונקרטי עם מספרים; אל תחזור על הממצאים כלשונם.
 
 כתוב תמיד בעברית פשוטה וקצרה, בלי כותרות.`;
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     if (!Deno.env.get("ANTHROPIC_API_KEY")) return json({ error: "יכולות ה-AI עוד לא הופעלו: צריך להגדיר את הסוד ANTHROPIC_API_KEY ב-Supabase (Edge Functions › Secrets)." }, 503);
 
     const body = await req.json();
-    const mode = body.mode as "plan" | "edit" | "advise";
+    const mode = body.mode as "plan" | "chat" | "edit" | "advise";
     const content: Anthropic.Beta.BetaContentBlockParam[] = [];
     if (mode === "plan") {
       const data = String(body.data || ""), media = String(body.media_type || "");
@@ -80,10 +80,12 @@ Deno.serve(async (req) => {
       else if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(media)) content.push({ type: "image", source: { type: "base64", media_type: media as "image/jpeg", data } });
       else return json({ error: "סוג קובץ לא נתמך. אפשר JPG, PNG, WEBP או PDF." }, 400);
       content.push({ type: "text", text: "mode=plan\nבנה את המטבח מהתוכנית המצורפת." });
-    } else if (mode === "edit") {
+    } else if (mode === "chat" || mode === "edit") {
       const text = String(body.text || "").slice(0, 2000);
       if (!text.trim() || !body.draft) return json({ error: "חסרה בקשה." }, 400);
-      content.push({ type: "text", text: `mode=edit\nהמטבח הנוכחי:\n${JSON.stringify(body.draft)}\n\nבקשת המשתמש:\n${text}` });
+      const history = (Array.isArray(body.history) ? body.history : []).slice(-10)
+        .map((m: { role?: string; text?: string }) => `${m.role === "ai" ? "העוזר" : "המשתמש"}: ${String(m.text || "").slice(0, 600)}`).join("\n");
+      content.push({ type: "text", text: `mode=chat\nהמטבח הנוכחי:\n${JSON.stringify(body.draft)}\n\nממצאי הבדיקה והנסטינג:\n${JSON.stringify(body.facts || {})}\n\nהשיחה עד כה:\n${history || "(אין)"}\n\nההודעה החדשה של המשתמש:\n${text}` });
     } else if (mode === "advise") {
       content.push({ type: "text", text: `mode=advise\nהמטבח:\n${JSON.stringify(body.draft)}\n\nממצאי הבדיקה והנסטינג:\n${JSON.stringify(body.facts || {})}` });
     } else return json({ error: "mode לא מוכר." }, 400);

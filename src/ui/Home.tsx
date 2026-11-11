@@ -39,7 +39,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
 
   async function saveCustomer() {
     if (!editing?.name?.trim()) return;
-    try { const c = await repo.saveCustomer({ ...editing, name: editing.name.trim() }); setEditing(null); await load(); go(`/c/${c.id}`); } catch (e) { setToast((e as Error).message); }
+    try { const fresh = !editing.id; const c = await repo.saveCustomer({ ...editing, name: editing.name.trim() }); setEditing(null); await load(); go(`/c/${c.id}`); if (fresh) setNewOrder(true); } catch (e) { setToast((e as Error).message); }
   }
   async function removeCustomer(c: Customer) {
     if (!confirm(`למחוק את "${c.name}" ואת כל ${count(c.id)} ההזמנות שלו? אי אפשר לבטל.`)) return;
@@ -59,7 +59,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
       <main className="home">
         <aside className="side glass">
           <div className="row"><span className="cap">לקוחות</span><span className="sp" /><button className="btn sm primary" onClick={() => setEditing({ name: '' })}><Icon.plus />לקוח חדש</button></div>
-          <input className="input" placeholder="חיפוש לפי שם, טלפון או כתובת" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input id="csearch" className="input" placeholder="חיפוש לפי שם, טלפון או כתובת" value={q} onChange={(e) => setQ(e.target.value)} />
           <div className="clist">
             {customers === null && <div className="mute" style={{ padding: 12 }}>טוען…</div>}
             {customers?.length === 0 && <div className="mute" style={{ padding: 12 }}>עוד אין לקוחות. התחילו ב"לקוח חדש".</div>}
@@ -84,7 +84,14 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
               <button className="btn primary" onClick={() => setNewOrder(true)}><Icon.plus />הזמנה חדשה</button>
             </div>
           ) : (
-            <div><h1>הזמנות אחרונות</h1><p className="mute">בחרו לקוח מהרשימה כדי לפתוח לו הזמנה חדשה.</p></div>
+            <>
+              <div><h1>מה עושים היום?</h1><p className="mute">שלב ראשון: לקוח חדש, או ממשיכים הזמנה קיימת.</p></div>
+              <div className="starts">
+                <button className="start dark" onClick={() => setEditing({ name: '' })}><Icon.plus /><b>לקוח חדש</b><small>פרטי לקוח › מידות (תבנית, DXF או צילום) › אבן › עיצוב › מסמך</small></button>
+                <button className="start" onClick={() => document.getElementById('csearch')?.focus()}><Icon.search /><b>לקוח או הזמנה קיימת</b><small>מחפשים לקוח ברשימה, או בוחרים מההזמנות האחרונות למטה</small></button>
+              </div>
+              {!!list.length && <span className="cap">הזמנות אחרונות</span>}
+            </>
           )}
           {current?.notes && <div className="note">{current.notes}</div>}
           <div className="cards">

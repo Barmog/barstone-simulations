@@ -2,26 +2,42 @@
 import * as THREE from 'three';
 import { Cutout, Piece, Project, Side, hostEdge, isVertical } from '../core/model';
 import { NestResult, Placement, localToSlab, segLocal } from '../core/nesting';
+import { floorById } from '../core/catalog';
 
 const S = 0.001;
-const FLOORS: Record<string, [string, string]> = { oak: ['#c9a57a', '#b8946a'], walnut: ['#6e4f39', '#5d4230'], light: ['#e3d5bf', '#d8c8ae'], concrete: ['#b9b6b0', '#aeaba5'] };
-export const FLOOR_HE: Record<string, string> = { oak: 'אלון', walnut: 'אגוז', light: 'בהיר', concrete: 'בטון' };
-
-function floorTexture(kind: string) {
-  const [a, b] = FLOORS[kind] || FLOORS.oak, c = document.createElement('canvas'); c.width = c.height = 1024;
-  const g = c.getContext('2d')!; g.fillStyle = a; g.fillRect(0, 0, 1024, 1024);
-  if (kind !== 'concrete') for (let row = 0; row < 8; row++) {
-    let x = -((row * 173) % 300), n = row * 7;
-    while (x < 1024) {
-      const w = 340 + ((n * 61) % 180), shade = ((n * 37) % 9) / 100;
-      g.fillStyle = n % 3 ? a : b; g.fillRect(x, row * 128, w, 128);
-      g.fillStyle = `rgba(0,0,0,${shade})`; g.fillRect(x, row * 128, w, 128);
-      g.fillStyle = 'rgba(60,40,20,.28)'; g.fillRect(x + w - 2, row * 128, 2, 128); x += w; n++;
+function floorTexture(id: string) {
+  const f = floorById(id), c = document.createElement('canvas'); c.width = c.height = 1024;
+  const g = c.getContext('2d')!; g.fillStyle = f.a; g.fillRect(0, 0, 1024, 1024);
+  const rnd = (n: number) => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
+  if (f.type === 'plank') {
+    const rows = f.rows || 8, rh = 1024 / rows;
+    for (let row = 0; row < rows; row++) {
+      let x = -(rnd(row + 1) * 300), n = row * 7;
+      while (x < 1024) {
+        const w = 300 + rnd(n + 3) * 220;
+        g.fillStyle = rnd(n + 9) > 0.5 ? f.a : f.b; g.fillRect(x, row * rh, w, rh);
+        g.fillStyle = `rgba(0,0,0,${rnd(n + 5) * 0.07})`; g.fillRect(x, row * rh, w, rh);
+        g.fillStyle = f.line; g.fillRect(x + w - 2, row * rh, 2, rh); x += w; n++;
+      }
+      g.fillStyle = f.line; g.fillRect(0, row * rh, 1024, 2);
     }
-    g.fillStyle = 'rgba(60,40,20,.28)'; g.fillRect(0, row * 128, 1024, 2);
+  } else if (f.type === 'tile' || f.type === 'checker') {
+    const n = f.tiles || 4, t = 1024 / n;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      g.fillStyle = f.type === 'checker' ? ((i + j) % 2 ? f.b : f.a) : rnd(i * 13 + j * 7 + 1) > 0.5 ? f.a : f.b; g.fillRect(i * t, j * t, t, t);
+      g.fillStyle = f.line; g.fillRect(i * t, j * t, t, 3); g.fillRect(i * t, j * t, 3, t);
+    }
+  } else if (f.type === 'terrazzo') {
+    for (let i = 0; i < 900; i++) { const r = 3 + rnd(i) * 9; g.fillStyle = [f.b, '#8d8377', '#f6f2ea', '#6f675d', '#c98f6b'][i % 5]; g.globalAlpha = 0.75; g.beginPath(); g.ellipse(rnd(i + 0.3) * 1024, rnd(i + 0.7) * 1024, r, r * (0.5 + rnd(i + 0.1) * 0.5), rnd(i) * 3, 0, 7); g.fill(); }
+    g.globalAlpha = 1;
+  } else {
+    for (let i = 0; i < 260; i++) { g.fillStyle = i % 2 ? f.b : 'rgba(255,255,255,.05)'; g.globalAlpha = 0.16; g.beginPath(); g.ellipse(rnd(i) * 1024, rnd(i + 0.5) * 1024, 40 + rnd(i + 0.2) * 150, 20 + rnd(i + 0.8) * 70, rnd(i) * 3, 0, 7); g.fill(); }
+    g.globalAlpha = 1;
   }
-  for (let i = 0; i < 1800; i++) { g.fillStyle = `rgba(${i % 2 ? 255 : 0},${i % 2 ? 255 : 0},${i % 2 ? 255 : 0},.03)`; g.fillRect((i * 7919) % 1024, (i * 104729) % 1024, kind === 'concrete' ? 3 : 60, 1.2); }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(9, 9); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+  for (let i = 0; i < 1500; i++) { g.fillStyle = `rgba(${i % 2 ? 255 : 0},${i % 2 ? 255 : 0},${i % 2 ? 255 : 0},.028)`; g.fillRect(rnd(i + 0.4) * 1024, rnd(i + 0.9) * 1024, f.type === 'plank' ? 60 : 3, 1.2); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  const rep = f.type === 'plank' ? (f.rows ? 12 : 9) : f.type === 'tile' ? 16 / ((f.tiles || 4) * (f.id === 'porcelain-beige' ? 0.8 : 0.6)) : f.type === 'checker' ? 16 / ((f.tiles || 6) * 0.4) : 5;
+  t.repeat.set(rep, rep); return t;
 }
 
 export interface Built { group: THREE.Group; center: THREE.Vector3; radius: number }
@@ -32,7 +48,7 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
   const cab = new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x1f1e1c, roughness: 0.5, metalness: 0.3 });
   const steel = new THREE.MeshStandardMaterial({ color: 0xc3c7cc, roughness: 0.28, metalness: 0.95 });
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xf2ede5, roughness: 0.96 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: project.wallColor || '#f4f2ee', roughness: 0.96 });
   const flat = project.pieces.filter((p) => !isVertical(p)), byId = new Map(project.pieces.map((p) => [p.id, p]));
   const plsOf = (id: string) => (nest?.slabs.flatMap((s) => s.placements) || []).filter((pl) => pl.pieceId === id && !pl.stripOf);
 
@@ -108,7 +124,9 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
       if (c.kind === 'sink') {
         const depth = 210, g = new THREE.BoxGeometry((c.w - 2) * S, depth * S, (c.h - 2) * S);
         const basin = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xb4b8bd, roughness: 0.3, metalness: 0.92, side: THREE.BackSide })); basin.position.set(cx * S, (H - T - depth / 2 + 1) * S, cz * S); basin.receiveShadow = true; group.add(basin);
-        const drain = new THREE.Mesh(new THREE.CylinderGeometry(28 * S, 28 * S, 4 * S, 24), dark); drain.position.set(cx * S, (H - T - depth + 4) * S, cz * S); group.add(drain);
+        // תחתית הכיור כפי שהיא נראית דרך הפתח (מעל גוף הארון)
+        const pan = new THREE.Mesh(new THREE.PlaneGeometry((c.w - 6) * S, (c.h - 6) * S), new THREE.MeshStandardMaterial({ color: 0x8e9398, roughness: 0.35, metalness: 0.85 })); pan.rotation.x = -Math.PI / 2; pan.position.set(cx * S, (H - T + 1) * S, cz * S); pan.receiveShadow = true; group.add(pan);
+        const drain = new THREE.Mesh(new THREE.CylinderGeometry(28 * S, 28 * S, 4 * S, 24), dark); drain.position.set(cx * S, (H - T + 2) * S, cz * S); group.add(drain);
       } else if (c.kind === 'cooktop') {
         box(c.w + 24, 6, c.h + 24, new THREE.MeshPhysicalMaterial({ color: 0x0c0c0e, roughness: 0.08, clearcoat: 1 }), cx, H + 3, cz);
         for (const [fx, fy, r] of [[0.28, 0.3, 0.8], [0.72, 0.3, 1], [0.28, 0.72, 1], [0.72, 0.72, 0.8]]) { const ring = new THREE.Mesh(new THREE.RingGeometry(Math.min(c.w, c.h) * 0.15 * r * S, Math.min(c.w, c.h) * 0.165 * r * S, 40), new THREE.MeshBasicMaterial({ color: 0x77777c })); ring.rotation.x = -Math.PI / 2; ring.position.set((p.x + c.x + c.w * fx) * S, (H + 6.4) * S, (p.y + c.y + c.h * fy) * S); group.add(ring); }
@@ -136,7 +154,7 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
   const xs = flat.flatMap((p) => [p.x, p.x + p.w]), zs = flat.flatMap((p) => [p.y, p.y + p.h]);
   const bx0 = Math.min(0, ...xs), bx1 = Math.max(1000, ...xs), bz0 = Math.min(0, ...zs), bz1 = Math.max(600, ...zs);
   const center = new THREE.Vector3(((bx0 + bx1) / 2) * S, 0.75, ((bz0 + bz1) / 2) * S), radius = (Math.hypot(bx1 - bx0, bz1 - bz0) / 2) * S;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: floorTexture(project.floor), roughness: 0.55 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: floorTexture(project.floor), roughness: floorById(project.floor).type === 'plank' ? 0.55 : 0.35 }));
   floor.rotation.x = -Math.PI / 2; floor.position.set(center.x, 0, center.z); floor.receiveShadow = true; group.add(floor);
   return { group, center, radius };
 }

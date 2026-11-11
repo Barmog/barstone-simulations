@@ -1,11 +1,10 @@
 // הסטודיו: מסך חי אחד — שרטוט, תלת־ממד ולוחות יחד. כל שינוי מתעדכן בכולם ונשמר אוטומטית.
 import { useEffect, useState } from 'react';
-import { exportNestDxf } from '../core/dxf';
 import { Customer, repo } from '../data/repo';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
 import { asset } from './util';
-import { LeftPanel, RightPanel } from './Panels';
+import { LeftPanel, RightPanel, STEPS } from './Panels';
 import { Plan2D } from './Plan2D';
 import { Slabs } from './Slabs';
 import { View3D } from './View3D';
@@ -27,7 +26,11 @@ export function Studio({ id }: { id: string }) {
   const { order, customer, missing } = useOrder(id);
   const save = useStore((s) => s.save), canUndo = useStore((s) => s.past.length > 0), canRedo = useStore((s) => s.future.length > 0), nest = useStore((s) => s.nest);
   const { undo, redo, flush } = useStore.getState();
+  const step = useStore((s) => s.step), setStep = useStore((s) => s.setStep);
   const [mode, setMode] = useState<'split' | 'plan' | '3d'>('split');
+  // כל שלב פותח את התצוגה שמתאימה לו; אפשר תמיד להחליף ידנית
+  useEffect(() => { setMode(step === 'design' ? '3d' : step === 'check' ? 'plan' : 'split'); }, [step]);
+  const si = STEPS.findIndex((x) => x.id === step);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -43,7 +46,6 @@ export function Studio({ id }: { id: string }) {
   if (missing) return <div className="login"><div className="box glass"><h1>ההזמנה לא נמצאה</h1><button className="btn primary" onClick={() => go('/')}>חזרה להזמנות</button></div></div>;
   if (!order) return <div className="login"><div className="spin dark" /></div>;
 
-  const dxf = () => { if (!nest) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportNestDxf(nest.slabs)], { type: 'application/dxf' })); a.download = `${order.title}-nesting.dxf`; a.click(); URL.revokeObjectURL(a.href); };
   return (
     <div className="studio">
       <header className="top">
@@ -53,9 +55,8 @@ export function Studio({ id }: { id: string }) {
         <span className="sp" />
         <div className="pill"><button title="ביטול (Ctrl+Z)" disabled={!canUndo} style={{ opacity: canUndo ? 1 : 0.35 }} onClick={undo}><Icon.undo />ביטול</button><button title="חזרה (Ctrl+Shift+Z)" disabled={!canRedo} style={{ opacity: canRedo ? 1 : 0.35 }} onClick={redo}><Icon.redo />חזרה</button></div>
         <div className="pill">{([['split', 'מפוצל'], ['plan', 'שרטוט'], ['3d', 'תלת־ממד']] as const).map(([k, v]) => <button key={k} className={mode === k ? 'on' : ''} onClick={() => setMode(k)}>{v}</button>)}</div>
-        <button className="btn sm" title="ייצוא תוכנית החיתוך ל-DXF" onClick={dxf}><Icon.download />DXF</button>
-        <button className="btn sm primary" onClick={() => { flush(); go(`/o/${id}/doc`); }}><Icon.doc />מסמך ללקוח</button>
       </header>
+      <nav className="steps" aria-label="שלבי העבודה">{STEPS.map((x, n) => <button key={x.id} className={n === si ? 'on' : n < si ? 'done' : ''} onClick={() => setStep(x.id)}><i>{n < si ? '✓' : n + 1}</i>{x.name}</button>)}</nav>
       <div className="work">
         <LeftPanel />
         <div className={`center ${mode === '3d' ? 'max' : ''}`}>

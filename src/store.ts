@@ -6,6 +6,8 @@ import { Issue, check } from './core/checks';
 import { Order, Stone, repo } from './data/repo';
 
 export type Sel = { type: 'piece' | 'cutout'; id: string } | null;
+export type Step = 'dims' | 'stone' | 'design' | 'check' | 'summary';
+export interface ChatMsg { role: 'user' | 'ai'; text: string }
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 
 interface State {
@@ -19,6 +21,10 @@ interface State {
   nest: NestResult | null;
   issues: Issue[];
   toast: string;
+  step: Step;
+  chat: ChatMsg[];
+  setStep(s: Step): void;
+  say(m: ChatMsg): void;
   open(order: Order): void;
   close(): void;
   /** שינוי שנכנס להיסטוריה. coalesce: מפתח שמאחד רצף שינויים (גרירה, הקלדה) לצעד ביטול אחד. */
@@ -42,8 +48,10 @@ export const useStore = create<State>((set, get) => {
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => get().flush(), 900); };
   const commit = (project: Project, extra: Partial<State> = {}) => { set({ project, ...derive(project), save: 'dirty', ...extra }); schedule(); };
   return {
-    order: null, project: null, past: [], future: [], sel: null, save: 'saved', stones: [], nest: null, issues: [], toast: '',
-    open(order) { lastKey = ''; set({ order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
+    order: null, project: null, past: [], future: [], sel: null, save: 'saved', stones: [], nest: null, issues: [], toast: '', step: 'dims', chat: [],
+    setStep(step) { set({ step, sel: null }); },
+    say(m) { set({ chat: [...get().chat, m] }); },
+    open(order) { lastKey = ''; set({ step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
     close() { get().flush(); set({ order: null, project: null, past: [], future: [], sel: null, nest: null, issues: [] }); },
     apply(fn, coalesce) {
       const cur = get().project; if (!cur) return;
