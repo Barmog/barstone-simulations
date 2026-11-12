@@ -63,7 +63,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
       <header className="top">
         <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} />
         <span className="sp" />
-        {isLocal && <span className="badge sand">מצב הדגמה · נתוני דוגמה, נשמר בדפדפן הזה בלבד</span>}
+        {isLocal && <span className="badge sand"><span className="demo-long">מצב הדגמה · נתוני דוגמה, נשמר בדפדפן הזה בלבד</span><span className="demo-short">דמו</span></span>}
         {isDemoOnLive && <button className="link" onClick={exitDemo}>יציאה מהדמו</button>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/catalog')}><Icon.grid />קטלוג ומלאי</button>}
         {!isLocal && <button className="btn sm primary" onClick={() => setFind(true)}><Icon.link />פתיחה מהזמנה בפיירברי</button>}

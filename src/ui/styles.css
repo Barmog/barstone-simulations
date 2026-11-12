@@ -291,13 +291,11 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 .tb-notes p { font-size: 10.5px; color: #4a453e; white-space: normal; } .tb-sign p { margin-top: 6px; }
 .tb-brand { align-items: center; justify-content: center; gap: 8px !important; text-align: center; } .tb-brand img { height: 28px; } .tb-brand small { color: #8c857b; }
 .tb .st { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; } .tb .st i { width: 11px; height: 11px; border: 1.5px solid #1b1a18; border-radius: 2px; display: inline-block; } .tb .st i.on { background: #1b1a18; }
-.book.capture { zoom: 1 !important; }
-@media (max-width: 1660px) { .book { zoom: .75; } }
-@media (max-width: 1240px) { .book { zoom: .55; } }
-@media (max-width: 900px) { .book { zoom: .4; } }
-@media (max-width: 640px) { .book { zoom: .23; padding: 10px 4px 40px; } }
+.book .a3 { zoom: var(--z, 1); }
+.book.capture .a3 { zoom: 1 !important; }
+@media (max-width: 640px) { .book { padding: 10px 4px 40px; gap: 14px; } }
 @page { size: A3 landscape; margin: 0; }
-@media print { .book { zoom: 1 !important; padding: 0; gap: 0; } .a3 { box-shadow: none; break-after: page; } }
+@media print { .book .a3 { zoom: 1 !important; } .book { padding: 0; gap: 0; } .a3 { box-shadow: none; break-after: page; } }
 .a3 .three { display: grid; grid-template-columns: 1.45fr 1fr .8fr; gap: 26px; align-items: start; }
 .a3 .edges { display: flex; flex-direction: column; gap: 10px; } .a3 .edges > div { border: 1px solid #ece6dc; border-radius: 10px; padding: 6px; } .a3 .edges svg { width: 100%; height: auto; display: block; max-height: 150px; }
 .a3 .parts.tight td { padding: 5px 10px; }
@@ -350,3 +348,19 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 .fblist { display: flex; flex-direction: column; gap: 10px; }
 .fbitem { border: 1px solid #ece6dc; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
 .fbitem p { margin: 0; white-space: pre-wrap; font-size: 15px; } .fbitem.done, .fbitem.wontfix { opacity: .6; }
+
+/* ===== מובייל: נוחות ===== */
+@media (max-width: 820px) {
+  .hide-m { display: none !important; }
+  .doctop { overflow-x: auto; flex-wrap: nowrap; gap: 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .doctop .crumb { order: -3; } .doctop .btn.primary { order: -2; }
+  .doctop::-webkit-scrollbar { display: none; } .doctop > * { flex: none; } .doctop label { white-space: nowrap; } .doctop .sp { display: none; }
+  .fb-fab { width: 44px; height: 44px; padding: 0; font-size: 0; bottom: calc(84px + env(safe-area-inset-bottom)); left: 10px; opacity: .92; }
+  .fb-fab::before { content: '💬'; font-size: 19px; }
+  .demo-long { display: none; } .demo-short { display: inline !important; }
+  .sharebox .input { font-size: 16px; }
+  .track { grid-template-columns: 1fr; }
+  .fbrow { padding: 12px; } .fbrow .num { min-width: 52px; }
+}
+.demo-short { display: none; }
+.top .link, .top .btn { white-space: nowrap; }
