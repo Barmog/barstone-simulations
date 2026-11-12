@@ -233,8 +233,9 @@ export function LeftPanel() {
     </section>
     <section>
       <div className="row"><span className="cap">מטר רץ לחישוב</span><span className="sp" /><b className="mono">{rm.total.toFixed(2)}</b></div>
-      <table className="rm"><tbody>{rm.rows.map((r) => <tr key={r.id}><td>{r.name}</td><td className="mono">{cm(r.len)}×{cm(r.wid)}</td><td>{factorHe(r.factor)}</td><td className="mono">{r.rm.toFixed(2)}</td></tr>)}</tbody></table>
-      <div className="mute" style={{ fontSize: 12 }}>לפי רוחב: עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול.</div>
+      <table className="rm"><tbody>{rm.rows.map((r) => <tr key={r.id}><td>{r.name}{r.corner ? <span className="mute"> · כולל פינה {cm(r.corner)}</span> : ''}</td><td className="mono">{cm(r.len)}×{cm(r.wid)}</td><td>{factorHe(r.factor)}</td><td className="mono">{r.rm.toFixed(2)}</td></tr>)}</tbody></table>
+      {rm.extras.length > 0 && <><span className="cap" style={{ marginTop: 4 }}>תוספות</span><table className="rm"><tbody>{rm.extras.map((x) => <tr key={x.id}><td>{x.name}</td><td /><td /><td className="mono">{x.qty} {x.unit}</td></tr>)}</tbody></table></>}
+      <div className="mute" style={{ fontSize: 12 }}>לפי רוחב (בחיפוי ובמפל — לפי הגובה): עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול. פינה נספרת בשתי הצלעות.</div>
     </section>
     <section>
       <span className="cap">סיכום</span>
