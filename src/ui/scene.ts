@@ -1,4 +1,5 @@
 // בניית סצנת התלת־ממד מתוך מודל המטבח. יחידות: מטר. x בתוכנית → x, y בתוכנית → z, גובה → y.
+import { Finish } from '../data/lucente';
 import * as THREE from 'three';
 import { Cutout, PLINTH_H, Piece, Project, SEAT_DEPTH, Side, UPPER_TOP, chairCount, cornerExt, corners, hostEdge, isVertical, longIsX, upperBottom } from '../core/model';
 import { NestResult, Placement, Rect, isBody, localToSlab, segLocal } from '../core/nesting';
@@ -49,9 +50,11 @@ function subtract(r: Rect, c: Rect): Rect[] {
   return [{ x: r.x, y: r.y, w: x0 - r.x, h: r.h }, { x: x1, y: r.y, w: r.x + r.w - x1, h: r.h }, { x: x0, y: r.y, w: x1 - x0, h: y0 - r.y }, { x: x0, y: y1, w: x1 - x0, h: r.y + r.h - y1 }].filter((q) => q.w > 1 && q.h > 1);
 }
 
-export function buildKitchen(project: Project, nest: NestResult | null, stoneTex: THREE.Texture | null): Built {
+export function buildKitchen(project: Project, nest: NestResult | null, stoneTex: THREE.Texture | null, finish: Finish = 'polished'): Built {
   const group = new THREE.Group(), H = project.counterH, T = project.thickness;
-  const stone = new THREE.MeshPhysicalMaterial({ map: stoneTex, color: stoneTex ? 0xffffff : 0xe6e1d8, roughness: 0.26, clearcoat: 0.4, clearcoatRoughness: 0.22, envMapIntensity: 0.95 });
+  // גימור האבן: מבריק = השתקפות חדה של החדר; מט = פיזור רך; סטרקצ׳ר = מרקם עדין מתוך הגיד עצמו
+  const FIN = { polished: { roughness: 0.07, clearcoat: 1, clearcoatRoughness: 0.035, envMapIntensity: 1.15 }, matte: { roughness: 0.58, clearcoat: 0, clearcoatRoughness: 1, envMapIntensity: 0.8 }, structure: { roughness: 0.72, clearcoat: 0, clearcoatRoughness: 1, envMapIntensity: 0.7 } }[finish];
+  const stone = new THREE.MeshPhysicalMaterial({ map: stoneTex, color: stoneTex ? 0xffffff : 0xe6e1d8, ...FIN, ...(finish === 'structure' && stoneTex ? { bumpMap: stoneTex, bumpScale: 2.2 } : {}) });
   const cab = new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62 });
   const cabX = project.xray ? new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62, transparent: true, opacity: 0.18, depthWrite: false }) : cab;
   const upColor = project.upperColor || project.cabinetColor, upStyle = project.upperStyle || 'doors';
@@ -97,7 +100,8 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
         if (p.outline && segs.length === 1) p.outline.forEach((q, i) => (i ? shape.lineTo(q.x, q.y) : shape.moveTo(q.x, q.y)));
         else { shape.moveTo(s.x, s.y); shape.lineTo(s.x + s.w, s.y); shape.lineTo(s.x + s.w, s.y + s.h); shape.lineTo(s.x, s.y + s.h); }
         for (const c of cuts) if (inside(c, s)) shape.holes.push(hole(c));
-        const g = new THREE.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false, curveSegments: 10 });
+        // קצה מעוגל קלות (1.5 מ"מ) — כמו אבן מלוטשת, לא קופסה חדה
+        const bv = Math.min(1.5, T / 6), g = new THREE.ExtrudeGeometry(shape, { depth: T - 2 * bv, bevelEnabled: true, bevelThickness: bv, bevelSize: bv * 0.8, bevelOffset: -bv * 0.8, bevelSegments: 3, curveSegments: 10 }); g.translate(0, 0, bv);
         const pos = g.attributes.position, uv = new Float32Array(pos.count * 2);
         for (let i = 0; i < pos.count; i++) { const [u, v] = uvAt(p, pls, pos.getX(i), pos.getY(i)); uv[i * 2] = u; uv[i * 2 + 1] = v; }
         g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.rotateX(Math.PI / 2); g.scale(S, S, S);
@@ -305,6 +309,38 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
     g.scale(S, S, S);
     const m = new THREE.Mesh(g, stone), y0 = splash ? H : 0, hh = splash ? q.h : Math.min(q.h, H - T);
     m.position.set((e.x + e.dx * (o0 + len / 2) - (e.nx * T) / 2) * S, (y0 + hh / 2) * S, (e.y + e.dy * (o0 + len / 2) - (e.ny * T) / 2) * S); if (!splash) m.scale.y = hh / q.h; if (e.dy) m.rotation.y = -Math.PI / 2; add(m);
+  }
+
+  // --- מכשירים: קולט אדים מעל הכיריים, וטור גבוה (תנור + מקרר) בקצה הפנוי של הקיר הארוך ---
+  if (project.appliances !== false) {
+    const hoodMat = new THREE.MeshStandardMaterial({ color: 0xb9bdc2, roughness: 0.3, metalness: 0.9 }), glassBlk = new THREE.MeshPhysicalMaterial({ color: 0x111214, roughness: 0.05, clearcoat: 1 });
+    for (const c of project.cutouts.filter((q) => q.kind === 'cooktop')) {
+      const p = byId.get(c.pieceId); if (!p?.wall) continue;
+      const e = hostEdge(p, p.wall), cx = p.x + c.x + c.w / 2, cz = p.y + c.y + c.h / 2, hw = Math.max(600, c.w + 120), lx = !!e.dx;
+      const wx = lx ? cx : e.x - e.nx * 250, wz = lx ? e.y - e.ny * 250 : cz;
+      if (project.uppers) box(lx ? hw : 500, 50, lx ? 500 : hw, hoodMat, wx, upperBottom(project) - 25, wz);
+      else { box(lx ? hw : 500, 70, lx ? 500 : hw, hoodMat, wx, H + 680, wz); const ch = 2500 - (H + 715); box(lx ? 300 : 260, ch, lx ? 260 : 300, hoodMat, lx ? cx : e.x - e.nx * 130, H + 715 + ch / 2, lx ? e.y - e.ny * 130 : cz); }
+    }
+    const main = flat.filter((q) => q.wall && q.kind === 'counter').sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h))[0];
+    if (main?.wall) {
+      const e = hostEdge(main, main.wall), ce = cornerExt(project, main), d = 600, th = 2200;
+      // קצה פנוי: לא ממשיך לפינה ואין משטח ניצב שנצמד אליו מלפנים
+      const D = e.dx ? main.h : main.w, at = (a: number, off: number) => ({ x: e.x + e.dx * a - e.nx * off, y: e.y + e.dy * a - e.ny * off });
+      const busy = (a: number) => [50, 650].some((k) => { const q0 = at(a === 0 ? k : e.len - k, D + 12); return flat.some((q) => q !== main && q0.x > q.x - 1 && q0.x < q.x + q.w + 1 && q0.y > q.y - 1 && q0.y < q.y + q.h + 1); });
+      const end = ce.tail === 0 && !busy(e.len) ? 1 : ce.lead === 0 && !busy(0) ? -1 : 0;
+      if (end) {
+        const a0 = end > 0 ? e.len : -1200, rect = { x: Math.min(e.x + e.dx * a0, e.x + e.dx * (a0 + 1200)) - (e.nx > 0 ? d : 0), y: Math.min(e.y + e.dy * a0, e.y + e.dy * (a0 + 1200)) - (e.ny > 0 ? d : 0), w: e.dx ? 1200 : d, h: e.dx ? d : 1200 };
+        const hit = flat.some((q) => q.x < rect.x + rect.w - 5 && q.x + q.w > rect.x + 5 && q.y < rect.y + rect.h - 5 && q.y + q.h > rect.y + 5);
+        if (!hit) for (const [k, kind] of [[0, 'oven'], [1, 'fridge']] as const) {
+          const a = a0 + 300 + 600 * (end > 0 ? k : 1 - k), px = e.x + e.dx * a - e.nx * (d / 2), pz = e.y + e.dy * a - e.ny * (d / 2);
+          box(e.dx ? 596 : d, th, e.dx ? d : 596, cab, px, th / 2, pz);
+          const wq = box(e.dx ? 600 : 100, 2500, e.dx ? 100 : 600, wallMat, e.x + e.dx * a + e.nx * 50, 1250, e.y + e.dy * a + e.ny * 50); wq.traverse((o) => (o.castShadow = false)); wq.userData.wallN = [e.nx, e.ny];
+          const fx = px - e.nx * (d / 2 + 2), fz = pz - e.ny * (d / 2 + 2), face = (w: number, h: number, y: number, mat: THREE.Material, off = 0) => box(e.dx ? w : 6, h, e.dx ? 6 : w, mat, fx - e.nx * off, y, fz - e.ny * off);
+          if (kind === 'oven') { face(560, 580, 1180, glassBlk); face(520, 22, 1440, steel, 18); face(560, 140, 800, glassBlk); }
+          else { face(560, 2080, 1080, cab, 2); face(22, 900, 1200, steel, 22); }
+        }
+      }
+    }
   }
 
   // --- רצפה ---

@@ -3,10 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { useStore } from '../store';
 import { Built, buildKitchen, disposeGroup } from './scene';
 import { Icon } from './icons';
 import { useStone } from './util';
+import { stoneFinish } from '../data/lucente';
 
 type Cam = 'persp' | 'top' | 'front';
 const texCache = new Map<string, Promise<THREE.Texture>>();
@@ -14,8 +19,20 @@ export const loadTex = (url: string) => { if (!texCache.has(url)) texCache.set(u
 
 export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax?: () => void; max?: boolean; stoneUrl?: string }) {
   const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), own = useStone(), stone = stoneUrl ? { url: stoneUrl } : own;
-  const host = useRef<HTMLDivElement>(null), api = useRef<{ rebuild: (b: Built, light: string, kelvin: number) => void; cam: (c: Cam) => void; shot: () => string; focus: () => void; built?: Built } | null>(null);
+  const host = useRef<HTMLDivElement>(null), api = useRef<{ rebuild: (b: Built, light: string, kelvin: number) => void; cam: (c: Cam) => void; shot: () => string; focus: () => void; view: () => { pos: THREE.Vector3; target: THREE.Vector3; fov: number }; built?: Built } | null>(null);
   const [cam, setCam] = useState<Cam>('persp'), [err, setErr] = useState('');
+  const [photo, setPhoto] = useState<{ p: number; img?: string; done?: boolean; abort: AbortController } | null>(null);
+  async function takePhoto() {
+    const v = api.current?.view(), el = host.current; if (!v || !el) return;
+    const ab = new AbortController(), w = el.clientWidth || 1200, h = el.clientHeight || 800, W = 2400, H = Math.round((W * h) / w);
+    setPhoto({ p: 0, abort: ab });
+    try {
+      const { photoRender } = await import('./photo');
+      const img = await photoRender({ project, nest, stoneUrl: stone.url, finish: stoneFinish(project, own.en), from: v, W, H, samples: 160, signal: ab.signal, onProgress: (p, img) => setPhoto((x) => x && { ...x, p, img }) });
+      setPhoto({ p: 1, img, done: true, abort: ab });
+    } catch (e) { if ((e as Error).name !== 'AbortError') setErr(`הצילום נכשל: ${(e as Error).message}`); setPhoto(null); }
+  }
+  const savePhoto = () => { if (!photo?.img) return; const a = document.createElement('a'); a.href = photo.img; a.download = `${project.name || 'barstone'} - צילום.jpg`; a.click(); };
 
   useEffect(() => {
     const el = host.current!; let renderer: THREE.WebGLRenderer;
@@ -30,9 +47,14 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
     const KELVIN: Record<number, number> = { 3000: 0xffb46b, 4000: 0xffdcb4, 6000: 0xdfeaff };
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.1); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.02; sun.shadow.radius = 5; scene.add(sun, sun.target);
     const camera = new THREE.PerspectiveCamera(36, 1, 0.05, 80);
+    // הצללה במגעים ובפינות (GTAO): מתחת לארונות, בין משטח לחיפוי, ליד הכיור. בטלפון — בלי, לטובת מהירות.
+    const ao = !still && !matchMedia('(max-width: 820px)').matches, composer = ao ? new EffectComposer(renderer) : null;
+    let gtao: GTAOPass | null = null;
+    if (composer) { composer.addPass(new RenderPass(scene, camera)); gtao = new GTAOPass(scene, camera, 600, 400); gtao.blendIntensity = 0.85; gtao.updateGtaoMaterial({ radius: 0.28, distanceExponent: 1.4, thickness: 1, scale: 1 }); composer.addPass(gtao); composer.addPass(new OutputPass()); }
+    const draw = () => (composer ? composer.render() : renderer.render(scene, camera));
     const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.09; controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.minDistance = 0.8; controls.maxDistance = 18;
     let dirty = true, raf = 0, group: THREE.Group | null = null, first = true;
-    const size = () => { const w = el.clientWidth || 600, h = el.clientHeight || 400; renderer.setSize(w, h, false); renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%'; camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true; };
+    const size = () => { const w = el.clientWidth || 600, h = el.clientHeight || 400; renderer.setSize(w, h, false); renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%'; camera.aspect = w / h; camera.updateProjectionMatrix(); composer?.setPixelRatio(renderer.getPixelRatio()); composer?.setSize(w, h); dirty = true; };
     const ro = new ResizeObserver(size); ro.observe(el); size();
     controls.addEventListener('change', () => (dirty = true));
     const place = (c: Cam, b: Built) => {
@@ -43,7 +65,7 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
       if (c === 'front') camera.position.set(b.center.x, 1.25, b.center.z + d * 1.02);
       controls.update(); dirty = true;
     };
-    const loop = () => { raf = requestAnimationFrame(loop); if (!still) controls.update(); if (dirty) { dirty = false; renderer.render(scene, camera); } };
+    const loop = () => { raf = requestAnimationFrame(loop); if (!still) controls.update(); if (dirty) { dirty = false; draw(); } };
     api.current = {
       rebuild(b, light, kelvin) {
         if (group) { scene.remove(group); disposeGroup(group); }
@@ -61,22 +83,23 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
       },
       cam(c) { if (api.current?.built) place(c, api.current.built); },
       focus() { const b = api.current?.built, s = b?.sinks[0]; if (!b || !s) return; const k = s.z > b.center.z ? -1 : 1; controls.target.set(s.x, s.y - 0.08, s.z); camera.position.set(s.x - 0.25, s.y + 0.95, s.z + 0.95 * k); controls.update(); dirty = true; },
+      view() { return { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov }; },
       shot() {
         const w = el.clientWidth, h = el.clientHeight, W = 3840, Hh = Math.round((W * h) / w), pr = renderer.getPixelRatio();
-        renderer.setPixelRatio(1); renderer.setSize(W, Hh, false); renderer.render(scene, camera);
+        renderer.setPixelRatio(1); renderer.setSize(W, Hh, false); composer?.setPixelRatio(1); composer?.setSize(W, Hh); draw();
         const url = renderer.domElement.toDataURL('image/jpeg', 0.94);
-        renderer.setPixelRatio(pr); size(); renderer.render(scene, camera); return url;
+        renderer.setPixelRatio(pr); size(); draw(); return url;
       },
     };
     loop();
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); if (group) disposeGroup(group); pm.dispose(); renderer.dispose(); renderer.domElement.remove(); api.current = null; };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); controls.dispose(); composer?.dispose(); gtao?.dispose(); if (group) disposeGroup(group); pm.dispose(); renderer.dispose(); renderer.domElement.remove(); api.current = null; };
   }, []);
 
   useEffect(() => {
     let live = true;
-    const t = setTimeout(() => { loadTex(stone.url).catch(() => null).then((tex) => { if (live && api.current) api.current.rebuild(buildKitchen(project, nest, tex), project.light || 'day', project.kelvin || 4000); }); }, 60);
+    const t = setTimeout(() => { loadTex(stone.url).catch(() => null).then((tex) => { if (live && api.current) api.current.rebuild(buildKitchen(project, nest, tex, stoneFinish(project, own.en)), project.light || 'day', project.kelvin || 4000); }); }, 60);
     return () => { live = false; clearTimeout(t); };
-  }, [project, nest, stone.url]);
+  }, [project, nest, stone.url, own.en]);
 
   useEffect(() => { if (still) return; const f = () => setTimeout(() => api.current?.focus(), 120); addEventListener('bs-focus-sink', f); return () => removeEventListener('bs-focus-sink', f); }, [still]);
   const save = () => { const url = api.current?.shot(); if (!url) return; const a = document.createElement('a'); a.href = url; a.download = `${project.name || 'barstone'}-4K.jpg`; a.click(); };
@@ -86,9 +109,16 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
         <span className="tag badge">הדמיה חיה · תלת־ממד</span>
         <div className="tools">
           <div className="pill">{(['persp', 'top', 'front'] as Cam[]).map((c) => <button key={c} className={cam === c ? 'on' : ''} onClick={() => { setCam(c); api.current?.cam(c); }}>{c === 'persp' ? 'פרספקטיבה' : c === 'top' ? 'מלמעלה' : 'חזית'}</button>)}</div>
-          <div className="pill">{project.cutouts.some((c) => c.kind === 'sink') && <button title="זום לכיור" onClick={() => api.current?.focus()}>כיור</button>}<button title="שמירת תמונה ברזולוציית 4K" onClick={save}><Icon.download />4K</button>{onMax && <button title={max ? 'חזרה לתצוגה מפוצלת' : 'מסך מלא'} className={max ? 'on' : ''} onClick={onMax}><Icon.max /></button>}</div>
+          <div className="pill">{project.cutouts.some((c) => c.kind === 'sink') && <button title="זום לכיור" onClick={() => api.current?.focus()}>כיור</button>}<button title="שמירת תמונה ברזולוציית 4K" onClick={save}><Icon.download />4K</button><button title="צילום פוטו־ריאליסטי מהזווית הנוכחית (חצי דקה עד דקה וחצי)" onClick={takePhoto} disabled={!!photo}>צילום מקצועי</button>{onMax && <button title={max ? 'חזרה לתצוגה מפוצלת' : 'מסך מלא'} className={max ? 'on' : ''} onClick={onMax}><Icon.max /></button>}</div>
         </div>
       </>}
+      {photo && <div className="photo-ov">
+        <div className="photo-box glass">
+          {photo.img ? <img src={photo.img} alt="צילום" /> : <div className="ph"><span className="spin dark" /></div>}
+          <div className="row">{photo.done ? <><b>הצילום מוכן</b><span className="sp" /><button className="btn" onClick={() => setPhoto(null)}>סגירה</button><button className="btn primary" onClick={savePhoto}><Icon.download />שמירה</button></>
+            : <><span className="mute">מחשב אור פיזיקלי… {Math.round(photo.p * 100)}%</span><div className="bar"><i style={{ width: `${photo.p * 100}%` }} /></div><button className="btn" onClick={() => { photo.abort.abort(); setPhoto(null); }}>ביטול</button></>}</div>
+        </div>
+      </div>}
       {err && <div className="empty" style={{ position: 'absolute', inset: 0, display: 'grid', placeContent: 'center' }}>{err}</div>}
     </div>
   );
