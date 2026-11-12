@@ -1,10 +1,12 @@
 // נסטינג: שיבוץ חלקי המטבח על לוחות (ברירת מחדל 3200×1600 מ"מ). ללא תלות בדפדפן.
 // כל חלק נחתך יחד עם פסי הקנט הארוכים שלו כ"בלוק" אחד, כדי שהגיד ימשיך מהמשטח אל הקנט.
-import { Cutout, Piece, Project, Side, longIsX, pieceLen, pieceWid } from './model';
+import { Cutout, PLINTH_H, Piece, Project, Side, isVertical, longIsX, pieceLen, pieceWid } from './model';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface Strip { side: Side; rect: Rect }
 export interface Placement {
+  /** מזהה יציב של השיבוץ (לסידור ידני). */
+  key: string;
   pieceId: string;
   slab: number;
   /** מלבן גוף החלק על הלוח. */
@@ -31,11 +33,14 @@ export interface NestResult {
   slabs: { w: number; h: number; placements: Placement[]; used: number }[];
   unplaced: { pieceId: string; len: number; wid: number; reason: string }[];
   joints: Joint[];
+  /** מפתחות של שיבוצים ידניים שחופפים זה לזה או חורגים מהלוח. */
+  overlaps: string[];
   metrics: { slabs: number; utilization: number; pieceArea: number; slabArea: number; apronLen: number; joints: number };
 }
 
-interface Block { pieceId: string; L: number; H: number; wid: number; seg: number; segs: number; off: number; lock: boolean; stripsBefore: Side[]; stripsAfter: Side[]; stripOf?: Side; extra?: string }
+interface Block { key: string; pieceId: string; L: number; H: number; wid: number; seg: number; segs: number; off: number; lock: boolean; stripsBefore: Side[]; stripsAfter: Side[]; stripOf?: Side; extra?: string }
 interface Opts { W: number; H: number; kerf: number; margin: number; apronH: number }
+type Manual = NonNullable<Project['manual']>;
 
 const hit = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
@@ -72,20 +77,28 @@ function toBlocks(project: Project, o: Opts): Block[] {
     const aprons = o.apronH > 0 ? p.aprons : [];
     const before = aprons.filter((s) => s === longSides[0]), after = aprons.filter((s) => s === longSides[1]);
     const prefer = p.joint === 'sink' || p.joint === 'cooktop' ? project.cutouts.filter((c) => c.pieceId === p.id && c.kind === p.joint).map((c) => (lx ? c.x + c.w / 2 : c.y + c.h / 2)) : [];
-    const pts = splitPoints(len, maxL, keepZones(p, project.cutouts), prefer);
+    const custom = [...new Set((p.jointAt || []).map(Math.round))].filter((v) => v > 20 && v < len - 20).sort((a, b) => a - b), cpts = [0, ...custom, len];
+    // חיבורים ידניים תקפים רק אם כל מקטע נכנס בלוח; אחרת חוזרים לאוטומטי
+    const pts = custom.length && cpts.every((v, i) => !i || v - cpts[i - 1] <= maxL) ? cpts : splitPoints(len, maxL, keepZones(p, project.cutouts), prefer);
     const segs = pts.length - 1;
     for (let i = 0; i < segs; i++) {
       const L = pts[i + 1] - pts[i];
-      blocks.push({ pieceId: p.id, L, wid, H: wid + (before.length + after.length) * (o.kerf + o.apronH), seg: i, segs, off: pts[i], lock: p.grainLock, stripsBefore: before, stripsAfter: after });
+      blocks.push({ key: `${p.id}|${i}`, pieceId: p.id, L, wid, H: wid + (before.length + after.length) * (o.kerf + o.apronH), seg: i, segs, off: pts[i], lock: p.grainLock, stripsBefore: before, stripsAfter: after });
     }
     // קנט בצדדים הקצרים: פס נפרד
-    for (const s of aprons.filter((s) => !longSides.includes(s))) blocks.push({ pieceId: p.id, L: wid, wid: o.apronH, H: o.apronH, seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], stripOf: s });
+    for (const s of aprons.filter((s) => !longSides.includes(s))) blocks.push({ key: `${p.id}|k-${s}`, pieceId: p.id, L: wid, wid: o.apronH, H: o.apronH, seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], stripOf: s });
   }
   // כיור בנוי מאבן: תחתית + 4 דפנות (ובכיור כפול גם מחיצה) נחתכים מהלוח
   for (const c of project.cutouts.filter((c) => c.kind === 'sink' && c.built)) {
     const t = project.thickness, D = 200, parts: [string, number, number][] = [['כיור · תחתית', c.w, c.h], ['כיור · דופן', c.w, D], ['כיור · דופן', c.w, D], ['כיור · דופן', c.h - 2 * t, D], ['כיור · דופן', c.h - 2 * t, D]];
     if (c.bowls && c.bowls !== 'single') parts.push(['כיור · מחיצה', c.h - 2 * t, D - 20]);
-    for (const [name, a, b] of parts) blocks.push({ pieceId: c.pieceId, L: Math.max(a, b), wid: Math.min(a, b), H: Math.min(a, b), seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], extra: name });
+    parts.forEach(([name, a, b], n) => blocks.push({ key: `${c.id}|s${n}`, pieceId: c.pieceId, L: Math.max(a, b), wid: Math.min(a, b), H: Math.min(a, b), seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], extra: name }));
+  }
+  // צוקל מאבן: פס בגובה הצוקל לאורך חזית הארונות (באי — מכל הצדדים)
+  if (project.plinthStone && project.cabinets) for (const p of project.pieces.filter((q) => !isVertical(q) && q.kind !== 'panel')) {
+    const runs = p.kind === 'island' ? [p.w, p.w, p.h, p.h] : [pieceLen(p)];
+    let n = 0;
+    for (const run of runs) for (let left = run; left > 1; left -= maxL) blocks.push({ key: `${p.id}|z${n++}`, pieceId: p.id, L: Math.min(left, maxL), wid: PLINTH_H, H: PLINTH_H, seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], extra: 'צוקל' });
   }
   return blocks;
 }
@@ -132,14 +145,25 @@ function place(bl: Block, r: Rect & { rot: boolean }, slab: number, o: Opts): Pl
     bl.stripsBefore.forEach((s, i) => strips.push({ side: s, rect: { x: r.x + i * step, y: r.y, w: o.apronH, h: bl.L } }));
     bl.stripsAfter.forEach((s, i) => strips.push({ side: s, rect: { x: body.x + bl.wid + o.kerf + i * step, y: r.y, w: o.apronH, h: bl.L } }));
   }
-  return { pieceId: bl.pieceId, slab, body, block: { x: r.x, y: r.y, w: r.w, h: r.h }, rot: r.rot, seg: bl.seg, segs: bl.segs, off: bl.off, len: bl.L, strips, stripOf: bl.stripOf, extra: bl.extra };
+  return { key: bl.key, pieceId: bl.pieceId, slab, body, block: { x: r.x, y: r.y, w: r.w, h: r.h }, rot: r.rot, seg: bl.seg, segs: bl.segs, off: bl.off, len: bl.L, strips, stripOf: bl.stripOf, extra: bl.extra };
 }
 
-function pack(blocks: Block[], o: Opts) {
+function pack(blocks: Block[], o: Opts, manual: Manual = {}) {
   const slabs: { mr: ReturnType<typeof maxRects>; placements: Placement[] }[] = [];
   const unplaced: Block[] = [];
   const fits = (b: Block) => (b.L <= o.W - 2 * o.margin && b.H <= o.H - 2 * o.margin) || (!b.lock && b.H <= o.W - 2 * o.margin && b.L <= o.H - 2 * o.margin);
+  const slabAt = (i: number) => { while (slabs.length <= i) slabs.push({ mr: maxRects(o.W, o.H, o), placements: [] }); return slabs[i]; };
+  // קודם החלקים שסודרו ידנית: הם תופסים את מקומם, והשאר מסתדרים סביבם
+  const fixed = new Set<string>();
   for (const bl of blocks) {
+    const m = manual[bl.key]; if (!m || !fits(bl)) continue;
+    const rot = !!m.rot && !bl.lock, w = rot ? bl.H : bl.L, h = rot ? bl.L : bl.H;
+    if (w > o.W || h > o.H) continue;
+    const r = { x: Math.round(Math.max(0, Math.min(o.W - w, m.x))), y: Math.round(Math.max(0, Math.min(o.H - h, m.y))), w, h, rot }, s = slabAt(Math.max(0, Math.min(40, Math.round(m.slab))));
+    s.mr.take(r); s.placements.push(place(bl, r, slabs.indexOf(s), o)); fixed.add(bl.key);
+  }
+  for (const bl of blocks) {
+    if (fixed.has(bl.key)) continue;
     if (!fits(bl)) { unplaced.push(bl); continue; }
     let done = false;
     for (let i = 0; i < slabs.length && !done; i++) {
@@ -147,12 +171,12 @@ function pack(blocks: Block[], o: Opts) {
       if (r) { slabs[i].mr.take(r); slabs[i].placements.push(place(bl, r, i, o)); done = true; }
     }
     if (!done) {
-      const s = { mr: maxRects(o.W, o.H, o), placements: [] as Placement[] };
-      const r = s.mr.find(bl.L, bl.H, !bl.lock)!;
-      s.mr.take(r); slabs.push(s); s.placements.push(place(bl, r, slabs.length - 1, o));
+      const s = slabAt(slabs.length), r = s.mr.find(bl.L, bl.H, !bl.lock)!;
+      s.mr.take(r); s.placements.push(place(bl, r, slabs.length - 1, o));
     }
   }
-  return { slabs, unplaced };
+  while (slabs.length && !slabs[slabs.length - 1].placements.length) slabs.pop();
+  return { slabs, unplaced, fixed };
 }
 
 const ORDERS: ((a: Block, b: Block) => number)[] = [
@@ -164,7 +188,7 @@ export function nest(project: Project): NestResult {
   const blocks = toBlocks(project, o);
   let best: ReturnType<typeof pack> | null = null, bestScore = Infinity;
   for (const ord of ORDERS) {
-    const r = pack([...blocks].sort(ord), o);
+    const r = pack([...blocks].sort(ord), o, project.manual);
     // פחות לוחות קודם; בשוויון — מעדיף שהלוח האחרון יהיה כמה שיותר ריק (שארית שימושית)
     const last = r.slabs[r.slabs.length - 1];
     const lastUse = last ? last.placements.reduce((s, p) => s + p.block.w * p.block.h, 0) / (o.W * o.H) : 0;
@@ -172,6 +196,13 @@ export function nest(project: Project): NestResult {
     if (score < bestScore) { best = r; bestScore = score; }
   }
   const res = best!;
+  // שיבוצים ידניים שחופפים לחלק אחר או חורגים מהשוליים
+  const overlaps = new Set<string>();
+  res.slabs.forEach((sl) => sl.placements.forEach((a) => {
+    if (!res.fixed.has(a.key)) return;
+    if (a.block.x < o.margin - 0.5 || a.block.y < o.margin - 0.5 || a.block.x + a.block.w > o.W - o.margin + 0.5 || a.block.y + a.block.h > o.H - o.margin + 0.5) overlaps.add(a.key);
+    for (const b of sl.placements) if (b !== a && hit({ x: a.block.x - o.kerf + 0.5, y: a.block.y - o.kerf + 0.5, w: a.block.w + 2 * o.kerf - 1, h: a.block.h + 2 * o.kerf - 1 }, b.block)) { overlaps.add(a.key); if (res.fixed.has(b.key)) overlaps.add(b.key); }
+  }));
   const slabArea = res.slabs.length * o.W * o.H;
   const usedArea = res.slabs.reduce((s, sl) => s + sl.placements.reduce((t, p) => t + p.block.w * p.block.h, 0), 0);
   const pieceArea = project.pieces.reduce((s, p) => s + p.w * p.h, 0);
@@ -181,6 +212,7 @@ export function nest(project: Project): NestResult {
     slabs: res.slabs.map((s) => ({ w: o.W, h: o.H, placements: s.placements, used: Math.round((s.placements.reduce((t, p) => t + p.block.w * p.block.h, 0) / (o.W * o.H)) * 100) })),
     unplaced: res.unplaced.map((b) => ({ pieceId: b.pieceId, len: b.L, wid: b.H, reason: b.lock ? 'גדול מהלוח (כיוון הגיד נעול)' : 'גדול מהלוח' })),
     joints,
+    overlaps: [...overlaps],
     metrics: { slabs: res.slabs.length, utilization: slabArea ? Math.round((usedArea / slabArea) * 100) : 0, pieceArea, slabArea, apronLen, joints: joints.length },
   };
 }

@@ -29,6 +29,12 @@ export interface Piece {
   joint?: 'auto' | 'sink' | 'cooktop';
   /** חיבור הפינה עם המשטח הסמוך: ישר או גרונג 45°. */
   corner?: 'butt' | 'miter';
+  /** מיקומי חיבור ידניים לאורך החלק (מ"מ מתחילתו). ריק = לפי joint. */
+  jointAt?: number[];
+  /** ישיבה (דלפק / אי): הצד שבו המשטח בולט מעבר לארונות, עומק הבליטה ומספר הכיסאות. */
+  seat?: Side;
+  seatDepth?: number;
+  chairs?: number;
   /** מתאר מדויק (מ-DXF), בקואורדינטות מקומיות בתוך w×h. ריק = מלבן. */
   outline?: Pt[];
 }
@@ -52,6 +58,8 @@ export interface Cutout {
   cabinet?: number;
   /** קערה אחת, כפול חצי-חצי, או כפול גדול + קטן. */
   bowls?: 'single' | 'even' | 'ls';
+  /** כיור בנוי: מכסה ניקוז (ונטיל) מאותה אבן. */
+  drainCover?: boolean;
 }
 
 export interface Project {
@@ -81,11 +89,33 @@ export interface Project {
   water?: boolean;
   /** הצגת פנים הארונות (שקוף) — לראות טוחן ומערכת מים. */
   xray?: boolean;
+  /** תאורה מתחת לארונות העליונים (ברירת מחדל: דולקת). */
+  underLight?: boolean;
+  /** גובה הארונות העליונים במ"מ (הקו העליון קבוע ב-220 ס"מ). */
+  upperH?: number;
+  upperStyle?: UpperStyle;
+  /** צבע חזיתות עליונות (ריק = כמו התחתונים) וגוון הזכוכית. */
+  upperColor?: string;
+  glassTint?: string;
+  /** צוקל מאבן (נכנס לנסטינג) במקום צוקל רגיל. */
+  plinthStone?: boolean;
+  /** דגם וגימור הברז מהקטלוג. */
+  faucet?: string;
+  faucetFinish?: string;
+  /** סידור ידני על הלוחות: מפתח שיבוץ → לוח ומיקום. שאר החלקים מסתדרים סביבם. */
+  manual?: Record<string, { slab: number; x: number; y: number; rot?: boolean }>;
   notes: string;
   source: 'manual' | 'dxf' | 'plan' | 'template';
 }
 
+export type UpperStyle = 'doors' | 'klapa' | 'glass' | 'shelves';
+export const UPPER_HE: Record<UpperStyle, string> = { doors: 'דלתות', klapa: 'קלאפות', glass: 'זכוכית', shelves: 'מדפים פתוחים' };
 export const SLAB = { w: 3200, h: 1600 };
+/** הקו העליון של הארונות העליונים, וגובה תחתיתם מהרצפה. */
+export const UPPER_TOP = 2200, PLINTH_H = 100, SEAT_DEPTH = 300, CHAIR_W = 600;
+export const upperBottom = (p: Project) => UPPER_TOP - Math.max(300, Math.min(1200, p.upperH || 700));
+/** מספר הכיסאות לאורך צד הישיבה (כיסא לכל 60 ס"מ, אלא אם נקבע ידנית). */
+export const chairCount = (p: Piece) => (p.seat ? p.chairs ?? Math.max(1, Math.floor(sideLen(p, p.seat) / CHAIR_W)) : 0);
 
 let seq = 0;
 export const uid = (p = 'p') => `${p}${Date.now().toString(36)}${(seq++).toString(36)}${Math.random().toString(36).slice(2, 5)}`;

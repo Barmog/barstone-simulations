@@ -1,8 +1,9 @@
 // הפאנלים של הסטודיו. ימין: השלב הנוכחי במסלול (מידות › אבן › עיצוב › בדיקה › סיכום). שמאל: צ'אט ובודק חכם.
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { CABINETS, FLOORS, Swatch, WALLS } from '../core/catalog';
+import { CABINETS, FAUCETS, FINISHES, FLOORS, GLASS, Swatch, WALLS, faucetById } from '../core/catalog';
+import { factorHe, runningMeters } from '../core/pricing';
 import { exportNestDxf } from '../core/dxf';
-import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SIDE_HE, Side, bounds, isVertical, letter, piece as mkPiece, sinkNet, uid } from '../core/model';
+import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
 import { upgrades } from '../core/upgrades';
 import { OrderStatus, STATUS_HE, isLocal, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
@@ -48,7 +49,7 @@ function addVertical(kind: 'splash' | 'waterfall') {
   if (!fresh.length) return st.setToast(kind === 'splash' ? 'כבר יש חיפוי לצד הזה' : 'כבר יש מפלים לחלק הזה');
   st.apply((pr) => ({ ...pr, pieces: [...pr.pieces, ...fresh.map((s) => mkPiece({ kind, name: kind === 'splash' ? 'חיפוי קיר' : `מפל · ${SIDE_HE[s]}`, w: s === 'back' || s === 'front' ? host.w : host.h, h: kind === 'splash' ? 600 : pr.counterH - pr.thickness, host: host.id, side: s }))] }));
 }
-function addCutout(kind: CutoutKind) {
+function addCutout(kind: CutoutKind, built = false) {
   const st = useStore.getState(), p = st.project!, sel = st.sel?.type === 'piece' ? p.pieces.find((q) => q.id === st.sel!.id) : undefined;
   const host = sel && !isVertical(sel) ? sel : flatOf(p)[0]; if (!host) return st.setToast('קודם מוסיפים משטח');
   const [w, h] = kind === 'sink' ? [760, 400] : kind === 'cooktop' ? [560, 490] : kind === 'faucet' ? [35, 35] : [100, 100];
@@ -57,7 +58,7 @@ function addCutout(kind: CutoutKind) {
   let x = (host.w - w) / 2, y = (host.h - h) / 2;
   if (kind === 'faucet' && sink) { x = sink.x + sink.w / 2 - 17.5; y = Math.max(25, sink.y / 2 - 17.5); }
   else if (host.w >= host.h) { const cand = [host.w * 0.25, host.w * 0.72, host.w * 0.5].map((c) => c - w / 2); x = cand.find((cx) => !used.some((u) => cx < u.x + u.w + 300 && u.x < cx + w + 300)) ?? cand[0]; }
-  const c: Cutout = { id: uid('c'), pieceId: host.id, kind, x: Math.round(Math.max(0, Math.min(host.w - w, x))), y: Math.round(Math.max(0, Math.min(host.h - h, y))), w: Math.min(w, host.w), h: Math.min(h, host.h), round: kind === 'faucet' || undefined, mount: kind === 'sink' ? 'under' : undefined };
+  const c: Cutout = { id: uid('c'), pieceId: host.id, kind, x: Math.round(Math.max(0, Math.min(host.w - w, x))), y: Math.round(Math.max(0, Math.min(host.h - h, y))), w: Math.min(w, host.w), h: Math.min(h, host.h), round: kind === 'faucet' || undefined, mount: kind === 'sink' ? 'under' : undefined, built: built || undefined, cabinet: built ? 800 : undefined };
   st.apply((pr) => ({ ...pr, cutouts: [...pr.cutouts, c] })); st.select({ type: 'cutout', id: c.id });
 }
 
@@ -66,7 +67,7 @@ export function setSplash(pr: Project, mode: 'none' | '60' | 'uppers' | 'ceiling
   const hosts = pr.pieces.filter((q) => q.kind === 'counter' && q.wall), ids = new Set(hosts.map((q) => q.id));
   const rest = pr.pieces.filter((q) => !(q.kind === 'splash' && q.host && ids.has(q.host)));
   if (mode === 'none') return { ...pr, pieces: rest };
-  const h = mode === '60' ? 600 : mode === 'uppers' ? 1500 - pr.counterH : Math.min(2500 - pr.counterH, pr.slabH - 2 * pr.margin); // עד התקרה, מוגבל לרוחב הלוח
+  const h = mode === '60' ? 600 : mode === 'uppers' ? upperBottom(pr) - pr.counterH : Math.min(2500 - pr.counterH, pr.slabH - 2 * pr.margin); // עד התקרה, מוגבל לרוחב הלוח
   return { ...pr, pieces: [...rest, ...hosts.map((q) => mkPiece({ kind: 'splash', name: 'חיפוי קיר', w: q.wall === 'back' || q.wall === 'front' ? q.w : q.h, h, host: q.id, side: q.wall }))] };
 }
 const NOTE_VEINS = 'ההדמיה להמחשה בלבד — אין התחייבות לגידים. מיקום וכיוון הגידים בפועל משתנים מלוח ללוח.';
@@ -80,6 +81,7 @@ export function LeftPanel() {
   const errors = issues.filter((x) => x.level === 'error').length, warns = issues.filter((x) => x.level === 'warn').length;
   const dxf = () => { if (!nest) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportNestDxf(nest.slabs)], { type: 'application/dxf' })); a.download = `${order.title}-nesting.dxf`; a.click(); URL.revokeObjectURL(a.href); };
 
+  const rm = runningMeters(project);
   let body: ReactNode;
   if (step === 'dims') body = <>
     <Inspector />
@@ -98,7 +100,7 @@ export function LeftPanel() {
       <div className="chips">
         <button className="chip" onClick={() => addPiece('counter')}>+ משטח</button><button className="chip" onClick={() => addPiece('island')}>+ אי</button>
         <button className="chip" onClick={() => addVertical('splash')}>+ חיפוי</button><button className="chip" onClick={() => addVertical('waterfall')}>+ מפל</button>
-        <button className="chip" onClick={() => addCutout('sink')}>+ כיור</button><button className="chip" onClick={() => addCutout('cooktop')}>+ כיריים</button><button className="chip" onClick={() => addCutout('faucet')}>+ ברז</button>
+        <button className="chip" onClick={() => addCutout('sink')}>+ כיור</button><button className="chip" onClick={() => addCutout('sink', true)}>+ כיור בנוי</button><button className="chip" onClick={() => addCutout('cooktop')}>+ כיריים</button><button className="chip" onClick={() => addCutout('faucet')}>+ ברז</button>
       </div>
     </section>
   </>;
@@ -136,8 +138,21 @@ export function LeftPanel() {
       <div className="chips">
         <button className={`chip ${project.cabinets ? 'on' : ''}`} onClick={() => set({ cabinets: !project.cabinets })}>ארונות תחתונים</button>
         <button className={`chip ${project.uppers ? 'on' : ''}`} onClick={() => set({ uppers: !project.uppers })}>ארונות עליונים</button>
+        <button className={`chip ${project.plinthStone ? 'on' : ''}`} onClick={() => set({ plinthStone: !project.plinthStone })}>צוקל מאבן</button>
       </div>
     </section>
+    {project.uppers && <section>
+      <span className="cap">ארונות עליונים</span>
+      <div className="chips">{(Object.keys(UPPER_HE) as UpperStyle[]).map((k) => <button key={k} className={`chip ${(project.upperStyle || 'doors') === k ? 'on' : ''}`} onClick={() => set({ upperStyle: k })}>{UPPER_HE[k]}</button>)}</div>
+      <div className="grid2">
+        <Num label="גובה הארון" value={project.upperH || 700} min={300} onChange={(v) => apply((p) => { const was = upperBottom(p), np = { ...p, upperH: Math.min(1200, v) }; return { ...np, pieces: p.pieces.map((q) => (q.kind === 'splash' && q.h === was - p.counterH ? { ...q, h: upperBottom(np) - p.counterH } : q)) }; })} />
+        <div className="field"><span>מרווח מעל המשטח</span><div className="input mono" style={{ background: 'rgba(27,26,24,.04)' }}>{cm(upperBottom(project) - project.counterH)}</div></div>
+      </div>
+      <div className="row"><span className="mute" style={{ fontSize: 12 }}>צבע החזיתות העליונות</span><span className="sp" />{project.upperColor && <button className="link" style={{ fontSize: 12 }} onClick={() => set({ upperColor: undefined })}>כמו התחתונים</button>}</div>
+      <Swatches items={CABINETS} value={project.upperColor || project.cabinetColor} onPick={(hex) => set({ upperColor: hex })} />
+      {project.upperStyle === 'glass' && <><span className="mute" style={{ fontSize: 12 }}>גוון הזכוכית</span><Swatches items={GLASS} value={project.glassTint || GLASS[0].hex} onPick={(hex) => set({ glassTint: hex })} /></>}
+      {project.upperStyle !== 'shelves' && <div className="chips"><button className={`chip ${project.underLight !== false ? 'on' : ''}`} onClick={() => set({ underLight: project.underLight === false })}>תאורה מתחת לארונות</button></div>}
+    </section>}
     <section>
       <div className="row"><span className="cap">ריצוף</span><span className="sp" /><span className="mute" style={{ fontSize: 12 }}>{FLOORS.find((f) => f.id === project.floor)?.name}</span></div>
       <div className="swatches">{FLOORS.map((f) => <button key={f.id} className={`sw ${project.floor === f.id ? 'on' : ''}`} title={f.name} onClick={() => set({ floor: f.id })}><i style={{ background: f.type === 'checker' ? `conic-gradient(${f.a} 25%, ${f.b} 0 50%, ${f.a} 0 75%, ${f.b} 0) 0 0/50% 50%` : f.type === 'plank' ? `repeating-linear-gradient(0deg, ${f.a} 0 7px, ${f.b} 7px 14px)` : f.type === 'tile' ? `linear-gradient(${f.line} 1px, transparent 1px) 0 0/50% 50%, linear-gradient(90deg, ${f.line} 1px, ${f.a} 1px) 0 0/50% 50%` : `radial-gradient(${f.b} 15%, ${f.a} 16%) 0 0/9px 9px` }} /><span>{f.name}</span></button>)}</div>
@@ -145,6 +160,12 @@ export function LeftPanel() {
     <section>
       <span className="cap">חיפוי קיר</span>
       <div className="chips">{([['none', 'בלי'], ['60', '60 ס"מ'], ['uppers', 'עד הארונות'], ['ceiling', 'עד התקרה']] as const).map(([k, v]) => <button key={k} className="chip" onClick={() => apply((p) => setSplash(p, k))}>{v}</button>)}</div>
+      {project.pieces.some((q) => q.kind === 'splash') && <Num label="גובה החיפוי (חופשי)" value={project.pieces.find((q) => q.kind === 'splash')!.h} min={50} onChange={(v) => set({ pieces: project.pieces.map((q) => (q.kind === 'splash' ? { ...q, h: Math.min(v, project.slabH - 2 * project.margin) } : q)) })} />}
+    </section>
+    <section>
+      <span className="cap">ברז</span>
+      <select className="input" value={faucetById(project.faucet).id} onChange={(e) => { const f = faucetById(e.target.value); set({ faucet: f.id, faucetFinish: f.finishes.includes(project.faucetFinish || '') ? project.faucetFinish : f.finishes[0], water: f.water ? true : project.water }); }}>{FAUCETS.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+      <div className="chips">{faucetById(project.faucet).finishes.map((k) => <button key={k} className={`chip ${(project.faucetFinish || faucetById(project.faucet).finishes[0]) === k ? 'on' : ''}`} onClick={() => set({ faucetFinish: k })}><i style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 5, background: FINISHES[k].hex, marginInlineEnd: 5, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.3)' }} />{FINISHES[k].name}</button>)}</div>
     </section>
     <section>
       <span className="cap">תאורה</span>
@@ -158,7 +179,8 @@ export function LeftPanel() {
         <button className={`chip ${project.water ? 'on' : ''}`} onClick={() => set({ water: !project.water, xray: !project.water ? true : project.xray })}>מערכת מים</button>
         <button className={`chip ${project.xray ? 'on' : ''}`} onClick={() => set({ xray: !project.xray })}>הצג את פנים הארון</button>
       </div>
-      <div className="mute" style={{ fontSize: 12.5 }}>הטוחן ומערכת המים מוצגים בתוך ארון הכיור. "פנים הארון" הופך את הארונות לשקופים.</div>
+      <div className="mute" style={{ fontSize: 12.5 }}>טוחן נובו (1 כ"ס) תלוי בקו התחתון של הכיור, עם כפתור אוויר על המשטח. מערכת המים: מחמם, מקרר ומסנן בארון הכיור, וברז ייעודי על המשטח. "פנים הארון" הופך את הארונות לשקופים.</div>
+      {project.cutouts.some((c) => c.kind === 'sink') && <button className="btn sm" onClick={() => dispatchEvent(new CustomEvent('bs-focus-sink'))}><Icon.max />זום לכיור</button>}
     </section>
     <section>
       <span className="cap">צבע קיר</span>
@@ -210,6 +232,11 @@ export function LeftPanel() {
       ))}
     </section>
     <section>
+      <div className="row"><span className="cap">מטר רץ לחישוב</span><span className="sp" /><b className="mono">{rm.total.toFixed(2)}</b></div>
+      <table className="rm"><tbody>{rm.rows.map((r) => <tr key={r.id}><td>{r.name}</td><td className="mono">{cm(r.len)}×{cm(r.wid)}</td><td>{factorHe(r.factor)}</td><td className="mono">{r.rm.toFixed(2)}</td></tr>)}</tbody></table>
+      <div className="mute" style={{ fontSize: 12 }}>לפי רוחב: עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול.</div>
+    </section>
+    <section>
       <span className="cap">סיכום</span>
       <div className="metrics">
         <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>שטח · מ"ר</small><b>{m2(m?.pieceArea || 0)}</b></div>
@@ -235,7 +262,7 @@ export function LeftPanel() {
 }
 
 function Inspector() {
-  const project = useStore((s) => s.project)!, sel = useStore((s) => s.sel);
+  const project = useStore((s) => s.project)!, sel = useStore((s) => s.sel), nest = useStore((s) => s.nest);
   const { patchPiece, patchCutout, remove, apply } = useStore.getState();
   if (!sel) return <div className="note">לחצו על חלק או על פתח בשרטוט כדי לשנות אותו.</div>;
   const card = { background: '#fff', margin: '0 -4px', padding: 12, borderRadius: 16, boxShadow: 'var(--sh1), inset 0 0 0 1px var(--sand2)' };
@@ -256,6 +283,9 @@ function Inspector() {
           <div className="field"><span>אם צריך חיבור (חלק מעל אורך הלוח)</span><div className="chips">{([['auto', 'אוטומטי'], ['sink', 'במרכז הכיור'], ['cooktop', 'במרכז הכיריים']] as const).map(([k, v]) => <button key={k} className={`chip ${(p.joint || 'auto') === k ? 'on' : ''}`} onClick={() => up({ joint: k })}>{v}</button>)}</div></div>
           <div className="field"><span>חיבור פינה עם המשטח הסמוך</span><div className="chips">{([['butt', 'ישר'], ['miter', 'גרונג 45°']] as const).map(([k, v]) => <button key={k} className={`chip ${(p.corner || 'butt') === k ? 'on' : ''}`} onClick={() => up({ corner: k })}>{v}</button>)}</div></div>
         </>}
+        {!vert && <div className="field"><span>ישיבה (בליטה לכיסאות){Math.min(p.w, p.h) > 800 && !p.seat ? ' · מומלץ מעל 80 ס"מ' : ''}</span><div className="chips"><button className={`chip ${!p.seat ? 'on' : ''}`} onClick={() => up({ seat: undefined, chairs: undefined })}>בלי</button>{SIDES.filter((s) => s !== p.wall).map((s) => <button key={s} className={`chip ${p.seat === s ? 'on' : ''}`} onClick={() => up({ seat: s, chairs: undefined })}>{SIDE_HE[s]}</button>)}</div></div>}
+        {!vert && p.seat && <div className="grid2"><Num label="עומק הבליטה" value={p.seatDepth || SEAT_DEPTH} min={150} onChange={(v) => up({ seatDepth: Math.min(600, v) })} /><label className="field"><span>כיסאות<i style={{ fontStyle: 'normal', opacity: 0.7 }}>60 ס"מ לכיסא</i></span><input type="number" min={0} max={12} key={chairCount(p)} defaultValue={chairCount(p)} onBlur={(e) => up({ chairs: Math.max(0, Math.min(12, Math.round(+e.target.value))) })} /></label></div>}
+        {(() => { const js = (nest?.joints || []).filter((j) => j.pieceId === p.id).map((j) => j.at); if (!js.length && !p.jointAt?.length) return null; return <div className="field"><span>מיקום החיבורים (ס"מ מתחילת החלק)</span><div className="grid2">{js.map((at, n) => <Num key={n} label={`חיבור ${n + 1}`} value={at} min={30} onChange={(v) => up({ jointAt: js.map((x, i) => (i === n ? Math.min(pieceLen(p) - 30, v) : x)) })} />)}</div><div className="row">{p.jointAt?.length ? <button className="link" style={{ fontSize: 12.5 }} onClick={() => up({ jointAt: undefined })}>חזרה לחיבור אוטומטי</button> : <span className="mute" style={{ fontSize: 12 }}>שינוי המיקום מעדכן מיד את הלוחות למטה.</span>}</div></div>; })()}
         <div className="chips"><button className={`chip ${p.grainLock ? 'on' : ''}`} onClick={() => up({ grainLock: !p.grainLock })}>{p.grainLock ? 'כיוון גיד נעול' : 'גיד חופשי (מותר לסובב)'}</button></div>
         {p.outline && <div className="note">החלק בצורה לא מלבנית (מה-DXF). שינוי מידות יהפוך אותו למלבן.</div>}
       </section>
@@ -277,7 +307,8 @@ function Inspector() {
         <div className="field"><span>סוג הכיור</span><div className="seg"><button className={!c.built ? 'on' : ''} onClick={() => up({ built: false })}>כיור קנוי</button><button className={c.built ? 'on' : ''} onClick={() => up({ built: true, mount: 'under' })}>בנוי מאבן</button></div></div>
         <div className="field"><span>רוחב ארון הכיור</span><div className="chips">{[600, 700, 800, 900].map((w) => <button key={w} className={`chip ${c.cabinet === w ? 'on' : ''}`} onClick={() => { const n = sinkNet(w, !!c.built, project.thickness), nw = Math.min(n.w, host.w - 120); up({ cabinet: w, w: nw, h: Math.min(n.h, host.h - 100), x: cl(c.x + (c.w - nw) / 2, host.w - nw) }); }}>{w / 10}</button>)}</div></div>
         <div className="field"><span>קערות</span><div className="chips">{([['single', 'אחת'], ['even', 'כפול חצי־חצי'], ['ls', 'כפול גדול + קטן']] as const).map(([k, v]) => <button key={k} className={`chip ${(c.bowls || 'single') === k ? 'on' : ''}`} onClick={() => up({ bowls: k })}>{v}</button>)}</div></div>
-        <div className="note">נטו משוער: <span className="mono">{cm(c.w)}×{cm(c.h)}</span> ס"מ{c.bowls === 'even' ? ` · כל קערה כ-${cm((c.w - 14) / 2)}` : c.bowls === 'ls' ? ` · כ-${cm(c.w * 0.6 - 7)} + ${cm(c.w * 0.4 - 7)}` : ''}{c.cabinet ? ` · ארון ${c.cabinet / 10}` : ''}. {c.built ? 'כיור בנוי: התחתית והדפנות נחתכות מהלוח ונכנסות לנסטינג.' : 'פלוס־מינוס, תלוי בדגם הכיור.'}</div>
+        {c.built && <div className="chips"><button className={`chip ${c.drainCover ? 'on' : ''}`} onClick={() => up({ drainCover: !c.drainCover })}>ונטיל מאבן (מכסה ניקוז)</button><button className="chip" onClick={() => dispatchEvent(new CustomEvent('bs-focus-sink', { detail: c.id }))}>זום לכיור בהדמיה</button></div>}
+        <div className="note">נטו משוער: <span className="mono">{cm(c.w)}×{cm(c.h)}</span> ס"מ{c.bowls === 'even' ? ` · כל קערה כ-${cm((c.w - 14) / 2)}` : c.bowls === 'ls' ? ` · כ-${cm(c.w * 0.6 - 7)} + ${cm(c.w * 0.4 - 7)}` : ''}{c.cabinet ? ` · ארון ${c.cabinet / 10}` : ''}. {c.built ? 'כיור בנוי בהתקנה תחתונה: ארבע דפנות ותחתית נחתכות מהלוח ונכנסות לנסטינג.' : 'פלוס־מינוס, תלוי בדגם הכיור.'}</div>
       </>}
       {c.kind === 'faucet' && <div className="mute" style={{ fontSize: 12.5 }}>בשדה "דגם" אפשר לרשום את הברז (למשל ברז מערכת מים 3 דרכים).</div>}
       {c.kind === 'sink' && <div className="field"><span>התקנה</span><div className="seg">{([['under', 'תחתונה'], ['flush', 'שטוחה'], ['top', 'עליונה']] as const).map(([k, v]) => <button key={k} className={c.mount === k ? 'on' : ''} onClick={() => up({ mount: k })}>{v}</button>)}</div></div>}
@@ -285,7 +316,7 @@ function Inspector() {
   );
 }
 
-const QUICK = ['תזיז את הכיור 20 ס"מ שמאלה', 'תוסיף אי של 2 מטר', 'תאורת ערב', 'חיפוי עד התקרה', 'בלי ארונות עליונים'];
+const QUICK = ['מטבח L 3.2 על 2.4 מטר', 'תוסיף אי של 2 מטר', 'ישיבה עם 3 כיסאות', 'כיור בנוי עם ונטיל', 'צוקל מאבן', 'תאורת ערב'];
 
 export function RightPanel({ onClose }: { onClose?: () => void }) {
   const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), issues = useStore((s) => s.issues), chat = useStore((s) => s.chat);
@@ -321,7 +352,7 @@ export function RightPanel({ onClose }: { onClose?: () => void }) {
           {busy && <div className="bubble ai"><span className="spin dark" /></div>}
         </div>
         {!chat.length && <div className="chips">{QUICK.map((q) => <button key={q} className="chip" onClick={() => send(q)}>{q}</button>)}</div>}
-        <div className="chatin"><textarea rows={1} value={text} placeholder="כתבו כאן…" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} /><button className="btn sm primary icon" title="שליחה" disabled={busy || !text.trim()} onClick={() => send(text)}><Icon.back /></button></div>
+        <div className="chatin"><textarea rows={1} value={text} placeholder="כתבו כאן, למשל: מטבח ישר 3.5 מטר עם אי…" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} /><button className="btn sm primary icon" title="שליחה" disabled={busy || !text.trim()} onClick={() => send(text)}><Icon.back /></button></div>
       </section>
       <section>
         <div className="row"><span className="cap">בודק חכם</span><span className="sp" />{issues.some((i) => i.level === 'error') ? <span className="badge err">{issues.filter((i) => i.level === 'error').length} שגיאות</span> : issues.some((i) => i.level === 'warn') ? <span className="badge warn">{issues.filter((i) => i.level === 'warn').length} אזהרות</span> : <span className="badge ok">תקין</span>}</div>

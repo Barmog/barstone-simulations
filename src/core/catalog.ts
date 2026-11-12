@@ -34,3 +34,28 @@ export const WALLS: Swatch[] = [
   { id: 'white', name: 'לבן', hex: '#f4f2ee' }, { id: 'warm', name: 'לבן חם', hex: '#efe8dc' }, { id: 'greige', name: 'גרייז׳', hex: '#d8d1c5' },
   { id: 'sage', name: 'מרווה', hex: '#c5ccbb' }, { id: 'blue', name: 'תכלת אפרפר', hex: '#c3ccd3' }, { id: 'charcoal', name: 'פחם', hex: '#55575a' },
 ];
+
+// ----- ברזי מטבח (מהקטלוג בדרייב) -----
+export interface FaucetModel { id: string; name: string; finishes: string[]; /** פרמטרים לצורה בהדמיה (מ"מ). */ h: number; reach: number; tube: number; base: number; baseH: number; lever: 'pin' | 'blade' | 'paddle' | 'tear' | 'two'; head: number; water?: boolean }
+const ALL = ['chrome', 'black', 'gold', 'rose', 'graphite', 'nickel'], NO_CHROME = ALL.slice(1);
+export const FAUCETS: FaucetModel[] = [
+  { id: 'K149', name: 'K149 · מינימליסטי', finishes: ALL, h: 400, reach: 210, tube: 11, base: 24, baseH: 110, lever: 'pin', head: 12 },
+  { id: 'K570', name: 'K570 · מודרני', finishes: ALL, h: 410, reach: 220, tube: 12, base: 27, baseH: 90, lever: 'pin', head: 13 },
+  { id: 'K569', name: 'K569 · בסיס רך', finishes: NO_CHROME, h: 400, reach: 215, tube: 11, base: 30, baseH: 70, lever: 'blade', head: 12 },
+  { id: 'K655', name: 'K655 · צינור ישר', finishes: NO_CHROME, h: 420, reach: 232, tube: 14, base: 25, baseH: 40, lever: 'blade', head: 14 },
+  { id: 'K727', name: 'K727 · דק במיוחד', finishes: NO_CHROME, h: 390, reach: 190, tube: 9, base: 20, baseH: 60, lever: 'pin', head: 10 },
+  { id: 'K121', name: 'K121 · קלאסי', finishes: NO_CHROME, h: 400, reach: 210, tube: 12, base: 28, baseH: 120, lever: 'tear', head: 20 },
+  { id: 'K114', name: 'K114 · קשת רחבה', finishes: NO_CHROME, h: 380, reach: 250, tube: 14, base: 30, baseH: 80, lever: 'paddle', head: 18 },
+  { id: 'K816', name: 'K816 · לבן', finishes: ['white'], h: 400, reach: 210, tube: 12, base: 25, baseH: 80, lever: 'pin', head: 13 },
+  { id: '4in1', name: 'ברז 4in1 · מים מסוננים חמים וקרים', finishes: ['black', 'nickel', 'graphite', 'gold'], h: 430, reach: 220, tube: 13, base: 28, baseH: 100, lever: 'two', head: 15, water: true },
+];
+export const FINISHES: Record<string, { name: string; hex: string; rough: number }> = {
+  chrome: { name: 'כרום', hex: '#d5d8dc', rough: 0.12 }, black: { name: 'שחור', hex: '#1b1b1d', rough: 0.45 }, gold: { name: 'זהב', hex: '#c9a45c', rough: 0.25 },
+  rose: { name: 'רוז גולד', hex: '#c98f7a', rough: 0.25 }, graphite: { name: 'גרפיט', hex: '#55585d', rough: 0.3 }, nickel: { name: 'ניקל מוברש', hex: '#b9b6ae', rough: 0.38 }, white: { name: 'לבן', hex: '#f3f3f1', rough: 0.4 },
+};
+export const faucetById = (id?: string) => FAUCETS.find((f) => f.id === id) || FAUCETS[0];
+/** גווני זכוכית לוויטרינות. */
+export const GLASS: Swatch[] = [
+  { id: 'clear', name: 'שקופה', hex: '#dfeeee' }, { id: 'smoke', name: 'מעושנת', hex: '#6f7275' }, { id: 'bronze', name: 'ברונזה', hex: '#9a7b5c' }, { id: 'black', name: 'שחורה', hex: '#2a2c2e' },
+  { id: 'fluted', name: 'חלבית', hex: '#f1f3f2' }, { id: 'green', name: 'ירקרקה', hex: '#a9c7b8' }, { id: 'blue', name: 'כחלחלה', hex: '#a9c0d6' }, { id: 'amber', name: 'ענבר', hex: '#c9a26a' },
+];

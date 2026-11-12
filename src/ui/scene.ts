@@ -1,8 +1,8 @@
 // בניית סצנת התלת־ממד מתוך מודל המטבח. יחידות: מטר. x בתוכנית → x, y בתוכנית → z, גובה → y.
 import * as THREE from 'three';
-import { Cutout, Piece, Project, Side, corners, hostEdge, isVertical, longIsX } from '../core/model';
+import { Cutout, PLINTH_H, Piece, Project, SEAT_DEPTH, Side, UPPER_TOP, chairCount, corners, hostEdge, isVertical, longIsX, upperBottom } from '../core/model';
 import { NestResult, Placement, Rect, isBody, localToSlab, segLocal } from '../core/nesting';
-import { floorById } from '../core/catalog';
+import { FINISHES, faucetById, floorById } from '../core/catalog';
 
 const S = 0.001;
 function floorTexture(id: string) {
@@ -40,7 +40,7 @@ function floorTexture(id: string) {
   t.repeat.set(rep, rep); return t;
 }
 
-export interface Built { group: THREE.Group; center: THREE.Vector3; radius: number; lamps: THREE.Vector3[] }
+export interface Built { group: THREE.Group; center: THREE.Vector3; radius: number; lamps: THREE.Vector3[]; sinks: THREE.Vector3[] }
 
 /** r פחות c: עד ארבעה מלבנים (לפתח שחיבור עובר דרכו). */
 function subtract(r: Rect, c: Rect): Rect[] {
@@ -53,6 +53,10 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
   const group = new THREE.Group(), H = project.counterH, T = project.thickness;
   const stone = new THREE.MeshPhysicalMaterial({ map: stoneTex, color: stoneTex ? 0xffffff : 0xe6e1d8, roughness: 0.26, clearcoat: 0.4, clearcoatRoughness: 0.22, envMapIntensity: 0.95 });
   const cab = new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62, transparent: !!project.xray, opacity: project.xray ? 0.2 : 1, depthWrite: !project.xray });
+  const upColor = project.upperColor || project.cabinetColor, upStyle = project.upperStyle || 'doors';
+  const upMat = new THREE.MeshStandardMaterial({ color: upColor, roughness: 0.6 });
+  const glass = new THREE.MeshPhysicalMaterial({ color: project.glassTint || '#cfe3e6', roughness: 0.06, metalness: 0, transparent: true, opacity: 0.32, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false });
+  const sinks: THREE.Vector3[] = [];
   const lamps: THREE.Vector3[] = [], seam = new THREE.MeshBasicMaterial({ color: 0x3a342c, transparent: true, opacity: 0.55 });
   const mirror = project.bookmatch === 'yes';
   const dark = new THREE.MeshStandardMaterial({ color: 0x1f1e1c, roughness: 0.5, metalness: 0.3 });
@@ -115,11 +119,14 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
     // --- ארונות תחתונים ---
     if (project.cabinets && p.kind !== 'panel') {
       const front: Side = p.wall === 'back' ? 'front' : p.wall === 'front' ? 'back' : p.wall === 'left' ? 'right' : p.wall === 'right' ? 'left' : p.w >= p.h ? 'front' : 'right';
-      const ins = (s: Side) => (p.wall === s ? 0 : s === front ? 30 : p.kind === 'island' ? 30 : 4) + (project.pieces.some((w) => w.kind === 'waterfall' && w.host === p.id && w.side === s) ? T : 0);
-      const x0 = p.x + ins('left'), x1 = p.x + p.w - ins('right'), z0 = p.y + ins('back'), z1 = p.y + p.h - ins('front'), toe = 100, ch = H - T - toe;
-      box(x1 - x0, ch, z1 - z0, cab, (x0 + x1) / 2, toe + ch / 2, (z0 + z1) / 2);
+      const ins = (s: Side) => (p.seat === s ? p.seatDepth || SEAT_DEPTH : p.wall === s ? 0 : s === front ? 30 : p.kind === 'island' ? 30 : 4) + (project.pieces.some((w) => w.kind === 'waterfall' && w.host === p.id && w.side === s) ? T : 0);
+      const x0 = p.x + ins('left'), x1 = p.x + p.w - ins('right'), z0 = p.y + ins('back'), z1 = p.y + p.h - ins('front'), toe = PLINTH_H, ch = H - T - toe, toeMat = project.plinthStone ? stone : dark;
+      // גוף הארון חלול מתחת לכיור, כדי שהכיור, הטוחן ומערכת המים יהיו אמיתיים בפנים
+      let bodies: Rect[] = [{ x: x0, y: z0, w: x1 - x0, h: z1 - z0 }];
+      for (const c of cuts.filter((q) => q.kind === 'sink')) bodies = bodies.flatMap((r) => subtract(r, { x: p.x + c.x - T - 8, y: p.y + c.y - T - 8, w: c.w + 2 * T + 16, h: c.h + 2 * T + 16 }));
+      for (const r of bodies) box(r.w, ch, r.h, cab, r.x + r.w / 2, toe + ch / 2, r.y + r.h / 2);
       const e = hostEdge({ ...p, x: x0, y: z0, w: x1 - x0, h: z1 - z0 }, front);
-      box(e.dx ? x1 - x0 : x1 - x0 - 70, toe, e.dx ? z1 - z0 - 70 : z1 - z0, dark, (x0 + x1) / 2 - (e.dx ? 0 : e.nx * 35), toe / 2, (z0 + z1) / 2 - (e.dx ? e.ny * 35 : 0));
+      box(e.dx ? x1 - x0 : x1 - x0 - 70, toe, e.dx ? z1 - z0 - 70 : z1 - z0, toeMat, (x0 + x1) / 2 - (e.dx ? 0 : e.nx * 35), toe / 2, (z0 + z1) / 2 - (e.dx ? e.ny * 35 : 0));
       const doors = Math.max(1, Math.round(e.len / 600)), dw = e.len / doors;
       for (let i = 0; i < doors; i++) {
         const a = dw * (i + 0.5), cx = e.x + e.dx * a + e.nx * 9, cz = e.y + e.dy * a + e.ny * 9;
@@ -127,46 +134,144 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
         box(e.dx ? 150 : 10, 10, e.dx ? 10 : 150, dark, cx + e.nx * 16, toe + ch - 48, cz + e.ny * 16);
       }
     }
+    // --- כיסאות בר בצד הישיבה ---
+    if (p.seat) {
+      const e = hostEdge(p, p.seat), n = chairCount(p), sh = H - 250, wood = new THREE.MeshStandardMaterial({ color: 0x2a2724, roughness: 0.55 }), pad = new THREE.MeshStandardMaterial({ color: 0xb9a688, roughness: 0.8 });
+      for (let i = 0; i < n; i++) {
+        const a = (e.len / n) * (i + 0.5), cx = e.x + e.dx * a + e.nx * 120, cz = e.y + e.dy * a + e.ny * 120;
+        const seat = new THREE.Mesh(new THREE.CylinderGeometry(185 * S, 170 * S, 45 * S, 28), pad); seat.position.set(cx * S, sh * S, cz * S); add(seat);
+        const back = new THREE.Mesh(new THREE.BoxGeometry((e.dx ? 320 : 22) * S, 190 * S, (e.dx ? 22 : 320) * S), pad); back.position.set((cx + e.nx * 170) * S, (sh + 130) * S, (cz + e.ny * 170) * S); add(back);
+        for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(11 * S, 9 * S, (sh - 20) * S, 8), wood); leg.position.set((cx + ox * 140) * S, ((sh - 20) / 2) * S, (cz + oz * 140) * S); add(leg); }
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(175 * S, 7 * S, 6, 28), wood); ring.rotation.x = Math.PI / 2; ring.position.set(cx * S, 230 * S, cz * S); add(ring);
+      }
+    }
     // --- קיר וארונות עליונים ---
     if (p.wall) {
       const e = hostEdge(p, p.wall), wh = 2500, wt = 100, cx = e.x + (e.dx * e.len) / 2 + (e.nx * wt) / 2, cz = e.y + (e.dy * e.len) / 2 + (e.ny * wt) / 2;
       const w = box(e.dx ? e.len + 900 : wt, wh, e.dx ? wt : e.len + 900, wallMat, cx, wh / 2, cz); w.traverse((o) => (o.castShadow = false));
       if (project.uppers && p.kind === 'counter' && e.len > 900) {
-        const d = 350, uh = 700, ub = 1500, ux = e.x + (e.dx * e.len) / 2 - (e.nx * d) / 2, uz = e.y + (e.dy * e.len) / 2 - (e.ny * d) / 2;
-        box(e.dx ? e.len : d, uh, e.dx ? d : e.len, cab, ux, ub + uh / 2, uz);
-        const n = Math.max(1, Math.round(e.len / 600));
-        for (let i = 1; i < n; i++) { const a = (e.len / n) * i; box(e.dx ? 3 : 4, uh - 4, e.dx ? 4 : 3, dark, e.x + e.dx * a - e.nx * (d + 1), ub + uh / 2, e.y + e.dy * a - e.ny * (d + 1)); }
-        const lamp = new THREE.Mesh(new THREE.BoxGeometry((e.dx ? e.len - 80 : 14) * S, 6 * S, (e.dx ? 14 : e.len - 80) * S), new THREE.MeshBasicMaterial({ color: 0xfff1d6 })); lamp.position.set((ux - e.nx * 60) * S, (ub - 4) * S, (uz - e.ny * 60) * S); group.add(lamp);
-        for (const f of e.len > 2200 ? [0.2, 0.5, 0.8] : [0.3, 0.7]) lamps.push(new THREE.Vector3((e.x + e.dx * e.len * f - e.nx * 200) * S, (ub - 60) * S, (e.y + e.dy * e.len * f - e.ny * 200) * S));
+        const d = 350, ub = upperBottom(project), uh = UPPER_TOP - ub, ux = e.x + (e.dx * e.len) / 2 - (e.nx * d) / 2, uz = e.y + (e.dy * e.len) / 2 - (e.ny * d) / 2;
+        const along = (a: number, off: number, y: number, w: number, h: number, t: number, mat: THREE.Material) => box(e.dx ? w : t, h, e.dx ? t : w, mat, e.x + e.dx * a - e.nx * off, y, e.y + e.dy * a - e.ny * off);
+        if (upStyle === 'shelves') {
+          // מדפים פתוחים: שלושה מדפים עבים וכמה פריטים עליהם
+          const rows = uh > 800 ? 3 : 2;
+          for (let r = 0; r < rows; r++) { const y = ub + (uh / rows) * r + 20; along(e.len / 2, 150, y, e.len - 60, 40, 300, upMat);
+            for (let k = 0; k < Math.floor(e.len / 520); k++) { const a = 200 + k * 520 + (r % 2) * 160; if (a > e.len - 200) break; const hh = 110 + ((k * 37 + r * 53) % 120), col = [0xd9cdb8, 0x8a8f7d, 0xf1ede4, 0x5c5248][(k + r) % 4]; along(a, 150, y + 20 + hh / 2, 90 + ((k * 29) % 60), hh, 110, new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 })); } }
+        } else if (upStyle === 'glass') {
+          // ויטרינה: גוף פתוח, מדפים וחזית זכוכית בגוון נבחר
+          along(e.len / 2, 9, ub + uh / 2, e.len, uh, 18, upMat); along(e.len / 2, d / 2, ub + 9, e.len, 18, d, upMat); along(e.len / 2, d / 2, ub + uh - 9, e.len, 18, d, upMat);
+          for (const a of [9, e.len - 9]) along(a, d / 2, ub + uh / 2, 18, uh, d, upMat);
+          for (let r = 1; r < 3; r++) along(e.len / 2, d / 2, ub + (uh / 3) * r, e.len - 36, 10, d - 30, glass);
+          const n = Math.max(1, Math.round(e.len / 500)), w = e.len / n;
+          for (let i = 0; i < n; i++) { const a = w * (i + 0.5); along(a, d + 3, ub + uh / 2, w - 44, uh - 44, 5, glass);
+            along(a, d + 3, ub + 11, w - 4, 22, 20, upMat); along(a, d + 3, ub + uh - 11, w - 4, 22, 20, upMat); along(a - w / 2 + 11, d + 3, ub + uh / 2, 22, uh, 20, upMat); along(a + w / 2 - 11, d + 3, ub + uh / 2, 22, uh, 20, upMat); }
+        } else {
+          box(e.dx ? e.len : d, uh, e.dx ? d : e.len, upMat, ux, ub + uh / 2, uz);
+          if (upStyle === 'klapa') {
+            // קלאפות: חזיתות רחבות שנפתחות למעלה, בשתי שורות כשהארון גבוה
+            const n = Math.max(1, Math.round(e.len / 900)), rows = uh >= 600 ? 2 : 1;
+            for (let i = 1; i < n; i++) along((e.len / n) * i, d + 1, ub + uh / 2, 4, uh - 4, 3, dark);
+            for (let r = 1; r < rows; r++) along(e.len / 2, d + 1, ub + (uh / rows) * r, e.len - 4, 4, 3, dark);
+          } else { const n = Math.max(1, Math.round(e.len / 600)); for (let i = 1; i < n; i++) along((e.len / n) * i, d + 1, ub + uh / 2, 4, uh - 4, 3, dark); }
+        }
+        if (project.underLight !== false && upStyle !== 'shelves') {
+          const lamp = new THREE.Mesh(new THREE.BoxGeometry((e.dx ? e.len - 80 : 14) * S, 6 * S, (e.dx ? 14 : e.len - 80) * S), new THREE.MeshBasicMaterial({ color: 0xfff1d6 })); lamp.position.set((ux - e.nx * 60) * S, (ub - 4) * S, (uz - e.ny * 60) * S); group.add(lamp);
+          for (const f of e.len > 2200 ? [0.2, 0.5, 0.8] : [0.3, 0.7]) lamps.push(new THREE.Vector3((e.x + e.dx * e.len * f - e.nx * 200) * S, (ub - 60) * S, (e.y + e.dy * e.len * f - e.ny * 200) * S));
+        }
       }
     }
     // --- כיור, ברז, כיריים ---
     for (const c of cuts) {
       const cx = p.x + c.x + c.w / 2, cz = p.y + c.y + c.h / 2;
       if (c.kind === 'sink') {
-        const depth = 210, inner = c.built ? new THREE.MeshPhysicalMaterial({ map: stoneTex, color: stoneTex ? 0xdddddd : 0xd6d1c8, roughness: 0.3, side: THREE.BackSide }) : new THREE.MeshStandardMaterial({ color: 0xb4b8bd, roughness: 0.3, metalness: 0.92, side: THREE.BackSide });
-        const basin = new THREE.Mesh(new THREE.BoxGeometry((c.w - 2) * S, depth * S, (c.h - 2) * S), inner); basin.position.set(cx * S, (H - T - depth / 2 + 1) * S, cz * S); basin.receiveShadow = true; group.add(basin);
-        // תחתית הכיור כפי שהיא נראית דרך הפתח (מעל גוף הארון)
-        const pan = new THREE.Mesh(new THREE.PlaneGeometry((c.w - 6) * S, (c.h - 6) * S), c.built ? new THREE.MeshPhysicalMaterial({ map: stoneTex, color: 0xcfcfcf, roughness: 0.35 }) : new THREE.MeshStandardMaterial({ color: 0x8e9398, roughness: 0.35, metalness: 0.85 })); pan.rotation.x = -Math.PI / 2; pan.position.set(cx * S, (H - T + 1) * S, cz * S); pan.receiveShadow = true; group.add(pan);
-        const horiz = c.w >= c.h, bowls = c.bowls && c.bowls !== 'single' ? (c.bowls === 'even' ? [0.5] : [0.6]) : [];
-        for (const f of bowls) box(horiz ? 14 : c.w - 6, T - 2, horiz ? c.h - 6 : 14, c.built ? stone : steel, p.x + c.x + (horiz ? c.w * f : c.w / 2), H - T / 2, p.y + c.y + (horiz ? c.h / 2 : c.h * f));
+        const depth = 200, horiz = c.w >= c.h, bowls = c.bowls && c.bowls !== 'single' ? (c.bowls === 'even' ? [0.5] : [0.6]) : [];
+        const fb = c.built ? T : 3, yb = H - T - depth; // תחתית הכיור (פנים)
+        sinks.push(new THREE.Vector3(cx * S, H * S, cz * S));
+        // אבן לחלקי הכיור: UV לפי המידה האמיתית, כדי שהגיד לא יימתח
+        const sbox = (w: number, h: number, d: number, x: number, y: number, z: number, seed: number) => {
+          const g = new THREE.BoxGeometry(w * S, h * S, d * S), uv = g.attributes.uv as THREE.BufferAttribute, su = Math.max(w, d) / project.slabW, sv = Math.max(h, Math.min(w, d)) / project.slabH, ou = (seed * 0.173) % (1 - su), ov = (seed * 0.291) % (1 - sv);
+          for (let i = 0; i < uv.count; i++) uv.setXY(i, ou + uv.getX(i) * su, ov + uv.getY(i) * sv);
+          const m = new THREE.Mesh(g, stone); m.position.set(x * S, y * S, z * S); return add(m);
+        };
+        if (c.built) {
+          // כיור בנוי בהתקנה תחתונה: ארבע דפנות ותחתית מאותה אבן, עם קווי הדבקה בפינות
+          sbox(c.w + 2 * T, depth, T, cx, yb + depth / 2, p.y + c.y - T / 2, 1); sbox(c.w + 2 * T, depth, T, cx, yb + depth / 2, p.y + c.y + c.h + T / 2, 2);
+          sbox(T, depth, c.h, p.x + c.x - T / 2, yb + depth / 2, cz, 3); sbox(T, depth, c.h, p.x + c.x + c.w + T / 2, yb + depth / 2, cz, 4);
+          sbox(c.w + 2 * T, T, c.h + 2 * T, cx, yb - T / 2, cz, 5);
+          const ln = (w: number, h: number, d: number, x: number, y: number, z: number) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, h * S, d * S), seam); m.position.set(x * S, y * S, z * S); group.add(m); };
+          for (const [sx, sz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) ln(2.4, depth, 2.4, p.x + c.x + sx * c.w + (sx ? -0.8 : 0.8), yb + depth / 2, p.y + c.y + sz * c.h + (sz ? -0.8 : 0.8));
+          for (const sz of [0, 1]) ln(c.w, 2.4, 2.4, cx, yb + 1.2, p.y + c.y + sz * c.h + (sz ? -0.8 : 0.8));
+          for (const sx of [0, 1]) ln(2.4, 2.4, c.h, p.x + c.x + sx * c.w + (sx ? -0.8 : 0.8), yb + 0.8, cz);
+          ln(c.w, 1.2, 1.2, cx, H - T - 0.4, p.y + c.y + 0.6); ln(c.w, 1.2, 1.2, cx, H - T - 0.4, p.y + c.y + c.h - 0.6); // קו ההדבקה מתחת למשטח
+        } else {
+          const basin = new THREE.Mesh(new THREE.BoxGeometry((c.w + 4) * S, depth * S, (c.h + 4) * S), new THREE.MeshStandardMaterial({ color: 0xb4b8bd, roughness: 0.3, metalness: 0.92, side: THREE.BackSide })); basin.position.set(cx * S, (yb + depth / 2) * S, cz * S); basin.receiveShadow = true; group.add(basin);
+        }
+        for (const f of bowls) (c.built ? sbox : (w: number, h: number, d: number, x: number, y: number, z: number) => box(w, h, d, steel, x, y, z))(horiz ? fb + 2 : c.w, depth - 20, horiz ? c.h : fb + 2, p.x + c.x + (horiz ? c.w * f : c.w / 2), yb + (depth - 20) / 2, p.y + c.y + (horiz ? c.h / 2 : c.h * f), 6);
         const drains = bowls.length ? [bowls[0] / 2, bowls[0] + (1 - bowls[0]) / 2] : [0.5];
-        for (const f of drains) { const drain = new THREE.Mesh(new THREE.CylinderGeometry(28 * S, 28 * S, 4 * S, 24), dark); drain.position.set((p.x + c.x + (horiz ? c.w * f : c.w / 2)) * S, (H - T + 2) * S, (p.y + c.y + (horiz ? c.h / 2 : c.h * f)) * S); group.add(drain); }
-        // מוצרים נלווים בתוך ארון הכיור
-        if (project.disposal) { const d = new THREE.Mesh(new THREE.CylinderGeometry(95 * S, 80 * S, 300 * S, 28), new THREE.MeshStandardMaterial({ color: 0x2b2d30, roughness: 0.45, metalness: 0.5 })); d.position.set((p.x + c.x + (horiz ? c.w * drains[0] : c.w / 2)) * S, (H - T - 190) * S, cz * S); group.add(d); const cap = new THREE.Mesh(new THREE.CylinderGeometry(60 * S, 95 * S, 40 * S, 28), steel); cap.position.set(d.position.x, (H - T - 22) * S, cz * S); group.add(cap); }
+        drains.forEach((f, n) => {
+          const dx = p.x + c.x + (horiz ? c.w * f : c.w / 2), dz = p.y + c.y + (horiz ? c.h / 2 : c.h * f);
+          const ring = new THREE.Mesh(new THREE.CylinderGeometry(45 * S, 45 * S, 3 * S, 28), c.built && c.drainCover ? dark : steel); ring.position.set(dx * S, (yb + 1.5) * S, dz * S); group.add(ring);
+          if (c.built && c.drainCover) { box(166, 5, 166, dark, dx, yb + 2.5, dz); sbox(150, T * 0.7, 150, dx, yb + 7 + T * 0.35, dz, 7 + n); } // ונטיל: מכסה ניקוז מאותה אבן, מורם מעט מעל התחתית
+          else { const hole = new THREE.Mesh(new THREE.CylinderGeometry(30 * S, 30 * S, 3.4 * S, 24), dark); hole.position.set(dx * S, (yb + 1.6) * S, dz * S); group.add(hole); }
+        });
+        const dX = p.x + c.x + (horiz ? c.w * drains[0] : c.w / 2), dZ = p.y + c.y + (horiz ? c.h / 2 : c.h * drains[0]), under = yb - fb;
+        // --- טוחן אשפה נובו: תלוי ישירות מתחת לניקוז, בקו התחתון של הכיור ---
+        if (project.disposal) {
+          const R = 105, DH = 360, g = new THREE.Group();
+          const gun = new THREE.MeshStandardMaterial({ color: 0x8a8d90, roughness: 0.38, metalness: 0.75 }), rib = new THREE.MeshStandardMaterial({ color: 0x232527, roughness: 0.6, metalness: 0.2 });
+          const pts = (arr: [number, number][]) => arr.map(([r, y]) => new THREE.Vector2(r * S, y * S));
+          const lower = new THREE.Mesh(new THREE.LatheGeometry(pts([[0, 0], [R - 8, 0], [R, 10], [R, DH * 0.5]]), 40), rib); g.add(lower);
+          for (let i = 0; i < 28; i++) { const a = (i / 28) * Math.PI * 2; if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a)) - Math.PI / 2) < 0.75) continue; const r = new THREE.Mesh(new THREE.BoxGeometry(5 * S, DH * 0.46 * S, 3 * S), rib); r.position.set(Math.cos(a) * (R + 0.5) * S, DH * 0.25 * S, Math.sin(a) * (R + 0.5) * S); r.rotation.y = -a + Math.PI / 2; g.add(r); }
+          const upper = new THREE.Mesh(new THREE.LatheGeometry(pts([[R + 1, DH * 0.48], [R + 2, DH * 0.72], [R - 6, DH * 0.86], [R - 28, DH * 0.95], [62, DH]]), 40), gun); g.add(upper);
+          // "לשון" מתכתית שיורדת בחזית עד קרוב לתחתית
+          const tongue = new THREE.Mesh(new THREE.CylinderGeometry((R + 2) * S, (R + 1.5) * S, DH * 0.42 * S, 24, 1, true, -0.62, 1.24), new THREE.MeshStandardMaterial({ color: 0x8a8d90, roughness: 0.38, metalness: 0.75, side: THREE.DoubleSide })); tongue.position.y = DH * 0.29 * S; g.add(tongue);
+          const badge = new THREE.Mesh(new THREE.CylinderGeometry(27 * S, 27 * S, 4 * S, 28), steel); badge.rotation.x = Math.PI / 2; badge.position.set(0, DH * 0.66 * S, (R + 2) * S); g.add(badge);
+          const logo = new THREE.Mesh(new THREE.BoxGeometry(30 * S, 9 * S, 1 * S), dark); logo.position.set(0, DH * 0.66 * S, (R + 4.4) * S); g.add(logo);
+          const neck = new THREE.Mesh(new THREE.CylinderGeometry(48 * S, 60 * S, 26 * S, 28), dark); neck.position.y = (DH + 13) * S; g.add(neck);
+          for (const [r, y, h] of [[78, DH + 30, 8], [66, DH + 44, 14], [80, DH + 58, 7]]) { const ringM = new THREE.Mesh(new THREE.CylinderGeometry(r * S, r * S, h * S, 32), steel); ringM.position.y = y * S; g.add(ringM); }
+          for (let i = 0; i < 3; i++) { const a = (i / 3) * Math.PI * 2 + 0.5, bolt = new THREE.Mesh(new THREE.CylinderGeometry(4 * S, 4 * S, 34 * S, 8), steel); bolt.position.set(Math.cos(a) * 72 * S, (DH + 44) * S, Math.sin(a) * 72 * S); g.add(bolt); }
+          // יציאה צדדית וסיפון לבן
+          const side = horiz ? 1 : 0, elbow = new THREE.Mesh(new THREE.CylinderGeometry(22 * S, 22 * S, 90 * S, 16), rib); elbow.rotation.z = Math.PI / 2; elbow.position.set((R + 35) * S, DH * 0.8 * S, 0); g.add(elbow);
+          const trap = new THREE.Mesh(new THREE.TorusGeometry(48 * S, 20 * S, 10, 20, Math.PI), new THREE.MeshStandardMaterial({ color: 0xf1f1ee, roughness: 0.5 })); trap.rotation.x = Math.PI; trap.position.set((R + 128) * S, DH * 0.8 * S, 0); g.add(trap);
+          const top = under - 66; g.position.set(dX * S, (top - DH) * S, dZ * S); if (!side) g.rotation.y = Math.PI / 2; add(g);
+          // כפתור אוויר על המשטח
+          const fc = cuts.find((q) => q.kind === 'faucet'), bx = fc ? p.x + fc.x + fc.w / 2 + (horiz ? 140 : 0) : cx + c.w / 2 - 60, bz = fc ? p.y + fc.y + fc.h / 2 + (horiz ? 0 : 140) : p.y + Math.max(30, c.y / 2);
+          const fl = new THREE.Mesh(new THREE.CylinderGeometry(27 * S, 27 * S, 5 * S, 28), steel); fl.position.set(bx * S, (H + 2.5) * S, bz * S); add(fl);
+          const bt = new THREE.Mesh(new THREE.CylinderGeometry(15 * S, 16 * S, 7 * S, 24), steel); bt.position.set(bx * S, (H + 7) * S, bz * S); add(bt);
+        }
+        // --- מערכת מים תת־כיורית: מחמם (נירוסטה), מקרר ומסנן תלת־שלבי ---
         if (project.water) {
-          const wx = p.x + c.x + (horiz ? c.w * 0.82 : c.w / 2), wz = p.y + c.y + (horiz ? c.h / 2 - 60 : c.h * 0.82);
-          const unit = new THREE.Mesh(new THREE.BoxGeometry(150 * S, 420 * S, 300 * S), new THREE.MeshStandardMaterial({ color: 0xf2f4f6, roughness: 0.4 })); unit.position.set(wx * S, 330 * S, wz * S); group.add(unit);
-          for (const k of [-1, 0, 1]) { const f = new THREE.Mesh(new THREE.CylinderGeometry(32 * S, 32 * S, 280 * S, 18), new THREE.MeshStandardMaterial({ color: 0x2f7fd0, roughness: 0.35 })); f.position.set((wx - 130) * S, 300 * S, (wz + k * 80) * S); group.add(f); }
+          const wx = p.x + c.x + (horiz ? c.w + T - 95 : c.w / 2), wz = p.y + c.y + (horiz ? c.h / 2 : c.h + T - 95), fy = PLINTH_H + 20;
+          const heater = new THREE.Mesh(new THREE.BoxGeometry((horiz ? 150 : 190) * S, 260 * S, (horiz ? 190 : 150) * S), new THREE.MeshStandardMaterial({ color: 0xbfc3c7, roughness: 0.35, metalness: 0.85 })); heater.position.set(wx * S, (fy + 130) * S, (wz + (horiz ? 60 : 0)) * S); add(heater);
+          const chill = new THREE.Mesh(new THREE.BoxGeometry((horiz ? 190 : 320) * S, 370 * S, (horiz ? 320 : 190) * S), new THREE.MeshStandardMaterial({ color: 0xeceeef, roughness: 0.45 })); chill.position.set((wx - (horiz ? 190 : 0)) * S, (fy + 185) * S, (wz - (horiz ? 0 : 190)) * S); add(chill);
+          for (const k of [0, 1, 2]) { const f = new THREE.Mesh(new THREE.CylinderGeometry(30 * S, 30 * S, 250 * S, 18), new THREE.MeshStandardMaterial({ color: 0xf6f7f8, roughness: 0.4 })), cap = new THREE.Mesh(new THREE.CylinderGeometry(32 * S, 32 * S, 26 * S, 18), new THREE.MeshStandardMaterial({ color: 0x2f7fd0, roughness: 0.4 })); const fx = p.x + c.x + (horiz ? 40 + k * 70 : c.w / 2), fz = p.y + c.y + (horiz ? -T - 40 + c.h + 2 * T + 0 : 40 + k * 70); f.position.set(fx * S, (fy + 300) * S, (horiz ? p.y + c.y + c.h + T - 45 : fz) * S); cap.position.set(f.position.x, (fy + 300 + 138) * S / 1, f.position.z); cap.position.y = (fy + 438) * S; add(f); add(cap); }
         }
       } else if (c.kind === 'cooktop') {
         box(c.w + 24, 6, c.h + 24, new THREE.MeshPhysicalMaterial({ color: 0x0c0c0e, roughness: 0.08, clearcoat: 1 }), cx, H + 3, cz);
         for (const [fx, fy, r] of [[0.28, 0.3, 0.8], [0.72, 0.3, 1], [0.28, 0.72, 1], [0.72, 0.72, 0.8]]) { const ring = new THREE.Mesh(new THREE.RingGeometry(Math.min(c.w, c.h) * 0.15 * r * S, Math.min(c.w, c.h) * 0.165 * r * S, 40), new THREE.MeshBasicMaterial({ color: 0x77777c })); ring.rotation.x = -Math.PI / 2; ring.position.set((p.x + c.x + c.w * fx) * S, (H + 6.4) * S, (p.y + c.y + c.h * fy) * S); group.add(ring); }
       } else if (c.kind === 'faucet') {
-        const sink = cuts.find((q) => q.kind === 'sink'), tx = sink ? p.x + sink.x + sink.w / 2 - cx : 0, tz = sink ? p.y + sink.y + sink.h / 2 - cz : 150, len = Math.hypot(tx, tz) || 1, dx = tx / len, dz = tz / len, reach = Math.min(190, len * 0.75);
-        const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 250, 0), new THREE.Vector3(dx * reach * 0.35, 330, dz * reach * 0.35), new THREE.Vector3(dx * reach * 0.85, 320, dz * reach * 0.85), new THREE.Vector3(dx * reach, 250, dz * reach)].map((q) => q.multiplyScalar(S)));
-        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 11 * S, 14), steel); tube.position.set(cx * S, H * S, cz * S); add(tube);
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(23 * S, 25 * S, 40 * S, 24), steel); base.position.set(cx * S, (H + 20) * S, cz * S); add(base);
+        const sink = cuts.find((q) => q.kind === 'sink'), tx = sink ? p.x + sink.x + sink.w / 2 - cx : 0, tz = sink ? p.y + sink.y + sink.h / 2 - cz : 150, len = Math.hypot(tx, tz) || 1, dx = tx / len, dz = tz / len;
+        const fm = faucetById(project.faucet), fin = FINISHES[project.faucetFinish && fm.finishes.includes(project.faucetFinish) ? project.faucetFinish : fm.finishes[0]];
+        const metal = new THREE.MeshStandardMaterial({ color: fin.hex, roughness: fin.rough, metalness: fin.hex === '#f3f3f1' ? 0.1 : 0.92 });
+        const neck = (ox: number, oz: number, h: number, reach0: number, tube: number, base: number, baseH: number, head: number) => {
+          const reach = Math.min(reach0, len * 0.8), top = h, r = reach / 2;
+          const curve = new THREE.CatmullRomCurve3([[0, baseH], [0, top - r], [reach * 0.15, top - r * 0.3], [reach * 0.5, top], [reach * 0.85, top - r * 0.3], [reach, top - r], [reach, top - r - 60]].map(([a, y]) => new THREE.Vector3(dx * a * S, y * S, dz * a * S)));
+          const tubeM = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, tube * S, 14), metal); tubeM.position.set((cx + ox) * S, H * S, (cz + oz) * S); add(tubeM);
+          const b = new THREE.Mesh(new THREE.CylinderGeometry((fm.id === 'K149' ? tube + 2 : base) * S, base * S, baseH * S, 28), metal); b.position.set((cx + ox) * S, (H + baseH / 2) * S, (cz + oz) * S); add(b);
+          const hd = new THREE.Mesh(new THREE.CylinderGeometry(head * S, (head + (fm.lever === 'tear' ? 8 : 1)) * S, 70 * S, 20), metal); hd.position.set((cx + ox + dx * reach) * S, (H + top - r - 95) * S, (cz + oz + dz * reach) * S); add(hd);
+        };
+        neck(0, 0, fm.h, fm.reach, fm.tube, fm.base, fm.baseH, fm.head);
+        // ידית: בצד הבסיס, בניצב לכיוון הכיור
+        const px = -dz, pz = dx, lv = (w: number, h: number, d: number, off: number, y: number, tilt = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w * S, h * S, d * S), metal); m.position.set((cx + px * off) * S, (H + y) * S, (cz + pz * off) * S); m.rotation.y = Math.atan2(px, pz); m.rotation.x = tilt; add(m); };
+        const valve = new THREE.Mesh(new THREE.CylinderGeometry(15 * S, 15 * S, 34 * S, 18), metal); valve.rotation.z = Math.PI / 2; valve.rotation.y = Math.atan2(-pz, px); valve.position.set((cx + px * (fm.base + 12)) * S, (H + fm.baseH * 0.62) * S, (cz + pz * (fm.base + 12)) * S); add(valve);
+        if (fm.lever === 'pin') lv(5, 70, 5, fm.base + 26, fm.baseH * 0.62 + 32);
+        else if (fm.lever === 'blade') lv(8, 95, 22, fm.base + 26, fm.baseH * 0.62 + 44);
+        else if (fm.lever === 'paddle') lv(10, 26, 90, fm.base + 30, fm.baseH * 0.62 + 16);
+        else if (fm.lever === 'tear') lv(12, 80, 16, fm.base + 28, fm.baseH * 0.62 + 36, 0.25);
+        else { lv(8, 80, 18, fm.base + 26, fm.baseH * 0.62 + 38); const k = new THREE.Mesh(new THREE.CylinderGeometry(13 * S, 13 * S, 26 * S, 18), metal); k.rotation.z = Math.PI / 2; k.rotation.y = Math.atan2(-pz, px); k.position.set((cx - px * (fm.base + 10)) * S, (H + fm.baseH * 0.5) * S, (cz - pz * (fm.base + 10)) * S); add(k); }
+        if (fm.id === 'K121') for (const y of [fm.baseH * 0.3, fm.baseH * 0.95]) { const rg = new THREE.Mesh(new THREE.TorusGeometry((fm.base - 3) * S, 4 * S, 8, 24), metal); rg.rotation.x = Math.PI / 2; rg.position.set(cx * S, (H + y) * S, cz * S); add(rg); }
+        // ברז ייעודי למערכת המים (hc2100), אם הברז הראשי אינו 4in1
+        if (project.water && !fm.water) { const off = 150; neck(-px * off, -pz * off, 243, 120, 8, 17, 46, 8.5); const l2 = new THREE.Mesh(new THREE.BoxGeometry(5 * S, 5 * S, 40 * S), metal); l2.position.set((cx - px * (off + 30)) * S, (H + 34) * S, (cz - pz * (off + 30)) * S); l2.rotation.y = Math.atan2(px, pz); add(l2); }
       }
     }
   }
@@ -204,7 +309,7 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
   const center = new THREE.Vector3(((bx0 + bx1) / 2) * S, 0.75, ((bz0 + bz1) / 2) * S), radius = (Math.hypot(bx1 - bx0, bz1 - bz0) / 2) * S;
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: floorTexture(project.floor), roughness: floorById(project.floor).type === 'plank' ? 0.55 : 0.35 }));
   floor.rotation.x = -Math.PI / 2; floor.position.set(center.x, 0, center.z); floor.receiveShadow = true; group.add(floor);
-  return { group, center, radius, lamps };
+  return { group, center, radius, lamps, sinks };
 }
 
 export function disposeGroup(g: THREE.Object3D) {
