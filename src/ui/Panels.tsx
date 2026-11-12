@@ -105,7 +105,7 @@ export function LeftPanel() {
       <input className="input" type="search" placeholder="חיפוש דגם: שם בעברית, באנגלית או השם הקודם…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="stonegrid">{shown.map((s) => <button key={s.id} className={`stone ${String(s.id) === String(stone.id) ? 'on' : ''}`} title={stoneLabel(s)} onClick={() => set({ stoneId: s.id })}>
         <i style={{ backgroundImage: s.hasImage ? `url("${s.thumb || s.url}")` : undefined }}>{!s.hasImage && 'אין תמונה'}</i>
-        <b>{s.name}</b><small>{s.en || ' '}{s.stock === 'no' ? ' · אין במלאי' : ''}</small>
+        <b>{s.name}</b><small>{s.en || ' '}{s.series ? ` · ${s.series}` : ''}{s.stock === 'no' ? ' · אין במלאי' : ''}</small>
       </button>)}{!shown.length && <div className="mute" style={{ fontSize: 13 }}>לא נמצא דגם בשם הזה.</div>}</div>
       <div className="row"><b style={{ fontSize: 14 }}>{stoneLabel(stone)}</b></div>
       <div style={{ height: 120, borderRadius: 14, background: `#ddd url("${stone.url}") center/cover`, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.2)' }} />
