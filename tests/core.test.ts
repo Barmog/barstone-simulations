@@ -169,3 +169,16 @@ describe('המשכיות גידים: חיפוי, בוק־מאץ׳ ופינה', (
     assertValid(p);
   });
 });
+
+describe('פינה כשהרגל היא זו שכוללת את ריבוע הפינה', () => {
+  it('החיפוי של הקיר האחורי ממשיך אחורה עד הפינה', async () => {
+    const { setSplash, cornerExt } = await import('../src/core/model');
+    const p = emptyProject();
+    const leg = piece({ kind: 'counter', name: 'רגל', x: 0, y: 0, w: 620, h: 2400, wall: 'left' });
+    const back = piece({ kind: 'counter', name: 'אחורי', x: 620, y: 0, w: 3000, h: 620, wall: 'back' });
+    p.pieces.push(leg, back);
+    expect(cornerExt(p, back).lead).toBe(620);
+    const q = setSplash(p, '60'), sp = q.pieces.find((x) => x.kind === 'splash' && x.host === back.id)!;
+    expect(sp.off).toBe(-(620 - p.thickness)); assertValid(q);
+  });
+});
