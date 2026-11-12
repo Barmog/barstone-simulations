@@ -4,7 +4,7 @@ import { CABINETS, FLOORS, Swatch, WALLS } from '../core/catalog';
 import { exportNestDxf } from '../core/dxf';
 import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SIDE_HE, Side, bounds, isVertical, letter, piece as mkPiece, sinkNet, uid } from '../core/model';
 import { upgrades } from '../core/upgrades';
-import { OrderStatus, STATUS_HE, isLocal } from '../data/repo';
+import { OrderStatus, STATUS_HE, isLocal, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
 import { ai, applyDraft, localAssist } from '../ai';
 import { Step, go, useStore } from '../store';
@@ -105,7 +105,7 @@ export function LeftPanel() {
   else if (step === 'stone') body = <>
     <section>
       <span className="cap">לוח</span>
-      <select className="input" value={String(stone.id)} onChange={(e) => { const s = stones.find((x) => String(x.id) === e.target.value); set({ stoneId: s ? s.id : null }); }}>{stones.map((s) => <option key={s.id} value={String(s.id)}>{s.name}{s.stock === 'no' ? ' · אין במלאי' : ''}{s.hasImage ? '' : ' · בלי תמונה'}</option>)}</select>
+      <select className="input" value={String(stone.id)} onChange={(e) => { const s = stones.find((x) => String(x.id) === e.target.value); set({ stoneId: s ? s.id : null }); }}>{stones.map((s) => <option key={s.id} value={String(s.id)}>{stoneLabel(s)}{s.stock === 'no' ? ' · אין במלאי' : ''}{s.hasImage ? '' : ' · בלי תמונה'}</option>)}</select>
       <div style={{ height: 120, borderRadius: 14, background: `#ddd url("${stone.url}") center/cover`, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.2)' }} />
       {stone.stock === 'no' && <div className="note err">הדגם הזה מסומן "אין במלאי". כדאי להציע ללקוח דגם דומה.</div>}
       {!stone.hasImage && <div className="note">לדגם הזה אין עדיין תמונת לוח, ולכן ההדמיה מציגה אבן כללית.</div>}
@@ -215,7 +215,7 @@ export function LeftPanel() {
         <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>שטח · מ"ר</small><b>{m2(m?.pieceArea || 0)}</b></div>
         <div className="metric"><small>חלקים</small><b>{project.pieces.length}</b></div><div className="metric"><small>לבדיקה</small><b>{errors + warns}</b></div>
       </div>
-      <div className="mute" style={{ fontSize: 13 }}>{stone.name} · {project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'בלי קנט'}</div>
+      <div className="mute" style={{ fontSize: 13 }}>{stoneLabel(stone)} · {project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'בלי קנט'}</div>
     </section>
     <button className="btn primary" onClick={() => { flush(); go(`/o/${order.id}/doc`); }}><Icon.doc />מסמך ללקוח</button>
   </>;

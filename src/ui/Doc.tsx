@@ -1,4 +1,5 @@
 // מסמך ללקוח: סיכום ההזמנה להדפסה / שמירה כ-PDF.
+import { stoneLabel } from '../data/repo';
 import { CUT_HE, corners, isVertical, letter } from '../core/model';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
@@ -23,7 +24,7 @@ export function Doc({ id }: { id: string }) {
           <div className="docshot"><View3D still /></div>
           <div className="facts">
             <div><small>תאריך</small><b>{new Date().toLocaleDateString('he-IL')}</b></div><div><small>מספר הזמנה</small><b>{order.order_no || '—'}</b></div>
-            <div><small>אבן</small><b>{stone.name || '—'}</b></div><div><small>עובי · קנט</small><b>{project.thickness} · {project.apronH || 'בלי'} מ"מ</b></div>
+            <div><small>אבן</small><b>{stone.name ? stoneLabel(stone) : '—'}</b></div><div><small>עובי · קנט</small><b>{project.thickness} · {project.apronH || 'בלי'} מ"מ</b></div>
             <div><small>לוחות</small><b>{nest?.metrics.slabs ?? 0}</b></div><div><small>שטח משטחים</small><b>{m2(nest?.metrics.pieceArea || 0)} מ"ר</b></div>
             <div><small>חיבורים</small><b>{nest?.metrics.joints ?? 0}</b></div><div><small>מידת לוח</small><b>{cm(project.slabW)}×{cm(project.slabH)} ס"מ</b></div>
           </div>

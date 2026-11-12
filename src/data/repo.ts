@@ -11,7 +11,9 @@ export interface Customer { id: string; name: string; phone?: string | null; ema
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
 export interface OrderMetrics { slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
 export interface Order { id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
-export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null }
+export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null; en?: string | null; novo?: string | null }
+/** שם דגם לתצוגה: עברית ולצידה השם באנגלית (LUCENTE). */
+export const stoneLabel = (s: { name: string; en?: string | null }) => (s.en ? `${s.name} · ${s.en}` : s.name);
 export const STATUS_HE: Record<OrderStatus, string> = { draft: 'טיוטה', review: 'לעיון הלקוח', approved: 'אושר', production: 'בייצור', done: 'הושלם' };
 
 const J = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) || '') ?? d; } catch { return d; } };
@@ -57,12 +59,17 @@ function demoStones(): Promise<Stone[]> {
 export const repo = {
   async stones(): Promise<Stone[]> {
     if (!sb) return demoStones();
-    let { data, error } = await sb.from('stones').select('id,name,color,tile_path,slab_path,supplier,in_stock,bookmatch').order('name');
-    if (error) ({ data, error } = await sb.from('stones').select('id,name,color,tile_path,slab_path,supplier').order('name') as any); // לפני עדכון הקטלוג
-    if (error || !data?.length) return LOCAL_STONES;
+    // מנסים את העמודות החדשות קודם, ונופלים אחורה אם המסד עוד לא עודכן
+    const cols = ['id,name,color,tile_path,slab_path,supplier,in_stock,bookmatch,name_en,novo_name,novo_no,active', 'id,name,color,tile_path,slab_path,supplier,in_stock,bookmatch', 'id,name,color,tile_path,slab_path,supplier'];
+    let data: any[] | null = null;
+    for (const c of cols) { const r = await sb.from('stones').select(c).order('name'); if (!r.error) { data = r.data; break; } }
+    if (!data?.length) return LOCAL_STONES;
     const rank = { yes: 0, unknown: 1, no: 2 };
+    // slab_path שמתחיל ב-site: הוא תמונה שמגיעה עם האתר (public/slabs); אחרת קובץ באחסון של Supabase
+    const slabUrl = (path: string) => (path.startsWith('site:') ? import.meta.env.BASE_URL + path.slice(5) : sb!.storage.from('slabs').getPublicUrl(path).data.publicUrl);
     return data
-      .map((s: any): Stone => ({ id: s.id, name: s.name, color: s.color, slab: !!s.slab_path, stock: s.in_stock || 'unknown', hasImage: !!(s.slab_path || s.tile_path), bookmatch: s.bookmatch, url: s.slab_path ? sb.storage.from('slabs').getPublicUrl(s.slab_path).data.publicUrl : s.tile_path ? sb.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : STONE_FALLBACK }))
+      .filter((s: any) => s.active !== false)
+      .map((s: any): Stone => ({ id: s.id, name: s.name, en: s.name_en, novo: [s.novo_name, s.novo_no].filter(Boolean).join(' · ') || null, color: s.color, slab: !!s.slab_path, stock: s.in_stock || 'unknown', hasImage: !!(s.slab_path || s.tile_path), bookmatch: s.bookmatch, url: s.slab_path ? slabUrl(s.slab_path) : s.tile_path ? sb!.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : STONE_FALLBACK }))
       .sort((a, b) => Number(b.hasImage) - Number(a.hasImage) || rank[a.stock] - rank[b.stock] || a.name.localeCompare(b.name, 'he'));
   },
   async updateStone(sid: number | string, patch: { in_stock?: string; bookmatch?: boolean | null; name?: string }) { if (sb) ok(await sb.from('stones').update(patch).eq('id', sid).select('id')); },
