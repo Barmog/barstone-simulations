@@ -44,6 +44,9 @@ export function Doc({ id }: { id: string }) {
   }, [key]);
 
   // מסמך שהלקוח חתם עליו נשלח אוטומטית להזמנה בפיירברי (רק להזמנה — לא לכרטיס הלקוח ולא למדידה)
+  // עמודי A3 מוקטנים בדיוק לרוחב המסך (בטלפון אפשר להגדיל בצביטה)
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => { const f = () => setZoom(Math.min(1, (Math.min(window.innerWidth, window.screen?.width || 9999, document.documentElement.clientWidth || 9999) - 24) / 1587)); f(); addEventListener('resize', f); return () => removeEventListener('resize', f); }, []);
   const autoSent = useRef(false);
   useEffect(() => {
     if (autoSent.current || !signed?.signed_at || !order?.fb_id || !order.fb_object || !shots.hero || (nest && !slabs.length)) return;
@@ -112,12 +115,12 @@ export function Doc({ id }: { id: string }) {
         <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" />
         <button className="btn" onClick={() => setShare(true)}>{signed ? '✓ אושר בחתימה' : 'שליחה ללקוח לאישור'}</button>
         <label className="row mute" style={{ fontSize: 13 }}><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />כולל מטר רץ (פנימי)</label>
-        <button className="btn" disabled={!ready || pro !== null} onClick={proCover} title="מחשב את תמונת השער באור פיזיקלי אמיתי">{pro !== null ? <><span className="spin dark" /><span>צילום {Math.round(pro * 100)}%</span></> : <span>צילום מקצועי לשער</span>}</button>
+        <button className="btn hide-m" disabled={!ready || pro !== null} onClick={proCover} title="מחשב את תמונת השער באור פיזיקלי אמיתי">{pro !== null ? <><span className="spin dark" /><span>צילום {Math.round(pro * 100)}%</span></> : <span>צילום מקצועי לשער</span>}</button>
         {order.fb_id && order.fb_object && <button className="btn" disabled={!ready || !!busy} onClick={() => exportPdf(true)}>{busy === 'fb' ? <span className="spin dark" /> : <Icon.send />}<span>{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף לפיירברי'}</span></button>}
         <button className="btn primary" disabled={!ready || !!busy} onClick={() => exportPdf(false)}>{busy === 'pdf' ? <span className="spin" /> : <Icon.download />}<span>{ready ? 'הורדת PDF' : 'מכין הדמיות…'}</span></button>
       </header>
       {share && <ShareModal orderId={id} title={order.title} phone={customer?.phone} onClose={() => { setShare(false); reloadShares(); }} />}
-      <main className="book" ref={book}>
+      <main className="book" ref={book} style={{ ['--z' as string]: zoom }}>
         {page('שער', <>
           <div className="cover">
             <div className="cover-shot"><Shot v="hero" label="" /></div>
