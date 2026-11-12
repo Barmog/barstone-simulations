@@ -8,6 +8,7 @@ import { go, useStore } from '../store';
 import { Icon } from './icons';
 import { asset } from './util';
 import { signOut } from './App';
+import { FbAccount, FbRecord, fireberry } from '../data/fireberry';
 
 type OrderRow = Omit<Order, 'project'>;
 const initials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
@@ -55,6 +56,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
         <span className="sp" />
         {isLocal && <span className="badge sand">מצב הדגמה · נשמר בדפדפן הזה בלבד</span>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/catalog')}><Icon.grid />קטלוג ומלאי</button>}
+        {!isLocal && <button className="btn sm" onClick={() => go('/fireberry')}><Icon.link />פיירברי</button>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/team')}><Icon.team />צוות</button>}
         {email && <button className="btn sm" title={email} onClick={signOut}><Icon.out />יציאה</button>}
       </header>
@@ -113,6 +115,8 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
       </main>
       {editing && (
         <Modal title={editing.id ? 'פרטי לקוח' : 'לקוח חדש'} onClose={() => setEditing(null)}>
+          {!isLocal && !editing.id && <FbPicker onPick={(a) => setEditing({ ...editing, name: a.name, phone: a.phone || editing.phone, email: a.email || editing.email, address: a.address || editing.address, fb_id: a.id })} />}
+          {editing.fb_id && <span className="badge ok" style={{ alignSelf: 'flex-start' }}>מקושר ללקוח בפיירברי</span>}
           <label className="field">שם הלקוח<input autoFocus value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && saveCustomer()} /></label>
           <div className="grid2">
             <label className="field">טלפון<input dir="ltr" value={editing.phone || ''} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></label>
@@ -140,6 +144,11 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const [dxf, setDxf] = useState<{ text: string; name: string; project: Project; info: DxfInfo } | null>(null);
   const [plan, setPlan] = useState<File | null>(null);
+  const [fbObj, setFbObj] = useState<number | null>(null), [fbRecs, setFbRecs] = useState<FbRecord[] | null>(null), [fbRec, setFbRec] = useState<FbRecord | null>(null), [fbErr, setFbErr] = useState('');
+  useEffect(() => {
+    if (!customer.fb_id || !fireberry.available()) return;
+    fireberry.settings().then((st) => { if (!st.object) return; setFbObj(st.object); return fireberry.records(st.object, customer.fb_id!).then(setFbRecs); }).catch((e) => setFbErr((e as Error).message));
+  }, [customer.fb_id]);
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const setToast = useStore((s) => s.setToast);
@@ -167,7 +176,7 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
         if (!r.draft?.pieces?.length) throw new Error(r.reply || 'לא הצלחתי לזהות משטחים.');
         project = { ...applyDraft(emptyProject(title), r.draft), source: 'plan', notes: [r.reply, ...(r.assumptions || []).map((a) => `• ${a}`)].filter(Boolean).join('\n') };
       }
-      const o = await repo.createOrder({ customer_id: customer.id, title: title.trim() || 'מטבח', order_no: no.trim() || undefined, project });
+      const o = await repo.createOrder({ customer_id: customer.id, title: title.trim() || 'מטבח', order_no: no.trim() || undefined, project, ...(fbRec && fbObj ? { fb_object: fbObj, fb_id: fbRec.id } : {}) });
       if (way === 'plan') setToast('התוכנית זוהתה — כדאי לעבור על המידות');
       if (way === 'photo') setToast('המידות מהצילום משוערות — חובה לאמת במדידה');
       go(`/o/${o.id}`);
@@ -180,6 +189,12 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
         <label className="field">שם ההזמנה<input value={title} onChange={(e) => setTitle(e.target.value)} /></label>
         <label className="field">מספר הזמנה (לא חובה)<input dir="ltr" value={no} onChange={(e) => setNo(e.target.value)} /></label>
       </div>
+      {customer.fb_id && fireberry.available() && <div className="col">
+        <span className="cap">הזמנה בפיירברי</span>
+        {fbErr ? <div className="note err">{fbErr}</div> : !fbObj ? <div className="note">כדי לקשר להזמנה בפיירברי, המנהל בוחר במסך "פיירברי" מאיזה אובייקט לוקחים הזמנות.</div>
+          : fbRecs === null ? <span className="spin dark" /> : !fbRecs.length ? <div className="mute" style={{ fontSize: 13 }}>אין רשומות ללקוח הזה בפיירברי.</div>
+          : <div className="chips">{fbRecs.map((r) => <button key={r.id} className={`chip ${fbRec?.id === r.id ? 'on' : ''}`} onClick={() => { setFbRec(fbRec?.id === r.id ? null : r); if (fbRec?.id !== r.id) { if (r.title && title === 'מטבח') setTitle(r.title); if (r.number && !no) setNo(r.number); } }}>{r.title || r.number || 'רשומה'}{r.number && r.title ? ` · ${r.number}` : ''}</button>)}</div>}
+      </div>}
       <div className="ways">
         <button className={`way ${way === 'template' ? 'on' : ''}`} onClick={() => pickWay('template')}><Icon.grid /><b>התחלה מתבנית</b><small>בוחרים צורה ומשנים מידות בגרירה</small></button>
         <button className={`way ${way === 'dxf' ? 'on' : ''}`} onClick={() => pickWay('dxf')}><Icon.file /><b>מדידה קיימת · DXF</b><small>כל המידות והפתחים נקראים מהקובץ, ישר לנסטינג</small></button>
@@ -215,5 +230,24 @@ function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => vo
       <div className="row"><span className="sp" /><button className="btn" onClick={onClose}>ביטול</button>
         <button className="btn primary" disabled={busy || (way === 'dxf' && !dxf?.info.pieces) || ((way === 'plan' || way === 'photo') && !plan)} onClick={create}>{busy ? <><span className="spin" />{way === 'plan' ? 'מזהה את התוכנית…' : way === 'photo' ? 'מנתח את התמונה…' : 'יוצר…'}</> : 'פתיחת הסטודיו'}</button></div>
     </Modal>
+  );
+}
+
+/** חיפוש לקוח בפיירברי לפי שם או טלפון, ומילוי הפרטים בלחיצה. */
+function FbPicker({ onPick }: { onPick: (a: FbAccount) => void }) {
+  const [q, setQ] = useState(''), [res, setRes] = useState<FbAccount[] | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  useEffect(() => {
+    if (q.trim().length < 2) { setRes(null); return; }
+    const t = setTimeout(() => { setBusy(true); setErr(''); fireberry.search(q.trim()).then(setRes).catch((e) => { setErr((e as Error).message); setRes(null); }).finally(() => setBusy(false)); }, 400);
+    return () => clearTimeout(t);
+  }, [q]);
+  return (
+    <div className="col fbpick">
+      <label className="field">ייבוא מפיירברי<input placeholder="שם הלקוח או טלפון" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+      {busy && <span className="spin dark" />}
+      {err && <div className="note err">{err}{/טוקן|חיברת/.test(err) && <> · <a className="link" onClick={() => go('/fireberry')}>חיבור פיירברי</a></>}</div>}
+      {res && (res.length ? <div className="fbres">{res.map((a) => <button key={a.id} className="citem" onClick={() => { onPick(a); setQ(''); setRes(null); }}><div><b>{a.name}</b><small>{[a.phone, a.address].filter(Boolean).join(' · ')}</small></div></button>)}</div>
+        : <div className="mute" style={{ fontSize: 13 }}>לא נמצא לקוח בשם הזה בפיירברי.</div>)}
+    </div>
   );
 }
