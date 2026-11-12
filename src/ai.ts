@@ -127,6 +127,19 @@ export function localAssist(p: Project, text: string): { project?: Project; repl
     const x = Math.max(0, Math.min(host.w - c.w, c.x + dx)), y = Math.max(0, Math.min(host.h - c.h, c.y + dy));
     return { project: { ...p, cutouts: p.cutouts.map((q) => (q.id === c.id ? { ...q, x, y } : q)) }, reply: `הזזתי את ה${mv[1]} ${mm / 10} ס"מ ${dir[1]}.` };
   }
+  if (/(^|\s)(אי|אִי)(\s|$|,)/.test(text) && /(הוסף|תוסיף|להוסיף|רוצה|תבנה|שים)/.test(text)) {
+    // "אי 200 על 100" (ס"מ), "אי 2 על 1 מטר", "אי של 2.4 מטר" — ואם יש גם "מפל" באותו משפט, מוסיפים אותו לאי החדש
+    const toMm = (v: number) => (v < 10 ? v * 1000 : v < 500 ? v * 10 : v);
+    const two = text.match(/(\d+(?:[.,]\d+)?)\s*(?:על|x|×|\*)\s*(\d+(?:[.,]\d+)?)/);
+    let w = mm >= 800 && mm <= 3200 ? mm : 2000, d = 1000;
+    if (two) { const a = toMm(parseFloat(two[1].replace(',', '.'))), b = toMm(parseFloat(two[2].replace(',', '.'))); w = Math.max(a, b); d = Math.min(a, b); }
+    w = Math.max(800, Math.min(3200, w)); d = Math.max(600, Math.min(1600, d));
+    const ys = flat.map((q) => q.y + q.h), xs = flat.map((q) => q.x);
+    const isl = mk({ kind: 'island', name: 'אי', x: xs.length ? Math.min(...xs) : 0, y: (ys.length ? Math.max(...ys) : 0) + 1050, w, h: d, aprons: ['front', 'back', 'left', 'right'] });
+    const wf = /מפל/.test(text) ? (['left', 'right'] as Side[]).map((s) => mk({ kind: 'waterfall', name: 'מפל', w: d, h: p.counterH - p.thickness, host: isl.id, side: s })) : [];
+    const seat = /ישיבה|כיסא/.test(text) && d > 800;
+    return { project: { ...p, pieces: [...p.pieces, seat ? { ...isl, seat: 'back' as Side } : isl, ...wf] }, reply: `הוספתי אי ${w / 10}×${d / 10} ס"מ${wf.length ? ' עם מפל בשני הצדדים' : ''}${seat ? ' וישיבה בצד האחורי' : ''}. אפשר לגרור אותו למקום.` };
+  }
   if (/מפל/.test(text)) {
     const isl = flat.find((q) => q.kind === 'island' && !p.pieces.some((w) => w.kind === 'waterfall' && w.host === q.id));
     if (!isl) return { reply: 'אין אי בלי מפל. אפשר לבקש קודם "תוסיף אי".' };
@@ -138,10 +151,6 @@ export function localAssist(p: Project, text: string): { project?: Project; repl
     const host = flat.find((q) => q.wall && !p.pieces.some((w) => w.kind === 'splash' && w.host === q.id));
     if (!host) return { reply: 'לכל המשטחים שצמודים לקיר כבר יש חיפוי.' };
     return { project: { ...p, pieces: [...p.pieces, mk({ kind: 'splash', name: 'חיפוי קיר', w: host.wall === 'back' || host.wall === 'front' ? host.w : host.h, h: mm && mm <= 1500 ? mm : 600, host: host.id, side: host.wall })] }, reply: `הוספתי חיפוי קיר מעל "${host.name}".` };
-  }
-  if (/אי(\s|$)/.test(text) && /(הוסף|תוסיף|להוסיף|רוצה)/.test(text)) {
-    const ys = flat.map((q) => q.y + q.h), xs = flat.map((q) => q.x), w = mm >= 800 && mm <= 3200 ? mm : 2000;
-    return { project: { ...p, pieces: [...p.pieces, mk({ kind: 'island', name: 'אי', x: xs.length ? Math.min(...xs) : 0, y: (ys.length ? Math.max(...ys) : 0) + 1050, w, h: 1000, aprons: ['front', 'back', 'left', 'right'] })] }, reply: `הוספתי אי באורך ${w / 10} ס"מ. אפשר לגרור אותו למקום.` };
   }
   if (/ערב|לילה/.test(text)) return { project: { ...p, light: 'evening' }, reply: 'עברתי לתאורת ערב.' };
   if (/אור יום|יום/.test(text) && /תאור|אור/.test(text)) return { project: { ...p, light: 'day' }, reply: 'עברתי לאור יום.' };

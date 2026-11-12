@@ -189,3 +189,18 @@ describe('פינה כשהרגל היא זו שכוללת את ריבוע הפי�
     expect(sp.off).toBe(-(620 - p.thickness)); assertValid(q);
   });
 });
+
+describe('עוזר מקומי (מצב הדגמה)', () => {
+  it('"תוסיף אי 200 על 100 עם מפל בשני הצדדים" מוסיף אי במידות ושני מפלים', async () => {
+    const { localAssist } = await import('../src/ai');
+    const r = localAssist(fromTemplate('l'), 'תוסיף אי 200 על 100 עם מפל בשני הצדדים');
+    const isl = r.project!.pieces.find((q) => q.kind === 'island')!;
+    expect([isl.w, isl.h]).toEqual([2000, 1000]);
+    expect(r.project!.pieces.filter((q) => q.kind === 'waterfall' && q.host === isl.id)).toHaveLength(2);
+  });
+  it('"תוסיף אי 2.4 על 1.2 מטר" במטרים', async () => {
+    const { localAssist } = await import('../src/ai');
+    const isl = localAssist(fromTemplate('straight'), 'תוסיף אי 2.4 על 1.2 מטר').project!.pieces.find((q) => q.kind === 'island')!;
+    expect([isl.w, isl.h]).toEqual([2400, 1200]);
+  });
+});
