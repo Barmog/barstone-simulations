@@ -13,7 +13,7 @@ import { View3D } from './View3D';
 export function Doc({ id }: { id: string }) {
   const { order, customer, missing } = useOrder(id);
   const project = useStore((s) => s.project), nest = useStore((s) => s.nest), stone = useStone();
-  const rm = project ? runningMeters(project) : { rows: [], total: 0 };
+  const rm = project ? runningMeters(project) : { rows: [], total: 0, extras: [] };
   if (missing) return <div className="login"><div className="box glass"><h1>ההזמנה לא נמצאה</h1><button className="btn primary" onClick={() => go('/')}>חזרה</button></div></div>;
   if (!order || !project) return <div className="login"><div className="spin dark" /></div>;
   return (
@@ -34,7 +34,7 @@ export function Doc({ id }: { id: string }) {
             {project.pieces.map((p, i) => <tr key={p.id}><td><span className="mono">{letter(i)}</span></td><td>{p.name}</td><td><span className="mono">{cm(p.w)} × {cm(p.h)}</span></td>
               <td>{project.cutouts.filter((c) => c.pieceId === p.id).map((c) => `${c.name || CUT_HE[c.kind]} ${c.round ? `Ø${cm(c.w)}` : `${cm(c.w)}×${cm(c.h)}`}`).join(' · ') || '—'}</td><td>{isVertical(p) || !p.aprons.length || !project.apronH ? '—' : `${p.aprons.length} צדדים`}</td></tr>)}
           </tbody></table>
-          <div><span className="cap">מטר רץ לחישוב · סה"כ {rm.total.toFixed(2)}</span><table style={{ marginTop: 6 }}><thead><tr><th>חלק</th><th>אורך × רוחב (ס"מ)</th><th>מקדם לפי רוחב</th><th>מטר רץ</th></tr></thead><tbody>{rm.rows.map((r) => <tr key={r.id}><td>{r.name}</td><td><span className="mono">{cm(r.len)} × {cm(r.wid)}</span></td><td>{factorHe(r.factor)}</td><td><span className="mono">{r.rm.toFixed(2)}</span></td></tr>)}</tbody></table></div>
+          <div><span className="cap">מטר רץ לחישוב · סה"כ {rm.total.toFixed(2)}</span><table style={{ marginTop: 6 }}><thead><tr><th>חלק</th><th>אורך × רוחב (ס"מ)</th><th>מקדם לפי רוחב</th><th>מטר רץ</th></tr></thead><tbody>{rm.rows.map((r) => <tr key={r.id}><td>{r.name}{r.corner ? ` · כולל פינה ${cm(r.corner)}` : ''}</td><td><span className="mono">{cm(r.len)} × {cm(r.wid)}</span></td><td>{factorHe(r.factor)}</td><td><span className="mono">{r.rm.toFixed(2)}</span></td></tr>)}{rm.extras.map((x) => <tr key={x.id}><td>תוספת · {x.name}</td><td /><td /><td><span className="mono">{x.qty}</span> {x.unit}</td></tr>)}</tbody></table></div>
           <div><span className="cap">פריסה על הלוחות</span><div className="docslabs" style={{ marginTop: 8 }}><Slabs readOnly /></div></div>
           <div><span className="cap">חיבורים ומוצרים נלווים</span>
             <ul style={{ margin: '8px 0 0', paddingInlineStart: 18, fontSize: 13.5, lineHeight: 1.7 }}>

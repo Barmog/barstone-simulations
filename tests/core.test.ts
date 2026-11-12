@@ -122,6 +122,10 @@ describe('מטר רץ, סידור ידני, צוקל וחיבורים ידניי
     expect(rmFactor(200)).toBeCloseTo(1 / 3); expect(rmFactor(250)).toBe(0.5); expect(rmFactor(300)).toBe(0.5); expect(rmFactor(620)).toBe(1); expect(rmFactor(700)).toBe(1); expect(rmFactor(1000)).toBe(2);
     const p = emptyProject(); p.pieces.push(piece({ kind: 'counter', w: 3000, h: 620 }), piece({ kind: 'island', w: 2000, h: 1000 }));
     expect(runningMeters(p).total).toBeCloseTo(3 + 4);
+    // L של 3 על 4 מטר (כל צלע עד הקיר): הפינה נספרת פעמיים = 7
+    const l = fromTemplate('l'); l.pieces = l.pieces.filter((q) => q.kind === 'counter'); l.pieces[1].h = 4000 - 620;
+    expect(runningMeters(l).total).toBeCloseTo(7);
+    expect(runningMeters(l).extras.find((x) => x.id === 'apron')!.qty).toBeCloseTo(3 + 3.38);
   });
   it('חלק שסודר ידנית נשאר במקומו, והשאר לא עולים עליו', () => {
     const p = fromTemplate('l-island'), r0 = nest(p), own = r0.slabs.flatMap((s) => s.placements).filter((q) => !q.attached && q.block.w < 2500 && q.block.h < 1200), pl = own[0];
