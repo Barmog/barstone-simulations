@@ -10,7 +10,7 @@ import { useStone } from './util';
 
 type Cam = 'persp' | 'top' | 'front';
 const texCache = new Map<string, Promise<THREE.Texture>>();
-const loadTex = (url: string) => { if (!texCache.has(url)) texCache.set(url, new THREE.TextureLoader().setCrossOrigin('anonymous').loadAsync(url).then((t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; })); return texCache.get(url)!; };
+export const loadTex = (url: string) => { if (!texCache.has(url)) texCache.set(url, new THREE.TextureLoader().setCrossOrigin('anonymous').loadAsync(url).then((t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; })); return texCache.get(url)!; };
 
 export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax?: () => void; max?: boolean; stoneUrl?: string }) {
   const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), own = useStone(), stone = stoneUrl ? { url: stoneUrl } : own;

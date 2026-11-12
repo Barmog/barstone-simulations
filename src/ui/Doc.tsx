@@ -1,70 +1,171 @@
-// מסמך ללקוח: סיכום ההזמנה להדפסה / שמירה כ-PDF.
+// מסמך הפרויקט: גיליונות A3 לרוחב עם בלוק כותרת בכל עמוד — שער עם הדמיה, הדמיות בזוויות, תוכנית מידות,
+// פריסת לוחות על תמונת האבן, טבלת חלקים עם פרופיל קנט, אביזרים, ומטר רץ. נשמר כ-PDF ונשלח לפיירברי.
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { factorHe, runningMeters } from '../core/pricing';
-import { stoneLabel } from '../data/repo';
-import { CUT_HE, corners, isVertical, letter } from '../core/model';
+import { STATUS_HE, repo, stoneLabel } from '../data/repo';
+import { fireberry } from '../data/fireberry';
+import { CUT_HE, Project, SIDE_HE, UPPER_HE, chairCount, corners, isVertical, letter } from '../core/model';
+import { FINISHES, faucetById } from '../core/catalog';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
-import { asset } from './util';
-import { Slabs } from './Slabs';
+import { asset, cm, useStone } from './util';
 import { useOrder } from './Studio';
-import { cm, m2, useStone } from './util';
-import { View3D } from './View3D';
-import { useRef, useState } from 'react';
-import { repo } from '../data/repo';
-import { fireberry } from '../data/fireberry';
-import { sheetToPdf } from './pdf';
+import { ViewName, renderViews } from './render';
+import { COLORS, edgeDetailSvg, edgeProfileSvg, slabImages } from './drawings';
+import { DimPlan } from './DimPlan';
+import { pagesToPdf } from './pdf';
+
+const NOTES = [
+  'אין התחייבות לגידים: מיקום, כיוון וגוון הגידים משתנים מלוח ללוח. ההדמיה להמחשה בלבד.',
+  'המידות הסופיות נקבעות במדידה בשטח, לפני חיתוך.',
+  'על המזמין לדאוג לתמיכות מתחת לכיורים מובנים ומתחת לכיורים בהתקנה תחתונה.',
+  'במידה וקיים טוחן אשפה, יש לדאוג שרוזטת הניקוז תהיה ביום ההתקנה וליידע את המתקין.',
+  'תיתכן סטייה בין המוצג בתוכנית לחיתוך בפועל.',
+];
+const sinkType = (c: Project['cutouts'][number]) => (c.built ? 'בנוי מאבן · התקנה תחתונה' : c.mount === 'top' ? 'קנוי · התקנה עליונה' : c.mount === 'flush' ? 'קנוי · התקנה שטוחה' : 'קנוי · התקנה תחתונה');
 
 export function Doc({ id }: { id: string }) {
   const { order, customer, missing } = useOrder(id);
-  const project = useStore((s) => s.project), nest = useStore((s) => s.nest), stone = useStone();
-  const sheet = useRef<HTMLDivElement>(null), [sending, setSending] = useState(false), setToast = useStore((s) => s.setToast), patchOrder = useStore((s) => s.patchOrder);
-  async function send() {
-    if (!order?.fb_id || !order.fb_object || !sheet.current) return;
-    setSending(true);
-    try {
-      const { base64 } = await sheetToPdf(sheet.current);
-      await fireberry.attach(order.fb_object, order.fb_id, `${order.title}${order.order_no ? ` ${order.order_no}` : ''} - הדמיה Barstone.pdf`, base64);
-      const at = new Date().toISOString(); await repo.updateOrder(order.id, { fb_sent_at: at }); useStore.setState({ order: { ...order, fb_sent_at: at } }); void patchOrder;
-      setToast('ה-PDF צורף להזמנה בפיירברי');
-    } catch (e) { setToast(`השליחה נכשלה: ${(e as Error).message}`); }
-    setSending(false);
-  }
-  const rm = project ? runningMeters(project) : { rows: [], total: 0, extras: [] };
+  const project = useStore((s) => s.project), nest = useStore((s) => s.nest), stone = useStone(), setToast = useStore((s) => s.setToast);
+  const [shots, setShots] = useState<Partial<Record<ViewName, string>>>({}), [slabs, setSlabs] = useState<string[]>([]);
+  const [internal, setInternal] = useState(false), [busy, setBusy] = useState<'' | 'pdf' | 'fb'>('');
+  const book = useRef<HTMLDivElement>(null);
+  const key = project ? JSON.stringify([project, stone.url]) : '';
+  useEffect(() => {
+    if (!project) return; let live = true;
+    const t = setTimeout(async () => {
+      const views: ViewName[] = ['hero', 'left', 'front', 'right', 'top', ...(project.cutouts.some((c) => c.kind === 'sink') ? ['sink' as const] : [])];
+      const s = await renderViews(project, nest, stone.url, views); if (live) setShots(s);
+      if (nest) { const im = await slabImages(project, nest, stone.url); if (live) setSlabs(im); }
+    }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [key]);
+
   if (missing) return <div className="login"><div className="box glass"><h1>ההזמנה לא נמצאה</h1><button className="btn primary" onClick={() => go('/')}>חזרה</button></div></div>;
   if (!order || !project) return <div className="login"><div className="spin dark" /></div>;
+  const rm = runningMeters(project), flat = project.pieces.filter((p) => !isVertical(p)), sinks = project.cutouts.filter((c) => c.kind === 'sink'), cooktops = project.cutouts.filter((c) => c.kind === 'cooktop');
+  const fm = faucetById(project.faucet), fin = FINISHES[project.faucetFinish && fm.finishes.includes(project.faucetFinish) ? project.faucetFinish : fm.finishes[0]];
+  const forProduction = order.status === 'approved' || order.status === 'production' || order.status === 'done';
+  const date = new Date(order.updated_at).toLocaleDateString('he-IL'), ready = !!shots.hero && (!nest || slabs.length > 0);
+  const fileName = `${order.title}${order.order_no ? ` ${order.order_no}` : ''} - Barstone.pdf`;
+
+  const material = `${stone.name ? stoneLabel(stone) : '—'} · ${project.thickness} מ"מ`;
+  const block = (
+    <div className="tb">
+      <div><h4>פרטי לקוח</h4><p><b>שם:</b> {customer?.name || '—'}</p><p><b>טלפון:</b> <span dir="ltr">{customer?.phone || '—'}</span></p><p><b>כתובת:</b> {customer?.address || '—'}</p></div>
+      <div><h4>פרטי הזמנה</h4><p><b>מס׳ הזמנה:</b> {order.order_no || '—'}</p><p><b>חומר:</b> {material}</p><p><b>קנט:</b> {project.apronH ? `${project.apronH} מ"מ בגרונג` : 'ישר'}</p>
+        <p><b>כיור:</b> {sinks.length ? sinks.map((c) => `${c.built ? 'בנוי' : 'קנוי'} ${cm(c.w)}×${cm(c.h)}`).join(' · ') : '—'}</p><p><b>כיריים:</b> {cooktops.length ? cooktops.map((c) => `${cm(c.w)}×${cm(c.h)}`).join(' · ') : '—'}</p></div>
+      <div className="tb-notes"><h4>הערות</h4>{NOTES.map((n) => <p key={n}>• {n}</p>)}</div>
+      <div className="tb-sign"><h4>אישור הלקוח</h4><p>שם: ____________________</p><p>חתימה: __________________</p><p>תאריך: _________________</p></div>
+      <div className="tb-brand"><img src={asset('logo.png')} alt="Barstone" /><span className={`st ${forProduction ? 'go' : ''}`}><i className={!forProduction ? 'on' : ''} />לעיון <i className={forProduction ? 'on' : ''} />לביצוע</span><small>{date} · {STATUS_HE[order.status]}</small></div>
+    </div>
+  );
+  let n = 0;
+  const page = (title: string, children: ReactNode) => { n++; return (
+    <section className="a3" key={title}>
+      <header className="a3-head"><img src={asset('logo.png')} alt="Barstone" /><span className="sp" /><div><small>{order.title}</small><b>עמוד {n} · {title}</b></div></header>
+      <div className="a3-body">{children}</div>
+      {block}
+    </section>
+  ); };
+  const Shot = ({ v, label }: { v: ViewName; label: string }) => <figure className="shot">{shots[v] ? <img src={shots[v]} alt={label} /> : <div className="ph"><span className="spin dark" /></div>}<figcaption>{label}</figcaption></figure>;
+
+  async function exportPdf(send: boolean) {
+    if (!book.current) return; setBusy(send ? 'fb' : 'pdf');
+    try {
+      book.current.classList.add('capture');
+      const { blob, base64 } = await pagesToPdf([...book.current.querySelectorAll<HTMLElement>('.a3')]).finally(() => book.current?.classList.remove('capture'));
+      if (send && order?.fb_id && order.fb_object) {
+        await fireberry.attach(order.fb_object, order.fb_id, fileName, base64);
+        const at = new Date().toISOString(); await repo.updateOrder(order.id, { fb_sent_at: at }); useStore.setState({ order: { ...order, fb_sent_at: at } });
+        setToast('המסמך צורף להזמנה בפיירברי');
+      } else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+    } catch (e) { setToast(`${send ? 'השליחה' : 'יצירת ה-PDF'} נכשלה: ${(e as Error).message}`); }
+    setBusy('');
+  }
+
   return (
     <>
-      <header className="top noprint doctop"><img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" />{order.fb_id && order.fb_object && <button className="btn" disabled={sending} onClick={send}>{sending ? <span className="spin dark" /> : <Icon.send />}{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף PDF להזמנה בפיירברי'}</button>}<button className="btn primary" onClick={() => print()}><Icon.download /><span>שמירה כ-PDF / הדפסה</span></button></header>
-      <main className="doc">
-        <div className="sheet" ref={sheet}>
-          <div className="row"><img src={asset('logo.png')} alt="Barstone" style={{ height: 22 }} /><span className="sp" /><span className="cap">הדמיית משטח אבן</span></div>
-          <div><h1>{order.title}</h1><p className="mute" style={{ fontSize: 16 }}>{[customer?.name, customer?.address].filter(Boolean).join(' · ')}</p></div>
-          <div className="docshot"><View3D still /></div>
-          <div className="facts">
-            <div><small>תאריך</small><b>{new Date().toLocaleDateString('he-IL')}</b></div><div><small>מספר הזמנה</small><b>{order.order_no || '—'}</b></div>
-            <div><small>אבן</small><b>{stone.name ? stoneLabel(stone) : '—'}</b></div><div><small>עובי · קנט</small><b>{project.thickness} · {project.apronH || 'בלי'} מ"מ</b></div>
-            <div><small>לוחות</small><b>{nest?.metrics.slabs ?? 0}</b></div><div><small>מטר רץ</small><b>{rm.total.toFixed(2)}</b></div>
-            <div><small>חיבורים</small><b>{nest?.metrics.joints ?? 0}</b></div><div><small>מידת לוח</small><b>{cm(project.slabW)}×{cm(project.slabH)} ס"מ</b></div>
+      <header className="top noprint doctop">
+        <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" />
+        <label className="row mute" style={{ fontSize: 13 }}><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />כולל מטר רץ (פנימי)</label>
+        {order.fb_id && order.fb_object && <button className="btn" disabled={!ready || !!busy} onClick={() => exportPdf(true)}>{busy === 'fb' ? <span className="spin dark" /> : <Icon.send />}<span>{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף לפיירברי'}</span></button>}
+        <button className="btn primary" disabled={!ready || !!busy} onClick={() => exportPdf(false)}>{busy === 'pdf' ? <span className="spin" /> : <Icon.download />}<span>{ready ? 'הורדת PDF' : 'מכין הדמיות…'}</span></button>
+      </header>
+      <main className="book" ref={book}>
+        {page('שער', <>
+          <div className="cover">
+            <div className="cover-shot"><Shot v="hero" label="" /></div>
+            <div className="cover-side">
+              <span className="eyebrow">הדמיית משטח אבן</span>
+              <h1>{order.title}</h1>
+              <p className="sub">{[customer?.name, customer?.address].filter(Boolean).join(' · ')}</p>
+              <div className="stone-card"><i style={{ backgroundImage: `url("${stone.thumb || stone.url}")` }} /><div><b>{stone.name || '—'}</b><small>{[stone.en, stone.series].filter(Boolean).join(' · ')}</small><small>{project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'קנט ישר'}</small></div></div>
+              <dl className="kv">
+                <div><dt>חלקים</dt><dd>{project.pieces.length}</dd></div><div><dt>לוחות</dt><dd>{nest?.metrics.slabs ?? 0}</dd></div>
+                <div><dt>חיבורים</dt><dd>{(nest?.metrics.joints ?? 0) + corners(project).length}</dd></div><div><dt>בוק־מאץ׳</dt><dd>{project.bookmatch === 'yes' ? 'כן' : project.bookmatch === 'no' ? 'לא' : '—'}</dd></div>
+              </dl>
+              <div className="minis"><Shot v="top" label="מלמעלה" /><Shot v="front" label="חזית" /></div>
+            </div>
           </div>
-          <table><thead><tr><th>#</th><th>חלק</th><th>מידות (ס"מ)</th><th>פתחים</th><th>קנט</th></tr></thead><tbody>
-            {project.pieces.map((p, i) => <tr key={p.id}><td><span className="mono">{letter(i)}</span></td><td>{p.name}</td><td><span className="mono">{cm(p.w)} × {cm(p.h)}</span></td>
-              <td>{project.cutouts.filter((c) => c.pieceId === p.id).map((c) => `${c.name || CUT_HE[c.kind]} ${c.round ? `Ø${cm(c.w)}` : `${cm(c.w)}×${cm(c.h)}`}`).join(' · ') || '—'}</td><td>{isVertical(p) || !p.aprons.length || !project.apronH ? '—' : `${p.aprons.length} צדדים`}</td></tr>)}
+        </>)}
+        {page('הדמיה בזוויות', <>
+          <div className="grid3"><Shot v="left" label="שמאל" /><Shot v="front" label="חזית" /><Shot v="right" label="ימין" /></div>
+          {shots.sink !== undefined && <div className="grid2d"><Shot v="sink" label="תקריב · אזור הכיור" /><Shot v="top" label="מבט על" /></div>}
+          <p className="fine">ההדמיה להמחשה בלבד ואינה בקנה מידה. המידות המחייבות מופיעות בתוכנית המידות.</p>
+        </>)}
+        {page('תוכנית מידות', <>
+          <div className="plan"><DimPlan project={project} nest={nest} /></div>
+          <div className="legend"><span><i style={{ background: COLORS.miter }} />קנט גרונג</span><span><i style={{ background: COLORS.joint }} />חיבור</span><span><i style={{ background: '#c9b99c' }} />חיפוי קיר</span><span><i className="dash" />אזור ישיבה</span><span>כל המידות בס"מ</span></div>
+        </>)}
+        {nest && nest.slabs.length > 0 && page('פריסת לוחות', <>
+          <div className={`slabgrid n${Math.min(nest.slabs.length, 4)}`}>{nest.slabs.map((s, i) => <figure key={i}>{slabs[i] ? <img src={slabs[i]} alt={`לוח ${i + 1}`} /> : <div className="ph"><span className="spin dark" /></div>}<figcaption><b>לוח {i + 1}{project.bookmatch === 'yes' ? (i % 2 ? ' · B (מראה)' : ' · A') : ''}</b> · {stone.name} · {cm(s.w)}×{cm(s.h)} ס"מ · {project.thickness} מ"מ · ניצול {s.used}%</figcaption></figure>)}</div>
+          <div className="legend"><span><i style={{ background: COLORS.cut }} />קו חיתוך</span><span><i style={{ background: COLORS.miter }} />פס קנט (גרונג)</span><span><i className="dash" style={{ borderColor: COLORS.edge }} />חיפוי צמוד למשטח — המשך גיד</span><span><i style={{ background: COLORS.extra }} />חלקי כיור / צוקל</span></div>
+        </>)}
+        {page('חלקים, פתחים ואביזרים', <>
+          <table className="parts"><thead><tr><th>#</th><th>חלק</th><th>מידות (מ"מ)</th><th>חומר</th><th>קנט</th><th>פרופיל</th><th>פתחים</th><th>הערות</th></tr></thead><tbody>
+            {project.pieces.map((p, i) => { const cuts = project.cutouts.filter((c) => c.pieceId === p.id), ap = !isVertical(p) && p.aprons.length && project.apronH ? project.apronH : 0; return (
+              <tr key={p.id}><td><b className="mono">{letter(i)}</b></td><td>{p.name}</td><td className="mono">{Math.round(p.w)}×{Math.round(p.h)}</td><td>{stone.name} · {project.thickness}</td>
+                <td>{ap ? `גרונג ${ap} · ${p.aprons.map((s) => SIDE_HE[s]).join(', ')}` : 'ישר'}</td><td className="prof" dangerouslySetInnerHTML={{ __html: edgeProfileSvg(project.thickness, ap) }} />
+                <td>{cuts.map((c) => `${c.name || CUT_HE[c.kind]} ${c.round ? `Ø${Math.round(c.w)}` : `${Math.round(c.w)}×${Math.round(c.h)}`}`).join(' · ') || '—'}</td>
+                <td>{[p.corner === 'miter' ? 'פינה 45°' : '', p.seat ? `ישיבה ${SIDE_HE[p.seat]} · ${chairCount(p)} כיסאות` : '', p.grainLock ? '' : 'גיד חופשי', (nest?.joints || []).filter((j) => j.pieceId === p.id).map((j) => `חיבור ב-${Math.round(j.at)}`).join(', ')].filter(Boolean).join(' · ') || '—'}</td></tr>); })}
           </tbody></table>
-          <div><span className="cap">מטר רץ לחישוב · סה"כ {rm.total.toFixed(2)}</span><table style={{ marginTop: 6 }}><thead><tr><th>חלק</th><th>אורך × רוחב (ס"מ)</th><th>מקדם לפי רוחב</th><th>מטר רץ</th></tr></thead><tbody>{rm.rows.map((r) => <tr key={r.id}><td>{r.name}{r.corner ? ` · כולל פינה ${cm(r.corner)}` : ''}</td><td><span className="mono">{cm(r.len)} × {cm(r.wid)}</span></td><td>{factorHe(r.factor)}</td><td><span className="mono">{r.rm.toFixed(2)}</span></td></tr>)}{rm.extras.map((x) => <tr key={x.id}><td>תוספת · {x.name}</td><td /><td /><td><span className="mono">{x.qty}</span> {x.unit}</td></tr>)}</tbody></table></div>
-          <div><span className="cap">פריסה על הלוחות</span><div className="docslabs" style={{ marginTop: 8 }}><Slabs readOnly /></div></div>
-          <div><span className="cap">חיבורים ומוצרים נלווים</span>
-            <ul style={{ margin: '8px 0 0', paddingInlineStart: 18, fontSize: 13.5, lineHeight: 1.7 }}>
-              {(nest?.joints || []).map((j, n) => { const q = project.pieces.find((x) => x.id === j.pieceId); return <li key={n}>חיבור ב"{q?.name}" — {Math.round(j.at / 10)} ס"מ מתחילת החלק{q?.joint === 'sink' ? ' (במרכז הכיור)' : q?.joint === 'cooktop' ? ' (במרכז הכיריים)' : ''}</li>; })}
-              {corners(project).map((c) => <li key={c.b.id}>חיבור פינה {c.miter ? 'בגרונג 45°' : 'ישר'} — "{c.b.name}"</li>)}
-              {!nest?.joints.length && !corners(project).length && <li>אין חיבורים</li>}
-              <li>בוק־מאץ׳: {project.bookmatch === 'yes' ? 'כן' : project.bookmatch === 'no' ? 'לא' : 'לא נקבע'}</li>
-              {project.cutouts.filter((c) => c.kind === 'sink').map((c) => <li key={c.id}>כיור {c.built ? 'בנוי מאבן' : 'קנוי'}{c.bowls === 'even' ? ', כפול חצי־חצי' : c.bowls === 'ls' ? ', כפול גדול + קטן' : ''}{c.cabinet ? `, ארון ${c.cabinet / 10}` : ''} — נטו משוער {cm(c.w)}×{cm(c.h)} ס"מ</li>)}
-              {project.disposal && <li>טוחן אשפה</li>}{project.water && <li>מערכת מים</li>}
-            </ul>
+          <div className="three">
+            <div>
+              <h3>כיורים ופתחים</h3>
+              <table className="parts"><thead><tr><th>פתח</th><th>סוג</th><th>מידות</th><th>X מהשמאל</th><th>Y מהגב</th><th>חלק</th></tr></thead><tbody>
+                {project.cutouts.map((c) => { const host = project.pieces.find((q) => q.id === c.pieceId); return <tr key={c.id}><td>{c.name || CUT_HE[c.kind]}</td><td>{c.kind === 'sink' ? sinkType(c) : c.kind === 'faucet' ? 'חור ברז' : c.kind === 'cooktop' ? 'פתח כיריים' : 'פתח'}</td><td className="mono">{c.round ? `Ø${Math.round(c.w)}` : `${Math.round(c.w)}×${Math.round(c.h)}`}</td><td className="mono">{Math.round(c.x)}</td><td className="mono">{Math.round(c.y)}</td><td>{host ? `${letter(project.pieces.indexOf(host))} · ${host.name}` : '—'}</td></tr>; })}
+              </tbody></table>
+              {sinks.filter((c) => c.built).map((c) => <p key={c.id} className="fine">כיור בנוי: 4 דפנות בגובה 200 + תחתית {Math.round(c.w)}×{Math.round(c.h)}{c.bowls && c.bowls !== 'single' ? ' + מחיצה' : ''}{c.drainCover ? ' · ונטיל מאבן מעל הניקוז' : ''}{c.cabinet ? ` · לארון ${c.cabinet / 10}` : ''}. החלקים בפריסת הלוחות.</p>)}
+            </div>
+            <div>
+              <h3>ברז ומוצרים נלווים</h3>
+              <dl className="kv wide">
+                <div><dt>ברז</dt><dd>{`${fm.name} · ${fin.name}`}</dd></div>
+                <div><dt>טוחן אשפה</dt><dd>{project.disposal ? 'נובו 1 כ"ס · כפתור אוויר על המשטח' : '—'}</dd></div>
+                <div><dt>מערכת מים</dt><dd>{project.water ? 'מחמם, מקרר ומסנן תלת־שלבי · ברז ייעודי' : '—'}</dd></div>
+                <div><dt>ארונות עליונים</dt><dd>{project.uppers ? `${UPPER_HE[project.upperStyle || 'doors']} · גובה ${cm(project.upperH || 700)} ס"מ${project.underLight !== false ? ' · תאורה מתחת' : ''}` : '—'}</dd></div>
+                <div><dt>צוקל</dt><dd>{project.plinthStone ? 'מאבן' : 'רגיל'}</dd></div>
+                <div><dt>חיבורי פינה</dt><dd>{corners(project).map((c) => `${c.b.name}: ${c.miter ? 'גרונג 45°' : 'ישר'}`).join(' · ') || '—'}</dd></div>
+              </dl>
+            </div>
+            <div>
+              <h3>פרטי קנט</h3>
+              <div className="edges">
+                <div dangerouslySetInnerHTML={{ __html: edgeDetailSvg(project.thickness, 0, 'קנט ישר') }} />
+                {project.apronH > 0 && <div dangerouslySetInnerHTML={{ __html: edgeDetailSvg(project.thickness, project.apronH, `קנט גרונג ${project.apronH}`) }} />}
+              </div>
+            </div>
           </div>
-          <div className="note"><b>אין התחייבות לגידים.</b> מיקום, כיוון וגוון הגידים בפועל משתנים מלוח ללוח, וההדמיה היא המחשה בלבד.</div>
-          <p className="mute" style={{ fontSize: 12 }}>ההדמיה להמחשה בלבד. גוון וגידים באבן טבעית ובפורצלן משתנים מלוח ללוח; המידות הסופיות ייקבעו במדידה בשטח.</p>
-        </div>
+        </>)}
+        {internal && page('מטר רץ (פנימי)', <>
+          <table className="parts"><thead><tr><th>חלק</th><th>אורך × רוחב (ס"מ)</th><th>מקדם לפי רוחב</th><th>מטר רץ</th></tr></thead><tbody>
+            {rm.rows.map((r) => <tr key={r.id}><td>{r.name}{r.corner ? ` · כולל פינה ${cm(r.corner)}` : ''}</td><td className="mono">{cm(r.len)} × {cm(r.wid)}</td><td>{factorHe(r.factor)}</td><td className="mono">{r.rm.toFixed(2)}</td></tr>)}
+            <tr className="sum"><td>סה"כ</td><td /><td /><td className="mono">{rm.total.toFixed(2)}</td></tr>
+            {rm.extras.map((x) => <tr key={x.id}><td>תוספת · {x.name}</td><td /><td /><td className="mono">{x.qty} {x.unit}</td></tr>)}
+          </tbody></table>
+          <p className="fine">לפי רוחב (בחיפוי — לפי הגובה): עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול · 150–170 פי 2.5. פינה נספרת בשתי הצלעות. מפל = גובה 90 לפי עומק האי.</p>
+        </>)}
       </main>
     </>
   );
