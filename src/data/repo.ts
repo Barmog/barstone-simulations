@@ -5,8 +5,14 @@ import { LUCENTE } from './lucente';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const KEY = import.meta.env.VITE_SUPABASE_KEY as string | undefined;
-export const sb: SupabaseClient | null = URL_ && KEY ? createClient(URL_, KEY) : null;
+// גרסת דמו באותו אתר: פותחים עם ?demo — הכול רץ על נתוני דוגמה בדפדפן, בלי הרשמה ובלי לגעת בלקוחות אמיתיים.
+const DEMO = (() => { if (typeof location === 'undefined') return false; const q = /[?&]demo\b/.test(location.search); try { if (q) sessionStorage.setItem('bs.demo', '1'); return q || sessionStorage.getItem('bs.demo') === '1'; } catch { return q; } })();
+const live: SupabaseClient | null = URL_ && KEY ? createClient(URL_, KEY) : null;
+export const sb: SupabaseClient | null = DEMO ? null : live;
 export const isLocal = !sb;
+/** דמו שרץ על האתר האמיתי: המשובים ממנו עדיין מגיעים למנהל. */
+export const isDemoOnLive = DEMO && !!live;
+export const exitDemo = () => { try { sessionStorage.removeItem('bs.demo'); } catch { /* */ } location.href = location.pathname; };
 
 export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; fb_id?: string | null; created_at: string; updated_at: string }
 export interface Share { token: string; order_id: string; created_at: string; expires_at: string; viewed_at?: string | null; signed_at?: string | null; signer_name?: string | null; signature?: string | null; customer_note?: string | null; layout_changed?: boolean }
@@ -150,7 +156,12 @@ export const repo = {
   },
   // --- משובים מהצוות ---
   async sendFeedback(f: Pick<Feedback, 'kind' | 'text' | 'route' | 'screen' | 'order_id'> & { email?: string }) {
-    if (!sb) { W('bs.feedback', [{ ...f, id: id(), created_at: now(), status: 'new' }, ...J<Feedback[]>('bs.feedback', [])]); return; }
+    if (!sb) {
+      W('bs.feedback', [{ ...f, id: id(), created_at: now(), status: 'new' }, ...J<Feedback[]>('bs.feedback', [])]);
+      // מהדמו באתר החי: ההערה נשלחת גם למנהל (בלי פרטים אישיים, מסומנת "דמו")
+      if (live) { const { data, error } = await live.functions.invoke('demo-feedback', { body: { kind: f.kind, text: f.text, screen: f.screen, route: f.route } }); if (error || data?.error) throw new Error(data?.error || error!.message); }
+      return;
+    }
     ok(await sb.from('feedback').insert(f).select('id'));
   },
   async feedback(): Promise<Feedback[]> {

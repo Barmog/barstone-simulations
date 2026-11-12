@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Customer, Order, STATUS_HE, isLocal, repo } from '../data/repo';
+import { Customer, Order, STATUS_HE, exitDemo, isDemoOnLive, isLocal, repo } from '../data/repo';
 import { Project, TEMPLATES, TemplateId, emptyProject, fromTemplate } from '../core/model';
 import { DxfInfo, parseDxf } from '../core/dxf';
 import { ai, applyDraft } from '../ai';
@@ -63,7 +63,8 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
       <header className="top">
         <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} />
         <span className="sp" />
-        {isLocal && <span className="badge sand">מצב הדגמה · נשמר בדפדפן הזה בלבד</span>}
+        {isLocal && <span className="badge sand">מצב הדגמה · נתוני דוגמה, נשמר בדפדפן הזה בלבד</span>}
+        {isDemoOnLive && <button className="link" onClick={exitDemo}>יציאה מהדמו</button>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/catalog')}><Icon.grid />קטלוג ומלאי</button>}
         {!isLocal && <button className="btn sm primary" onClick={() => setFind(true)}><Icon.link />פתיחה מהזמנה בפיירברי</button>}
         {!isLocal && <button className="btn sm" onClick={() => go('/fireberry')}>פיירברי</button>}
