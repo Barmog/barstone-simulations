@@ -13,3 +13,19 @@ export async function sheetToPdf(el: HTMLElement): Promise<{ base64: string; blo
   const blob = pdf.output('blob'), base64 = pdf.output('datauristring').split(',')[1];
   return { base64, blob };
 }
+
+/** כל עמוד במסמך (.a3) נצלם בנפרד ונכנס לעמוד A3 לרוחב — בלי חיתוך באמצע תוכן. */
+export async function pagesToPdf(pages: HTMLElement[]): Promise<{ base64: string; blob: Blob }> {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3', compress: true });
+  const W = 420, H = 297;
+  for (let i = 0; i < pages.length; i++) {
+    const el = pages[i];
+    const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, windowWidth: el.scrollWidth });
+    const r = Math.min(W / canvas.width, H / canvas.height), w = canvas.width * r, h = canvas.height * r;
+    if (i) pdf.addPage('a3', 'landscape');
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (W - w) / 2, (H - h) / 2, w, h);
+  }
+  const blob = pdf.output('blob'), base64 = pdf.output('datauristring').split(',')[1];
+  return { base64, blob };
+}

@@ -150,7 +150,7 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
     // --- קיר וארונות עליונים ---
     if (p.wall) {
       const e = hostEdge(p, p.wall), wh = 2500, wt = 100, cx = e.x + (e.dx * e.len) / 2 + (e.nx * wt) / 2, cz = e.y + (e.dy * e.len) / 2 + (e.ny * wt) / 2;
-      const w = box(e.dx ? e.len + 900 : wt, wh, e.dx ? wt : e.len + 900, wallMat, cx, wh / 2, cz); w.traverse((o) => (o.castShadow = false));
+      const w = box(e.dx ? e.len + 900 : wt, wh, e.dx ? wt : e.len + 900, wallMat, cx, wh / 2, cz); w.traverse((o) => (o.castShadow = false)); w.userData.wallN = [e.nx, e.ny];
       // בפינה הארונות העליונים ממשיכים עד הארון של הקיר הניצב (שעומקו 35 ס"מ)
       const ce = cornerExt(project, p), l0 = Math.max(0, ce.lead - 350), t0 = Math.max(0, ce.tail - 350), eu = { ...e, x: e.x - e.dx * l0, y: e.y - e.dy * l0, len: e.len + l0 + t0 };
       if (project.uppers && p.kind === 'counter' && e.len > 900) {
