@@ -1,5 +1,7 @@
 // חישוב מטר רץ לפי הכללים של Barstone:
-// · האורך הוא המטר הרץ, והרוחב קובע את המקדם: עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול.
+// · האורך הוא המטר הרץ, והרוחב קובע את המקדם: עד 20 ס"מ (כולל) שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול · 150–170 פי 2.5.
+// · אין מינימום ואין עיגול: מחשבים לפי המ"מ.
+// · מפל: אורך = גובה המטבח (90), והמקדם לפי עומק האי — מפל באי מעל 80 = 1.8 מטר רץ.
 // · חיפוי ומפל: הגובה הוא ה"רוחב" (חיפוי 60 = רגיל, חיפוי עד התקרה = כפול).
 // · פינה נספרת פעמיים: ב-L של 3 על 4 מטר (כל צלע עד הקיר) מחשבים 7 מטר.
 // · קנט: תוספת נפרדת לפי מטר אורך. כיור בנוי: תוספת. פתחים (כיור קנוי, כיריים, ברז): בלי תוספת.
@@ -10,9 +12,10 @@ export function rmFactor(widthMm: number): number {
   if (widthMm <= 300) return 0.5;
   if (widthMm <= 700) return 1;
   if (widthMm <= 1500) return 2;
-  return 3; // מעל 150 ס"מ: חריג, לבדוק מול המחירון
+  if (widthMm <= 1700) return 2.5;
+  return 3; // מעל 170 ס"מ: חריג, לבדוק מול המחירון
 }
-export const factorHe = (f: number) => (f < 0.4 ? 'שליש' : f === 0.5 ? 'חצי' : f === 1 ? 'רגיל' : f === 2 ? 'כפול' : '×3 (חריג)');
+export const factorHe = (f: number) => (f < 0.4 ? 'שליש' : f === 0.5 ? 'חצי' : f === 1 ? 'רגיל' : f === 2 ? 'כפול' : f === 2.5 ? 'פי 2.5' : '×3 (חריג)');
 
 /** כמה להוסיף לאורך של משטח בגלל פינה: משטח ניצב שנוגע בקצה שלו (כך כל צלע נמדדת עד הקיר). */
 export function cornerAdd(p: Project, x: Piece): number {
@@ -31,7 +34,7 @@ export interface RmRow { id: string; name: string; len: number; wid: number; fac
 export interface Extra { id: string; name: string; qty: number; unit: string }
 export function runningMeters(p: Project): { rows: RmRow[]; total: number; extras: Extra[] } {
   const row = (id: string, name: string, len: number, wid: number, corner = 0): RmRow => { const factor = rmFactor(wid); return { id, name, len: len + corner, wid, factor, rm: ((len + corner) / 1000) * factor, corner: corner || undefined }; };
-  const rows = p.pieces.map((q) => row(q.id, q.name, pieceLen(q), pieceWid(q), cornerAdd(p, q)));
+  const rows = p.pieces.map((q) => (q.kind === 'waterfall' ? row(q.id, q.name, p.counterH, q.w) : row(q.id, q.name, pieceLen(q), pieceWid(q), cornerAdd(p, q))));
   if (p.plinthStone && p.cabinets) { const len = p.pieces.filter((q) => !isVertical(q) && q.kind !== 'panel').reduce((s, q) => s + (q.kind === 'island' ? 2 * (q.w + q.h) : pieceLen(q)), 0); if (len) rows.push(row('plinth', 'צוקל מאבן', len, PLINTH_H)); }
   const extras: Extra[] = [];
   const apron = p.apronH > 0 ? p.pieces.reduce((s, q) => s + q.aprons.reduce((t, sd) => t + (sd === 'front' || sd === 'back' ? q.w : q.h), 0), 0) : 0;
