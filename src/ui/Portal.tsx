@@ -53,11 +53,11 @@ export function Portal({ token }: { token: string }) {
   if (err) return <div className="login"><div className="box glass"><img className="plogo" src={asset('logo.png')} alt="Barstone" /><h1>לא הצלחנו לפתוח את הקישור</h1><p className="mute">{err}</p></div></div>;
   if (!data || !project) return <div className="login"><div className="spin dark" /></div>;
 
-  const changed = JSON.stringify(project.manual || {}) !== original.current;
+  const changed = JSON.stringify(project.manual || {}) !== original.current, overlap = !!nest?.overlaps?.length;
   const flat = project.pieces.filter((p) => !isVertical(p)), sinks = project.cutouts.filter((c) => c.kind === 'sink');
   const reset = () => useStore.getState().apply((p) => ({ ...p, manual: JSON.parse(original.current) }));
   async function sign() {
-    if (!sig || !agree || name.trim().length < 2) return; setBusy(true);
+    if (!sig || !agree || name.trim().length < 2 || overlap) return; setBusy(true);
     try {
       const r = await repo.portal<{ signed_at: string }>({ mode: 'sign', token, name: name.trim(), signature: sig, note, manual: project!.manual || {} });
       setSigned({ at: r.signed_at, name: name.trim(), sig }); scrollTo({ top: 0, behavior: 'smooth' });
@@ -92,6 +92,7 @@ export function Portal({ token }: { token: string }) {
         <h2>בחרו את החלק היפה בלוח</h2>
         <p className="mute">זו תמונת הלוח האמיתית, וכל חלק מסומן במקום שממנו ייחתך. {signed ? '' : 'גררו חלק כדי להזיז אותו על הלוח, וההדמיה למעלה תתעדכן מיד.'}</p>
         <div className="p-slabs"><Slabs readOnly={!!signed} /></div>
+        {overlap && !signed && <div className="note err">שני חלקים חופפים או שחלק יוצא מהלוח. מזיזים אותו למקום פנוי, או לוחצים "חזרה למיקום שהצענו".</div>}
         {changed && !signed && <div className="row"><span className="mute">שיניתם את המיקום.</span><span className="sp" /><button className="btn sm" onClick={reset}>חזרה למיקום שהצענו</button></div>}
       </section>}
 
@@ -108,7 +109,7 @@ export function Portal({ token }: { token: string }) {
           <label className="field"><span>הערה לנציג (לא חובה)</span><textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></label>
           <SignaturePad onChange={setSig} />
           <label className="row chk"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />קראתי ואני מאשר/ת את ההדמיה{changed ? ' ואת מיקום החלקים שבחרתי' : ''}</label>
-          <button className="btn primary big" disabled={!sig || !agree || name.trim().length < 2 || busy} onClick={sign}>{busy ? <span className="spin" /> : 'אישור וחתימה'}</button>
+          <button className="btn primary big" disabled={!sig || !agree || name.trim().length < 2 || busy || overlap} onClick={sign}>{busy ? <span className="spin" /> : 'אישור וחתימה'}</button>
         </>}
       </section>
       <footer className="p-foot">Barstone · משטחי אבן ופורצלן</footer>

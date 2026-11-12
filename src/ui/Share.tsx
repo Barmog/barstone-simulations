@@ -1,10 +1,11 @@
 // שליחה ללקוח לאישור: קישור אישי (בוואטסאפ או בהעתקה), ומעקב — נשלח · נצפה · אושר ונחתם.
 import { useEffect, useState } from 'react';
-import { Share, repo } from '../data/repo';
+import { Share, isDemoOnLive, repo } from '../data/repo';
 import { useStore } from '../store';
 import { Modal } from './Home';
 
-export const shareUrl = (token: string) => `${location.origin}${location.pathname}#/p/${token}`;
+// בדמו הקישור נשאר בדמו (אחרת הוא נפתח מול המערכת האמיתית ולא נמצא)
+export const shareUrl = (token: string) => `${location.origin}${location.pathname}${isDemoOnLive ? '?demo' : ''}#/p/${token}`;
 const when = (s?: string | null) => (s ? new Date(s).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 /** הקישור האחרון של ההזמנה (למסמך ולסטודיו). */

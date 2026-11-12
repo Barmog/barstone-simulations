@@ -99,7 +99,7 @@ export function check(p: Project, nest: NestResult): Issue[] {
     const falls = p.pieces.filter((w) => w.kind === 'waterfall' && w.host === isl.id);
     if (!falls.length && nest.metrics.utilization < 70) out.push({
       id: `wf-${isl.id}`, level: 'tip', pieceId: isl.id, title: 'מפל לאי — מראה יוקרתי', detail: 'צדי האי יכולים לרדת עד הרצפה מאותו לוח, כך שהגיד "נשפך" מהמשטח למטה ברצף. יש מספיק מקום פנוי בלוחות.',
-      fix: { label: 'הוסף מפל בשני הצדדים', apply: (pr) => { const lx = longIsX(isl); const sides: Side[] = lx ? ['left', 'right'] : ['back', 'front']; return { ...pr, pieces: [...pr.pieces, ...sides.map((s) => mkPiece({ kind: 'waterfall', name: `מפל · ${SIDE_HE[s]}`, w: pieceWid(isl), h: pr.counterH - pr.thickness, host: isl.id, side: s }))] }; } },
+      fix: { label: 'הוסף מפל בשני הצדדים', apply: (pr) => { const lx = longIsX(isl); const sides: Side[] = lx ? ['left', 'right'] : ['back', 'front']; return { ...pr, pieces: [...pr.pieces.map((q) => (q.id === isl.id ? { ...q, aprons: q.aprons.filter((a) => !sides.includes(a)) } : q)), ...sides.map((s) => mkPiece({ kind: 'waterfall', name: `מפל · ${SIDE_HE[s]}`, w: pieceWid(isl), h: pr.counterH - pr.thickness, host: isl.id, side: s }))] }; } },
     });
     if (pieceWid(isl) > 1250) out.push({ id: `deep-${isl.id}`, level: 'tip', pieceId: isl.id, title: 'אי עמוק מאוד', detail: `עומק ${pieceWid(isl) / 10} ס"מ קשה לניקוי במרכז, ומשאיר שארית קטנה בלוח. 100–120 ס"מ הוא הטווח הנוח.` });
   }

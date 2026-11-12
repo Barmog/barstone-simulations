@@ -17,7 +17,7 @@ export function useOrder(id: string) {
   const [customer, setCustomer] = useState<Customer | null>(null), [missing, setMissing] = useState(false);
   useEffect(() => {
     const st = useStore.getState(); st.loadStones();
-    if (st.order?.id !== id) repo.order(id).then((o) => (o && o.project?.pieces ? st.open(o) : setMissing(true))).catch(() => setMissing(true));
+    if (st.order?.id !== id || st.portal) repo.order(id).then((o) => (o && o.project?.pieces ? st.open(o) : setMissing(true))).catch(() => setMissing(true));
   }, [id]);
   useEffect(() => { if (order?.id === id) repo.customers().then((cs) => setCustomer(cs.find((c) => c.id === order.customer_id) || null)).catch(() => {}); }, [order?.id]);
   return { order: order?.id === id ? order : null, customer, missing };

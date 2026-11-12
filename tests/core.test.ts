@@ -189,3 +189,48 @@ describe('פינה כשהרגל היא זו שכוללת את ריבוע הפי�
     expect(sp.off).toBe(-(620 - p.thickness)); assertValid(q);
   });
 });
+
+describe('עוזר מקומי (מצב הדגמה)', () => {
+  it('"תוסיף אי 200 על 100 עם מפל בשני הצדדים" מוסיף אי במידות ושני מפלים', async () => {
+    const { localAssist } = await import('../src/ai');
+    const r = localAssist(fromTemplate('l'), 'תוסיף אי 200 על 100 עם מפל בשני הצדדים');
+    const isl = r.project!.pieces.find((q) => q.kind === 'island')!;
+    expect([isl.w, isl.h]).toEqual([2000, 1000]);
+    expect(r.project!.pieces.filter((q) => q.kind === 'waterfall' && q.host === isl.id)).toHaveLength(2);
+  });
+  it('"תוסיף אי 2.4 על 1.2 מטר" במטרים', async () => {
+    const { localAssist } = await import('../src/ai');
+    const isl = localAssist(fromTemplate('straight'), 'תוסיף אי 2.4 על 1.2 מטר').project!.pieces.find((q) => q.kind === 'island')!;
+    expect([isl.w, isl.h]).toEqual([2400, 1200]);
+  });
+});
+
+describe('חיפוי בפינה', () => {
+  it('רגל L ארוכה עם חיפוי שממשיך לפינה עדיין נכנסת בלוח (החיפוי מודבק או נחתך בנפרד)', async () => {
+    const { setSplash } = await import('../src/core/model');
+    const p = emptyProject();
+    p.pieces = [piece({ kind: 'counter', name: 'ראשי', x: 0, y: 0, w: 2000, h: 620, wall: 'back' }), piece({ kind: 'counter', name: 'רגל', x: 1380, y: 620, w: 620, h: 3000, wall: 'right' })];
+    const q = setSplash(p, '60'), r = nest(q);
+    expect(r.unplaced).toHaveLength(0);
+    for (const s of r.slabs) for (const pl of s.placements) { expect(pl.block.x + pl.block.w).toBeLessThanOrEqual(s.w); expect(pl.block.y + pl.block.h).toBeLessThanOrEqual(s.h); }
+    // כל החיפויים נכנסו לנסטינג
+    for (const sp of q.pieces.filter((x) => x.kind === 'splash')) expect(r.slabs.some((s) => s.placements.some((pl) => pl.pieceId === sp.id))).toBe(true);
+  });
+});
+
+describe('ממצאי הבדיקה', () => {
+  it('קנט לא נספר בצלע שיש עליה מפל', async () => {
+    const { runningMeters } = await import('../src/core/pricing');
+    const p = fromTemplate('island'), isl = p.pieces.find((q) => q.kind === 'island')!;
+    const before = runningMeters(p).extras.find((x) => x.id === 'apron')?.qty || 0;
+    const q = { ...p, pieces: [...p.pieces, piece({ kind: 'waterfall', name: 'מפל', w: isl.h, h: 888, host: isl.id, side: 'left' }), piece({ kind: 'waterfall', name: 'מפל', w: isl.h, h: 888, host: isl.id, side: 'right' })] };
+    const after = runningMeters(q).extras.find((x) => x.id === 'apron')?.qty || 0;
+    expect(+(before - after).toFixed(2)).toBeCloseTo(2 * isl.h / 1000, 2);
+  });
+  it('פינה מזוהה גם כשהרגל בגובה מלא והמשטח הראשי נצמד לצד שלה', async () => {
+    const { corners } = await import('../src/core/model');
+    const p = emptyProject();
+    p.pieces = [piece({ kind: 'counter', name: 'ראשי', x: 0, y: 0, w: 2380, h: 620, wall: 'back' }), piece({ kind: 'counter', name: 'רגל', x: 2380, y: 0, w: 620, h: 4000, wall: 'right' })];
+    expect(corners(p)).toHaveLength(1);
+  });
+});

@@ -12,7 +12,7 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-const esc = (s: string) => s.replace(/'/g, "''").slice(0, 80);
+const esc = (s: string) => s.slice(0, 80).replace(/'/g, "''"); // קודם חותכים, אחר כך מכפילים גרש — כדי שלא יישאר גרש בודד
 
 type Rec = Record<string, unknown>;
 /** התשובות של פיירברי עטופות בכמה שכבות (data.Data, data.data...). מחזירים את המערך הראשון של רשומות. */
@@ -145,14 +145,25 @@ Deno.serve(async (req) => {
     if (mode === "file") {
       const object = Number(body.object) || 1001, rec = str(body.recordId), fid = str(body.fileId), url = str(body.url);
       let r: Response | null = null;
+      /** הורדה עם מעקב ידני אחרי הפניות: הטוקן רק לבקשה הראשונה ורק לשרת של פיירברי; כל הפניה חייבת להיות לשרת מוכר. */
+      const getFollow = async (start: string): Promise<Response | null> => {
+        let next = start, hops = 0;
+        while (true) {
+          const h = okHost(next); if (!h) return null;
+          const own = /(^|\.)(fireberry\.com|powerlink\.co\.il)$/i.test(h);
+          const x: Response = await fetch(next, { redirect: "manual", headers: own && hops === 0 ? { tokenid: tok.token } : {} });
+          const loc = x.status >= 300 && x.status < 400 ? x.headers.get("location") : null;
+          if (!loc) return x;
+          next = new URL(loc, next).toString(); if (++hops > 4) return null;
+        }
+      };
       if (url) {
-        // רק קישורים מאובטחים של פיירברי ושל שירותי האחסון שלו
-        const host = okHost(url);
-        if (!host) return json({ error: "קישור הקובץ לא מוכר." }, 400);
-        r = await fetch(url, { headers: /fireberry|powerlink/i.test(host) ? { tokenid: tok.token } : {} });
+        if (!okHost(url)) return json({ error: "קישור הקובץ לא מוכר." }, 400);
+        r = await getFollow(url);
+        if (!r) return json({ error: "קישור הקובץ הפנה לכתובת לא מוכרת." }, 400);
       } else if (rec && fid) {
         for (const path of [`/api/v2/record/${object}/${encodeURIComponent(rec)}/files/${encodeURIComponent(fid)}`, `/api/record/${object}/${encodeURIComponent(rec)}/files/${encodeURIComponent(fid)}`, `/api/v2/file/${encodeURIComponent(fid)}`]) {
-          const x = await fetch(API + path, { headers: { tokenid: tok.token } }); if (x.ok) { r = x; break; }
+          const x = await getFollow(API + path); if (x?.ok) { r = x; break; }
         }
       } else return json({ error: "חסר קובץ." }, 400);
       if (!r || !r.ok) return json({ error: `לא הצלחתי להוריד את הקובץ מפיירברי (${r?.status ?? "?"}).` }, 502);
@@ -160,7 +171,7 @@ Deno.serve(async (req) => {
       let buf = new Uint8Array(await r.arrayBuffer());
       // לפעמים חוזר JSON עם קישור להורדה
       if (/json/i.test(type)) { const j = JSON.parse(new TextDecoder().decode(buf)); const u = pick(j as Rec, ["url", "downloadUrl", "fileUrl"]) || pick(meta(j), ["url", "downloadUrl", "fileUrl"]);
-        if (!u || !okHost(u)) return json({ error: "פיירברי לא החזיר את הקובץ." }, 502); const x = await fetch(u); if (!x.ok) return json({ error: "הורדת הקובץ נכשלה." }, 502); buf = new Uint8Array(await x.arrayBuffer()); }
+        if (!u || !okHost(u)) return json({ error: "פיירברי לא החזיר את הקובץ." }, 502); const x = await getFollow(u); if (!x?.ok) return json({ error: "הורדת הקובץ נכשלה." }, 502); buf = new Uint8Array(await x.arrayBuffer()); }
       if (buf.length > 15_000_000) return json({ error: "הקובץ גדול מ-15MB." }, 400);
       let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
       return json({ data: btoa(bin), type: /json/i.test(type) ? "" : type, size: buf.length });
