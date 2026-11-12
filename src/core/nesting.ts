@@ -2,6 +2,9 @@
 // כל חלק נחתך יחד עם פסי הקנט הארוכים שלו כ"בלוק" אחד, כדי שהגיד ימשיך מהמשטח אל הקנט.
 import { Cutout, PLINTH_H, Piece, Project, Side, isVertical, longIsX, pieceLen, pieceWid } from './model';
 
+/** מיפוי אפיני מנקודה מקומית בחלק לנקודה על הלוח: x = a·lx + b·ly + e, y = c·lx + d·ly + f. */
+export type Affine = [a: number, b: number, c: number, d: number, e: number, f: number];
+
 export interface Rect { x: number; y: number; w: number; h: number }
 export interface Strip { side: Side; rect: Rect }
 export interface Placement {
@@ -25,6 +28,9 @@ export interface Placement {
   stripOf?: Side;
   /** חלק נלווה (למשל דופן של כיור בנוי) — לא גוף של חלק. */
   extra?: string;
+  /** חיפוי שנחתך צמוד למשטח שמתחתיו (המשכיות גידים): המפתח של שיבוץ המשטח, ומיפוי ישיר ללוח. */
+  attached?: string;
+  map?: Affine;
 }
 /** האם השיבוץ הוא גוף החלק עצמו (ולא קנט או חלק נלווה). */
 export const isBody = (pl: Placement) => !pl.stripOf && !pl.extra;
@@ -38,7 +44,11 @@ export interface NestResult {
   metrics: { slabs: number; utilization: number; pieceArea: number; slabArea: number; apronLen: number; joints: number };
 }
 
-interface Block { key: string; pieceId: string; L: number; H: number; wid: number; seg: number; segs: number; off: number; lock: boolean; stripsBefore: Side[]; stripsAfter: Side[]; stripOf?: Side; extra?: string }
+interface SplashSlot { piece: Piece; host: Piece; side: Side; low: boolean; start: number; end: number }
+interface Block { key: string; pieceId: string; L: number; H: number; wid: number; seg: number; segs: number; off: number; lock: boolean; stripsBefore: Side[]; stripsAfter: Side[]; stripOf?: Side; extra?: string;
+  /** אורך נוסף לפני ואחרי המקטע (חיפוי שממשיך לפינה), כיוון החלק, וחיפוי מוצמד. */
+  lead?: number; tail?: number; lx?: boolean; splash?: SplashSlot }
+const fullL = (b: Block) => b.L + (b.lead || 0) + (b.tail || 0);
 interface Opts { W: number; H: number; kerf: number; margin: number; apronH: number }
 type Manual = NonNullable<Project['manual']>;
 
@@ -71,7 +81,19 @@ export function splitPoints(len: number, maxL: number, keep: [number, number][],
 function toBlocks(project: Project, o: Opts): Block[] {
   const blocks: Block[] = [];
   const maxL = o.W - 2 * o.margin;
+  // חיפוי קיר נחתך צמוד לצלע הקיר של המשטח שמתחתיו, כדי שהגיד ימשיך מהמשטח אל החיפוי
+  const byId = new Map(project.pieces.map((q) => [q.id, q])), attached = new Map<string, Piece>();
+  for (const q of project.pieces) {
+    if (q.kind !== 'splash' || !q.host || !q.side) continue;
+    const h = byId.get(q.host); if (!h || isVertical(h) || h.outline) continue;
+    const longSides: Side[] = longIsX(h) ? ['back', 'front'] : ['left', 'right'];
+    const aprH = o.apronH > 0 ? h.aprons.filter((sd) => longSides.includes(sd)).length * (o.kerf + o.apronH) : 0;
+    if (!longSides.includes(q.side) || attached.has(h.id) || pieceWid(h) + aprH + o.kerf + q.h > o.H - 2 * o.margin) continue;
+    attached.set(h.id, q);
+  }
+  const glued = new Set([...attached.values()].map((q) => q.id));
   for (const p of project.pieces) {
+    if (glued.has(p.id)) continue;
     const wid = pieceWid(p), lx = longIsX(p), len = pieceLen(p) + (p.corner === 'miter' ? wid : 0); // גרונג 45°: החלק ארוך יותר בעומק המשטח
     const longSides: Side[] = lx ? ['back', 'front'] : ['left', 'right'];
     const aprons = o.apronH > 0 ? p.aprons : [];
@@ -83,7 +105,13 @@ function toBlocks(project: Project, o: Opts): Block[] {
     const segs = pts.length - 1;
     for (let i = 0; i < segs; i++) {
       const L = pts[i + 1] - pts[i];
-      blocks.push({ key: `${p.id}|${i}`, pieceId: p.id, L, wid, H: wid + (before.length + after.length) * (o.kerf + o.apronH), seg: i, segs, off: pts[i], lock: p.grainLock, stripsBefore: before, stripsAfter: after });
+      const sq = attached.get(p.id), b: Block = { key: `${p.id}|${i}`, pieceId: p.id, L, wid, H: wid + (before.length + after.length) * (o.kerf + o.apronH), seg: i, segs, off: pts[i], lock: p.grainLock, stripsBefore: before, stripsAfter: after, lx };
+      if (sq) {
+        // החלק של החיפוי שמעל המקטע הזה; במקטע הראשון והאחרון הוא יכול להמשיך לפינה
+        const s0 = sq.off || 0, s1 = s0 + sq.w, start = i === 0 ? s0 : Math.max(s0, pts[i]), end = i === segs - 1 ? s1 : Math.min(s1, pts[i + 1]);
+        if (end - start > 1) { b.splash = { piece: sq, host: p, side: sq.side!, low: sq.side === longSides[0], start, end }; b.H += o.kerf + sq.h; b.lead = Math.max(0, pts[i] - start); b.tail = Math.max(0, end - pts[i + 1]); }
+      }
+      blocks.push(b);
     }
     // קנט בצדדים הקצרים: פס נפרד
     for (const s of aprons.filter((s) => !longSides.includes(s))) blocks.push({ key: `${p.id}|k-${s}`, pieceId: p.id, L: wid, wid: o.apronH, H: o.apronH, seg: 0, segs: 1, off: 0, lock: false, stripsBefore: [], stripsAfter: [], stripOf: s });
@@ -132,47 +160,83 @@ function maxRects(W: number, H: number, o: Opts) {
   };
 }
 
-function place(bl: Block, r: Rect & { rot: boolean }, slab: number, o: Opts): Placement {
-  const step = o.kerf + o.apronH, nb = bl.stripsBefore.length;
+function place(bl: Block, r: Rect & { rot: boolean }, slab: number, o: Opts): Placement[] {
+  const step = o.kerf + o.apronH, sp = bl.splash, spH = sp ? o.kerf + sp.piece.h : 0;
+  // הצד "הנמוך" (y קטן, או x קטן כשמסובב) של הבלוק: חלק לאורך y שלא מסובב מתהפך על הלוח
+  const flip = !r.rot && bl.lx === false, low = flip ? bl.stripsAfter : bl.stripsBefore, high = flip ? bl.stripsBefore : bl.stripsAfter;
+  const spLow = !!sp && sp.low !== flip, lowH = low.length * step + (spLow ? spH : 0), highStart = (sp && !spLow ? spH : 0) + o.kerf;
+  const lead = bl.lead || 0, tail = bl.tail || 0;
   const strips: Strip[] = [];
   let body: Rect;
   if (!r.rot) {
-    body = { x: r.x, y: r.y + nb * step, w: bl.L, h: bl.wid };
-    bl.stripsBefore.forEach((s, i) => strips.push({ side: s, rect: { x: r.x, y: r.y + i * step, w: bl.L, h: o.apronH } }));
-    bl.stripsAfter.forEach((s, i) => strips.push({ side: s, rect: { x: r.x, y: body.y + bl.wid + o.kerf + i * step, w: bl.L, h: o.apronH } }));
+    body = { x: r.x + lead, y: r.y + lowH, w: bl.L, h: bl.wid };
+    low.forEach((sd, i) => strips.push({ side: sd, rect: { x: body.x, y: r.y + i * step, w: bl.L, h: o.apronH } }));
+    high.forEach((sd, i) => strips.push({ side: sd, rect: { x: body.x, y: body.y + bl.wid + highStart + i * step, w: bl.L, h: o.apronH } }));
   } else {
-    body = { x: r.x + nb * step, y: r.y, w: bl.wid, h: bl.L };
-    bl.stripsBefore.forEach((s, i) => strips.push({ side: s, rect: { x: r.x + i * step, y: r.y, w: o.apronH, h: bl.L } }));
-    bl.stripsAfter.forEach((s, i) => strips.push({ side: s, rect: { x: body.x + bl.wid + o.kerf + i * step, y: r.y, w: o.apronH, h: bl.L } }));
+    body = { x: r.x + lowH, y: r.y + (bl.lx === false ? lead : tail), w: bl.wid, h: bl.L };
+    low.forEach((sd, i) => strips.push({ side: sd, rect: { x: r.x + i * step, y: body.y, w: o.apronH, h: bl.L } }));
+    high.forEach((sd, i) => strips.push({ side: sd, rect: { x: body.x + bl.wid + highStart + i * step, y: body.y, w: o.apronH, h: bl.L } }));
   }
-  return { key: bl.key, pieceId: bl.pieceId, slab, body, block: { x: r.x, y: r.y, w: r.w, h: r.h }, rot: r.rot, seg: bl.seg, segs: bl.segs, off: bl.off, len: bl.L, strips, stripOf: bl.stripOf, extra: bl.extra };
+  const host: Placement = { key: bl.key, pieceId: bl.pieceId, slab, body, block: { x: r.x, y: r.y, w: r.w, h: r.h }, rot: r.rot, seg: bl.seg, segs: bl.segs, off: bl.off, len: bl.L, strips, stripOf: bl.stripOf, extra: bl.extra };
+  if (!sp) return [host];
+  // החיפוי: צמוד לצלע הקיר של המקטע, כך שהשורה התחתונה שלו ממשיכה את השורה האחורית של המשטח
+  const h = sp.host, q = sp.piece, edge = (t: number): [number, number] => (sp.side === 'back' ? [t, 0] : sp.side === 'front' ? [t, h.h] : sp.side === 'left' ? [0, t] : [h.w, t]);
+  const out: [number, number] = sp.side === 'back' ? [0, -1] : sp.side === 'front' ? [0, 1] : sp.side === 'left' ? [-1, 0] : [1, 0];
+  const at = (lx: number, ly: number) => localToSlab(h, host, lx, ly), E0 = at(...edge(0)), E1 = at(...edge(1)), [ex, ey] = edge(0), N = at(ex + out[0], ey + out[1]);
+  const u = { x: E1.x - E0.x, y: E1.y - E0.y }, n = { x: N.x - E0.x, y: N.y - E0.y }, s0 = q.off || 0, gap = o.kerf + q.h;
+  const map: Affine = [u.x, -n.x, u.y, -n.y, E0.x + u.x * s0 + n.x * gap, E0.y + u.y * s0 + n.y * gap];
+  const pt = (lx: number, ly: number) => ({ x: map[0] * lx + map[1] * ly + map[4], y: map[2] * lx + map[3] * ly + map[5] });
+  const c1 = pt(sp.start - s0, 0), c2 = pt(sp.end - s0, q.h), rect = { x: Math.round(Math.min(c1.x, c2.x)), y: Math.round(Math.min(c1.y, c2.y)), w: Math.round(Math.abs(c2.x - c1.x)), h: Math.round(Math.abs(c2.y - c1.y)) };
+  return [host, { key: `${q.id}|${bl.seg}`, pieceId: q.id, slab, body: rect, block: rect, rot: r.rot, seg: bl.seg, segs: bl.segs, off: sp.start - s0, len: sp.end - sp.start, strips: [], attached: bl.key, map }];
 }
 
-function pack(blocks: Block[], o: Opts, manual: Manual = {}) {
+function pack(blocks: Block[], o: Opts, manual: Manual = {}, bookmatch = false) {
   const slabs: { mr: ReturnType<typeof maxRects>; placements: Placement[] }[] = [];
   const unplaced: Block[] = [];
-  const fits = (b: Block) => (b.L <= o.W - 2 * o.margin && b.H <= o.H - 2 * o.margin) || (!b.lock && b.H <= o.W - 2 * o.margin && b.L <= o.H - 2 * o.margin);
+  const fits = (b: Block) => (fullL(b) <= o.W - 2 * o.margin && b.H <= o.H - 2 * o.margin) || (!b.lock && b.H <= o.W - 2 * o.margin && fullL(b) <= o.H - 2 * o.margin);
   const slabAt = (i: number) => { while (slabs.length <= i) slabs.push({ mr: maxRects(o.W, o.H, o), placements: [] }); return slabs[i]; };
   // קודם החלקים שסודרו ידנית: הם תופסים את מקומם, והשאר מסתדרים סביבם
   const fixed = new Set<string>();
   for (const bl of blocks) {
     const m = manual[bl.key]; if (!m || !fits(bl)) continue;
-    const rot = !!m.rot && !bl.lock, w = rot ? bl.H : bl.L, h = rot ? bl.L : bl.H;
+    const rot = !!m.rot && !bl.lock, w = rot ? bl.H : fullL(bl), h = rot ? fullL(bl) : bl.H;
     if (w > o.W || h > o.H) continue;
     const r = { x: Math.round(Math.max(0, Math.min(o.W - w, m.x))), y: Math.round(Math.max(0, Math.min(o.H - h, m.y))), w, h, rot }, s = slabAt(Math.max(0, Math.min(40, Math.round(m.slab))));
-    s.mr.take(r); s.placements.push(place(bl, r, slabs.indexOf(s), o)); fixed.add(bl.key);
+    s.mr.take(r); s.placements.push(...place(bl, r, slabs.indexOf(s), o)); fixed.add(bl.key);
+  }
+  // בוק־מאץ': חלק עם חיבור נחתך מזוג לוחות (A ו-B במראה), והמקטע השני יושב במקום המשלים — כך הגיד נפתח כמו ספר על החיבור
+  if (bookmatch) {
+    const free = (sl: number, r: Rect) => !slabAt(sl).placements.some((p) => hit({ x: r.x - o.kerf, y: r.y - o.kerf, w: r.w + 2 * o.kerf, h: r.h + 2 * o.kerf }, p.block));
+    const cur = new Map<number, number>();
+    for (const a of blocks) {
+      if (a.seg !== 0 || a.segs !== 2 || a.stripOf || a.extra || fixed.has(a.key)) continue;
+      const b = blocks.find((x) => x.pieceId === a.pieceId && x.seg === 1 && !x.stripOf && !x.extra);
+      if (!b || fixed.has(b.key) || fullL(a) > o.W - 2 * o.margin || b.L + (b.tail || 0) > a.L + (a.lead || 0)) continue;
+      const hh = Math.max(a.H, b.H);
+      for (let k = 0; k < 40; k += 2) {
+        let y = cur.get(k) ?? o.margin, ok = false, ra = { x: 0, y: 0, w: 0, h: 0, rot: false }, rb = ra;
+        for (; y + hh <= o.H - o.margin; y += 20) {
+          ra = { x: o.margin, y, w: fullL(a), h: a.H, rot: false }; rb = { x: o.W - (o.margin + (a.lead || 0) + a.L), y, w: fullL(b), h: b.H, rot: false };
+          if (free(k, ra) && free(k + 1, rb)) { ok = true; break; }
+        }
+        if (!ok) continue;
+        slabAt(k).mr.take(ra); slabAt(k).placements.push(...place(a, ra, k, o));
+        slabAt(k + 1).mr.take(rb); slabAt(k + 1).placements.push(...place(b, rb, k + 1, o));
+        fixed.add(a.key); fixed.add(b.key); cur.set(k, y + hh + o.kerf); break;
+      }
+    }
   }
   for (const bl of blocks) {
     if (fixed.has(bl.key)) continue;
     if (!fits(bl)) { unplaced.push(bl); continue; }
     let done = false;
     for (let i = 0; i < slabs.length && !done; i++) {
-      const r = slabs[i].mr.find(bl.L, bl.H, !bl.lock);
-      if (r) { slabs[i].mr.take(r); slabs[i].placements.push(place(bl, r, i, o)); done = true; }
+      const r = slabs[i].mr.find(fullL(bl), bl.H, !bl.lock);
+      if (r) { slabs[i].mr.take(r); slabs[i].placements.push(...place(bl, r, i, o)); done = true; }
     }
     if (!done) {
-      const s = slabAt(slabs.length), r = s.mr.find(bl.L, bl.H, !bl.lock)!;
-      s.mr.take(r); s.placements.push(place(bl, r, slabs.length - 1, o));
+      const s = slabAt(slabs.length), r = s.mr.find(fullL(bl), bl.H, !bl.lock)!;
+      s.mr.take(r); s.placements.push(...place(bl, r, slabs.length - 1, o));
     }
   }
   while (slabs.length && !slabs[slabs.length - 1].placements.length) slabs.pop();
@@ -180,7 +244,7 @@ function pack(blocks: Block[], o: Opts, manual: Manual = {}) {
 }
 
 const ORDERS: ((a: Block, b: Block) => number)[] = [
-  (a, b) => b.H * b.L - a.H * a.L, (a, b) => Math.max(b.L, b.H) - Math.max(a.L, a.H), (a, b) => b.H - a.H || b.L - a.L, (a, b) => b.L - a.L || b.H - a.H,
+  (a, b) => b.H * fullL(b) - a.H * fullL(a), (a, b) => Math.max(fullL(b), b.H) - Math.max(fullL(a), a.H), (a, b) => b.H - a.H || fullL(b) - fullL(a), (a, b) => fullL(b) - fullL(a) || b.H - a.H,
 ];
 
 export function nest(project: Project): NestResult {
@@ -188,10 +252,10 @@ export function nest(project: Project): NestResult {
   const blocks = toBlocks(project, o);
   let best: ReturnType<typeof pack> | null = null, bestScore = Infinity;
   for (const ord of ORDERS) {
-    const r = pack([...blocks].sort(ord), o, project.manual);
+    const r = pack([...blocks].sort(ord), o, project.manual, project.bookmatch === 'yes');
     // פחות לוחות קודם; בשוויון — מעדיף שהלוח האחרון יהיה כמה שיותר ריק (שארית שימושית)
     const last = r.slabs[r.slabs.length - 1];
-    const lastUse = last ? last.placements.reduce((s, p) => s + p.block.w * p.block.h, 0) / (o.W * o.H) : 0;
+    const lastUse = last ? last.placements.filter((p) => !p.attached).reduce((s, p) => s + p.block.w * p.block.h, 0) / (o.W * o.H) : 0;
     const score = r.unplaced.length * 1e6 + r.slabs.length * 1e3 + lastUse;
     if (score < bestScore) { best = r; bestScore = score; }
   }
@@ -199,17 +263,17 @@ export function nest(project: Project): NestResult {
   // שיבוצים ידניים שחופפים לחלק אחר או חורגים מהשוליים
   const overlaps = new Set<string>();
   res.slabs.forEach((sl) => sl.placements.forEach((a) => {
-    if (!res.fixed.has(a.key)) return;
+    if (!res.fixed.has(a.key) || a.attached) return;
     if (a.block.x < o.margin - 0.5 || a.block.y < o.margin - 0.5 || a.block.x + a.block.w > o.W - o.margin + 0.5 || a.block.y + a.block.h > o.H - o.margin + 0.5) overlaps.add(a.key);
-    for (const b of sl.placements) if (b !== a && hit({ x: a.block.x - o.kerf + 0.5, y: a.block.y - o.kerf + 0.5, w: a.block.w + 2 * o.kerf - 1, h: a.block.h + 2 * o.kerf - 1 }, b.block)) { overlaps.add(a.key); if (res.fixed.has(b.key)) overlaps.add(b.key); }
+    for (const b of sl.placements) if (b !== a && b.attached !== a.key && hit({ x: a.block.x - o.kerf + 0.5, y: a.block.y - o.kerf + 0.5, w: a.block.w + 2 * o.kerf - 1, h: a.block.h + 2 * o.kerf - 1 }, b.block)) { overlaps.add(a.key); if (res.fixed.has(b.key)) overlaps.add(b.key); }
   }));
   const slabArea = res.slabs.length * o.W * o.H;
-  const usedArea = res.slabs.reduce((s, sl) => s + sl.placements.reduce((t, p) => t + p.block.w * p.block.h, 0), 0);
+  const usedArea = res.slabs.reduce((s, sl) => s + sl.placements.filter((p) => !p.attached).reduce((t, p) => t + p.block.w * p.block.h, 0), 0);
   const pieceArea = project.pieces.reduce((s, p) => s + p.w * p.h, 0);
   const joints: Joint[] = blocks.filter((b) => b.segs > 1 && b.seg > 0 && !b.stripOf && !b.extra).map((b) => ({ pieceId: b.pieceId, at: b.off }));
   const apronLen = o.apronH > 0 ? project.pieces.reduce((s, p) => s + p.aprons.reduce((t, sd) => t + (sd === 'front' || sd === 'back' ? p.w : p.h), 0), 0) : 0;
   return {
-    slabs: res.slabs.map((s) => ({ w: o.W, h: o.H, placements: s.placements, used: Math.round((s.placements.reduce((t, p) => t + p.block.w * p.block.h, 0) / (o.W * o.H)) * 100) })),
+    slabs: res.slabs.map((s) => ({ w: o.W, h: o.H, placements: s.placements, used: Math.round((s.placements.filter((p) => !p.attached).reduce((t, p) => t + p.block.w * p.block.h, 0) / (o.W * o.H)) * 100) })),
     unplaced: res.unplaced.map((b) => ({ pieceId: b.pieceId, len: b.L, wid: b.H, reason: b.lock ? 'גדול מהלוח (כיוון הגיד נעול)' : 'גדול מהלוח' })),
     joints,
     overlaps: [...overlaps],
@@ -225,6 +289,7 @@ export function segLocal(p: Piece, pl: Placement): Rect {
 
 /** נקודה מקומית בחלק → נקודה על הלוח (למיפוי טקסטורה מדויק = רצף גידים אמיתי). */
 export function localToSlab(p: Piece, pl: Placement, lx: number, ly: number): { x: number; y: number } {
+  if (pl.map) { const m = pl.map; return { x: m[0] * lx + m[1] * ly + m[4], y: m[2] * lx + m[3] * ly + m[5] }; }
   const s = segLocal(p, pl), sameAxis = longIsX(p) !== pl.rot;
   if (sameAxis) return { x: pl.body.x + (lx - s.x), y: pl.body.y + (ly - s.y) };
   return { x: pl.body.x + (ly - s.y), y: pl.body.y + pl.body.h - (lx - s.x) };

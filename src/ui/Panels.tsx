@@ -3,7 +3,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { CABINETS, FAUCETS, FINISHES, FLOORS, GLASS, Swatch, WALLS, faucetById } from '../core/catalog';
 import { factorHe, runningMeters } from '../core/pricing';
 import { exportNestDxf } from '../core/dxf';
-import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
+import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
 import { upgrades } from '../core/upgrades';
 import { OrderStatus, STATUS_HE, isLocal, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
@@ -47,7 +47,7 @@ function addVertical(kind: 'splash' | 'waterfall') {
   const sides: Side[] = kind === 'splash' ? [host.wall || 'back'] : host.w >= host.h ? ['left', 'right'] : ['back', 'front'];
   const fresh = sides.filter((s) => !p.pieces.some((q) => q.kind === kind && q.host === host.id && q.side === s));
   if (!fresh.length) return st.setToast(kind === 'splash' ? 'כבר יש חיפוי לצד הזה' : 'כבר יש מפלים לחלק הזה');
-  st.apply((pr) => ({ ...pr, pieces: [...pr.pieces, ...fresh.map((s) => mkPiece({ kind, name: kind === 'splash' ? 'חיפוי קיר' : `מפל · ${SIDE_HE[s]}`, w: s === 'back' || s === 'front' ? host.w : host.h, h: kind === 'splash' ? 600 : pr.counterH - pr.thickness, host: host.id, side: s }))] }));
+  st.apply((pr) => ({ ...pr, pieces: [...pr.pieces, ...fresh.map((s) => { const ce = kind === 'splash' && s === host.wall ? cornerExt(pr, host) : { lead: 0, tail: 0 }, a = ce.lead ? ce.lead - pr.thickness : 0, b = ce.tail ? ce.tail - pr.thickness : 0; return mkPiece({ kind, name: kind === 'splash' ? 'חיפוי קיר' : `מפל · ${SIDE_HE[s]}`, off: a ? -a : undefined, w: (s === 'back' || s === 'front' ? host.w : host.h) + a + b, h: kind === 'splash' ? 600 : pr.counterH - pr.thickness, host: host.id, side: s }); })] }));
 }
 function addCutout(kind: CutoutKind, built = false) {
   const st = useStore.getState(), p = st.project!, sel = st.sel?.type === 'piece' ? p.pieces.find((q) => q.id === st.sel!.id) : undefined;
@@ -62,14 +62,7 @@ function addCutout(kind: CutoutKind, built = false) {
   st.apply((pr) => ({ ...pr, cutouts: [...pr.cutouts, c] })); st.select({ type: 'cutout', id: c.id });
 }
 
-/** חיפוי קיר בלחיצה: בלי / 60 ס"מ / עד הארונות העליונים / עד התקרה. */
-export function setSplash(pr: Project, mode: 'none' | '60' | 'uppers' | 'ceiling'): Project {
-  const hosts = pr.pieces.filter((q) => q.kind === 'counter' && q.wall), ids = new Set(hosts.map((q) => q.id));
-  const rest = pr.pieces.filter((q) => !(q.kind === 'splash' && q.host && ids.has(q.host)));
-  if (mode === 'none') return { ...pr, pieces: rest };
-  const h = mode === '60' ? 600 : mode === 'uppers' ? upperBottom(pr) - pr.counterH : Math.min(2500 - pr.counterH, pr.slabH - 2 * pr.margin); // עד התקרה, מוגבל לרוחב הלוח
-  return { ...pr, pieces: [...rest, ...hosts.map((q) => mkPiece({ kind: 'splash', name: 'חיפוי קיר', w: q.wall === 'back' || q.wall === 'front' ? q.w : q.h, h, host: q.id, side: q.wall }))] };
-}
+export { setSplash } from '../core/model';
 const NOTE_VEINS = 'ההדמיה להמחשה בלבד — אין התחייבות לגידים. מיקום וכיוון הגידים בפועל משתנים מלוח ללוח.';
 
 export function LeftPanel() {
@@ -234,7 +227,7 @@ export function LeftPanel() {
         <div key={u.id} className={`upg ${u.active ? 'on' : ''}`}>
           <div className="row"><b>{u.title}</b><span className="sp" /><button className={`btn sm ${u.active ? '' : 'primary'}`} onClick={() => apply(u.apply)}>{u.active ? 'הסר' : 'הוסף'}</button></div>
           <p>{u.pitch}</p>
-          <span className="mute mono" style={{ fontSize: 11.5 }}>{u.dArea ? `${u.dArea > 0 ? '+' : ''}${u.dArea} מ"ר אבן` : 'בלי אבן נוספת'}{u.dSlabs ? ` · ${u.dSlabs > 0 ? '+' : ''}${u.dSlabs} לוח` : u.dArea > 0 ? ' · בלי לוח נוסף' : ''}</span>
+          <span className="mute mono" style={{ fontSize: 11.5 }}>{u.dRm ? `${u.dRm > 0 ? '+' : ''}${u.dRm} מטר רץ` : u.dArea ? 'אבן לכיור בנוי' : 'בלי אבן נוספת'}{u.dSlabs ? ` · ${u.dSlabs > 0 ? '+' : ''}${u.dSlabs} לוח` : u.dArea > 0 ? ' · בלי לוח נוסף' : ''}</span>
         </div>
       ))}
     </section>
@@ -246,7 +239,7 @@ export function LeftPanel() {
     <section>
       <span className="cap">סיכום</span>
       <div className="metrics">
-        <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>שטח · מ"ר</small><b>{m2(m?.pieceArea || 0)}</b></div>
+        <div className="metric"><small>לוחות</small><b>{m?.slabs ?? 0}</b></div><div className="metric"><small>מטר רץ</small><b>{rm.total.toFixed(2)}</b></div>
         <div className="metric"><small>חלקים</small><b>{project.pieces.length}</b></div><div className="metric"><small>לבדיקה</small><b>{errors + warns}</b></div>
       </div>
       <div className="mute" style={{ fontSize: 13 }}>{stoneLabel(stone)} · {project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'בלי קנט'}</div>

@@ -21,6 +21,8 @@ export interface Piece {
   /** חלק אנכי: לאיזה חלק ולאיזה צד הוא צמוד. */
   host?: string;
   side?: Side;
+  /** חלק אנכי: היסט מתחילת הצלע (שלילי = ממשיך אחורה עד הפינה). */
+  off?: number;
   /** צדדים עם קנט (פס אבן מודבק בגרונג, נחתך צמוד לחלק לשמירת רצף הגיד). */
   aprons: Side[];
   /** נעילת כיוון גיד: true = החלק לא מסתובב על הלוח. */
@@ -241,4 +243,35 @@ export function corners(p: Project): { a: Piece; b: Piece; x1: number; y1: numbe
     out.push({ a, b, x1: outerRight ? b.x : b.x + b.w, y1: ey, x2: outerRight ? b.x + b.w : b.x, y2: oy, miter });
   }
   return out;
+}
+
+/** כמה צלע הקיר של משטח צריכה להמשיך לפני תחילתה ואחרי סופה, עד הקיר של משטח ניצב (פינת L / U). */
+export function cornerExt(p: Project, host: Piece): { lead: number; tail: number } {
+  const out = { lead: 0, tail: 0 }; if (!host.wall) return out;
+  const e = hostEdge(host, host.wall), x1 = e.x + e.dx * e.len, y1 = e.y + e.dy * e.len, near = (a: number, b: number) => Math.abs(a - b) < 6;
+  for (const q of p.pieces) {
+    if (q === host || isVertical(q) || q.kind !== 'counter' || !q.wall) continue;
+    if (e.dy) { // צלע לאורך y: מחפשים משטח עם קיר אחורי/קדמי שנוגע בתחילתה או בסופה
+      if (e.x < q.x - 6 || e.x > q.x + q.w + 6) continue;
+      if (q.wall === 'back' && near(q.y + q.h, e.y) && q.y < e.y) out.lead = Math.max(out.lead, e.y - q.y);
+      if (q.wall === 'front' && near(q.y, y1) && q.y + q.h > y1) out.tail = Math.max(out.tail, q.y + q.h - y1);
+    } else {
+      if (e.y < q.y - 6 || e.y > q.y + q.h + 6) continue;
+      if (q.wall === 'left' && near(q.x + q.w, e.x) && q.x < e.x) out.lead = Math.max(out.lead, e.x - q.x);
+      if (q.wall === 'right' && near(q.x, x1) && q.x + q.w > x1) out.tail = Math.max(out.tail, q.x + q.w - x1);
+    }
+  }
+  return out;
+}
+
+/** חיפוי קיר בלחיצה: בלי / 60 ס"מ / עד הארונות העליונים / עד התקרה. בפינה החיפוי ממשיך עד החיפוי של הקיר הניצב. */
+export function setSplash(pr: Project, mode: 'none' | '60' | 'uppers' | 'ceiling' | number): Project {
+  const hosts = pr.pieces.filter((q) => q.kind === 'counter' && q.wall), ids = new Set(hosts.map((q) => q.id));
+  const rest = pr.pieces.filter((q) => !(q.kind === 'splash' && q.host && ids.has(q.host)));
+  if (mode === 'none') return { ...pr, pieces: rest };
+  const h = typeof mode === 'number' ? mode : mode === '60' ? 600 : mode === 'uppers' ? upperBottom(pr) - pr.counterH : Math.min(2500 - pr.counterH, pr.slabH - 2 * pr.margin);
+  return { ...pr, pieces: [...rest, ...hosts.map((q) => {
+    const { lead, tail } = cornerExt(pr, q), a = lead ? lead - pr.thickness : 0, b = tail ? tail - pr.thickness : 0;
+    return piece({ kind: 'splash', name: 'חיפוי קיר', w: sideLen(q, q.wall!) + a + b, h, host: q.id, side: q.wall, off: a ? -a : undefined });
+  })] };
 }

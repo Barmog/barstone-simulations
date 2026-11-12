@@ -14,7 +14,7 @@ function assertValid(p: ReturnType<typeof emptyProject>) {
       expect(pl.block.x).toBeGreaterThanOrEqual(p.margin); expect(pl.block.y).toBeGreaterThanOrEqual(p.margin);
       expect(pl.block.x + pl.block.w).toBeLessThanOrEqual(s.w - p.margin); expect(pl.block.y + pl.block.h).toBeLessThanOrEqual(s.h - p.margin);
     }
-    for (let i = 0; i < s.placements.length; i++) for (let j = i + 1; j < s.placements.length; j++) expect(overlap(s.placements[i].block, s.placements[j].block, p.kerf - 0.01)).toBe(false);
+    for (let i = 0; i < s.placements.length; i++) for (let j = i + 1; j < s.placements.length; j++) { const a = s.placements[i], b = s.placements[j]; if (a.attached === b.key || b.attached === a.key) continue; expect(overlap(a.block, b.block, p.kerf - 0.01)).toBe(false); }
   }
   return r;
 }
@@ -124,13 +124,13 @@ describe('מטר רץ, סידור ידני, צוקל וחיבורים ידניי
     expect(runningMeters(p).total).toBeCloseTo(3 + 4);
   });
   it('חלק שסודר ידנית נשאר במקומו, והשאר לא עולים עליו', () => {
-    const p = fromTemplate('l-island'), r0 = nest(p), pl = r0.slabs[0].placements[0];
+    const p = fromTemplate('l-island'), r0 = nest(p), own = r0.slabs.flatMap((s) => s.placements).filter((q) => !q.attached && q.block.w < 2500 && q.block.h < 1200), pl = own[0];
     p.manual = { [pl.key]: { slab: 0, x: 500, y: 300 } };
     const r = nest(p), moved = r.slabs.flatMap((s) => s.placements).find((q) => q.key === pl.key)!;
     expect(moved.block.x).toBe(500); expect(moved.block.y).toBe(300); expect(r.unplaced.length).toBe(0); expect(r.overlaps.length).toBe(0);
-    for (const s of r.slabs) for (let i = 0; i < s.placements.length; i++) for (let j = i + 1; j < s.placements.length; j++) expect(overlap(s.placements[i].block, s.placements[j].block, -1)).toBe(false);
+    for (const s of r.slabs) for (let i = 0; i < s.placements.length; i++) for (let j = i + 1; j < s.placements.length; j++) { const a = s.placements[i], b = s.placements[j]; if (a.attached === b.key || b.attached === a.key) continue; expect(overlap(a.block, b.block, -1)).toBe(false); }
     // שני חלקים ידניים באותו מקום: מדווח כחפיפה
-    const other = r0.slabs[0].placements[1]; p.manual[other.key] = { slab: 0, x: 520, y: 320 };
+    const other = own[1]; p.manual[other.key] = { slab: 0, x: 520, y: 320 };
     expect(nest(p).overlaps.length).toBeGreaterThan(0);
     expect(check(p, nest(p)).some((i) => i.id === 'manual-overlap')).toBe(true);
   });
@@ -140,5 +140,32 @@ describe('מטר רץ, סידור ידני, צוקל וחיבורים ידניי
     expect(nest(p).slabs.flatMap((s) => s.placements).length).toBe(n0 + 1);
     p.pieces[0].w = 4200; p.pieces[0].jointAt = [1500];
     expect(nest(p).joints.map((j) => j.at)).toEqual([1500]);
+  });
+});
+
+describe('המשכיות גידים: חיפוי, בוק־מאץ׳ ופינה', () => {
+  const sameSlab = (p: any, r: any, id: string) => r.slabs.flatMap((s: any) => s.placements).filter((q: any) => q.pieceId === id);
+  it('החיפוי נחתך צמוד לצלע הקיר של המשטח, והשורה התחתונה שלו ממשיכה את השורה האחורית', () => {
+    for (const id of ['straight', 'l', 'u'] as const) {
+      const p = fromTemplate(id), r = assertValid(p), sp = p.pieces.find((q) => q.kind === 'splash')!, host = p.pieces.find((q) => q.id === sp.host)!;
+      const s = sameSlab(p, r, sp.id)[0], h = sameSlab(p, r, host.id).find((q: any) => q.key === s.attached);
+      expect(s.slab).toBe(h.slab);
+      // נקודה בתחתית החיפוי ונקודה בגב המשטח, באותו מקום לאורך — רחוקות זו מזו רק בעובי המסור
+      const a = localToSlab(sp, s, 500, sp.h), b = localToSlab(host, h, 500, 0);
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(p.kerf, 3);
+    }
+  });
+  it('בוק־מאץ׳: המקטע השני יושב בלוח המראה, במקום המשלים', () => {
+    const p = fromTemplate('straight'); p.pieces[0].w = 4400; p.bookmatch = 'yes';
+    const r = assertValid(p), segs = sameSlab(p, r, p.pieces[0].id).sort((x: any, y: any) => x.seg - y.seg);
+    expect(segs[1].slab).toBe(segs[0].slab + 1); expect(segs[0].slab % 2).toBe(0);
+    // הקצה של מקטע A על הלוח הוא תמונת המראה של תחילת מקטע B
+    expect(segs[0].body.x + segs[0].body.w).toBe(p.slabW - segs[1].body.x); expect(segs[0].body.y).toBe(segs[1].body.y);
+  });
+  it('חיפוי הרגל ממשיך עד הפינה', async () => {
+    const { setSplash } = await import('../src/core/model');
+    const p = setSplash(fromTemplate('l'), '60'), leg = p.pieces.find((q) => q.name === 'משטח L')!, sp = p.pieces.find((q) => q.kind === 'splash' && q.host === leg.id)!;
+    expect(sp.off).toBe(-(620 - p.thickness)); expect(sp.w).toBe(leg.h + 620 - p.thickness);
+    assertValid(p);
   });
 });

@@ -1,5 +1,5 @@
 // הבודק החכם: כללי מקצוע דטרמיניסטיים. כל ממצא מסביר מה הבעיה, ואם אפשר — מציע תיקון בלחיצה.
-import { CUT_HE, Cutout, Piece, Project, corners as cornersOf, isVertical, longIsX, pieceLen, pieceWid, piece as mkPiece, SIDE_HE, Side } from './model';
+import { CUT_HE, Cutout, Piece, Project, cornerExt, corners as cornersOf, isVertical, longIsX, pieceLen, pieceWid, piece as mkPiece, SIDE_HE, Side } from './model';
 import { NestResult } from './nesting';
 
 export interface Issue {
@@ -116,6 +116,12 @@ export function check(p: Project, nest: NestResult): Issue[] {
   const last = nest.slabs[nest.slabs.length - 1];
   if (nest.slabs.length > 1 && last && last.used < 18) out.push({ id: 'waste', level: 'tip', title: `הלוח האחרון מנוצל רק ב-${last.used}%`, detail: 'קיצור קטן של אחד החלקים, ויתור על קנט בצד נסתר, או שחרור כיוון גיד בחלק קטן — עשויים לחסוך לוח שלם.' });
 
+  // --- חיפוי שלא מגיע לפינה ---
+  for (const q of p.pieces.filter((x) => x.kind === 'splash' && x.host)) {
+    const host = byId[q.host!]; if (!host?.wall || q.side !== host.wall) continue;
+    const { lead, tail } = cornerExt(p, host), a = lead ? lead - p.thickness : 0, b = tail ? tail - p.thickness : 0, o0 = q.off || 0;
+    if ((a && o0 > -a + 5) || (b && o0 + q.w < sideLenOf(host, host.wall) + b - 5)) out.push({ id: `corner-${q.id}`, level: 'warn', pieceId: q.id, title: `החיפוי מעל "${host.name}" לא מגיע לפינה`, detail: 'בפינה נשאר קיר בלי חיפוי. ההשלמה ממשיכה את החיפוי עד הקיר הניצב, באותה חתיכה כדי שהגיד יהיה רציף.', fix: { label: 'השלם עד הפינה', apply: patchPiece(q.id, () => ({ off: a ? -a : undefined, w: sideLenOf(host, host.wall!) + a + b })) } });
+  }
   // --- סידור ידני על הלוח ---
   if (nest.overlaps.length) out.push({ id: 'manual-overlap', level: 'error', title: 'חלקים חופפים או חורגים בלוח', detail: `${nest.overlaps.length} חלקים שסודרו ידנית עולים על חלק אחר או יוצאים משולי הלוח. הם מסומנים באדום בלוחות.`, fix: { label: 'אפס סידור ידני', apply: (pr) => ({ ...pr, manual: undefined }) } });
   // --- דלפק / אי: מעל 80 ס"מ רוחב בדרך כלל יש ישיבה ---

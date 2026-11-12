@@ -1,6 +1,6 @@
 // בניית סצנת התלת־ממד מתוך מודל המטבח. יחידות: מטר. x בתוכנית → x, y בתוכנית → z, גובה → y.
 import * as THREE from 'three';
-import { Cutout, PLINTH_H, Piece, Project, SEAT_DEPTH, Side, UPPER_TOP, chairCount, corners, hostEdge, isVertical, longIsX, upperBottom } from '../core/model';
+import { Cutout, PLINTH_H, Piece, Project, SEAT_DEPTH, Side, UPPER_TOP, chairCount, cornerExt, corners, hostEdge, isVertical, longIsX, upperBottom } from '../core/model';
 import { NestResult, Placement, Rect, isBody, localToSlab, segLocal } from '../core/nesting';
 import { FINISHES, faucetById, floorById } from '../core/catalog';
 
@@ -151,34 +151,36 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
     if (p.wall) {
       const e = hostEdge(p, p.wall), wh = 2500, wt = 100, cx = e.x + (e.dx * e.len) / 2 + (e.nx * wt) / 2, cz = e.y + (e.dy * e.len) / 2 + (e.ny * wt) / 2;
       const w = box(e.dx ? e.len + 900 : wt, wh, e.dx ? wt : e.len + 900, wallMat, cx, wh / 2, cz); w.traverse((o) => (o.castShadow = false));
+      // בפינה הארונות העליונים ממשיכים עד הארון של הקיר הניצב (שעומקו 35 ס"מ)
+      const ce = cornerExt(project, p), l0 = Math.max(0, ce.lead - 350), t0 = Math.max(0, ce.tail - 350), eu = { ...e, x: e.x - e.dx * l0, y: e.y - e.dy * l0, len: e.len + l0 + t0 };
       if (project.uppers && p.kind === 'counter' && e.len > 900) {
-        const d = 350, ub = upperBottom(project), uh = UPPER_TOP - ub, ux = e.x + (e.dx * e.len) / 2 - (e.nx * d) / 2, uz = e.y + (e.dy * e.len) / 2 - (e.ny * d) / 2;
-        const along = (a: number, off: number, y: number, w: number, h: number, t: number, mat: THREE.Material) => box(e.dx ? w : t, h, e.dx ? t : w, mat, e.x + e.dx * a - e.nx * off, y, e.y + e.dy * a - e.ny * off);
+        const d = 350, ub = upperBottom(project), uh = UPPER_TOP - ub, ux = eu.x + (eu.dx * eu.len) / 2 - (eu.nx * d) / 2, uz = eu.y + (eu.dy * eu.len) / 2 - (eu.ny * d) / 2;
+        const along = (a: number, off: number, y: number, w: number, h: number, t: number, mat: THREE.Material) => box(eu.dx ? w : t, h, eu.dx ? t : w, mat, eu.x + eu.dx * a - eu.nx * off, y, eu.y + eu.dy * a - eu.ny * off);
         if (upStyle === 'shelves') {
           // מדפים פתוחים: שלושה מדפים עבים וכמה פריטים עליהם
           const rows = uh > 800 ? 3 : 2;
-          for (let r = 0; r < rows; r++) { const y = ub + (uh / rows) * r + 20; along(e.len / 2, 150, y, e.len - 60, 40, 300, upMat);
-            for (let k = 0; k < Math.floor(e.len / 520); k++) { const a = 200 + k * 520 + (r % 2) * 160; if (a > e.len - 200) break; const hh = 110 + ((k * 37 + r * 53) % 120), col = [0xd9cdb8, 0x8a8f7d, 0xf1ede4, 0x5c5248][(k + r) % 4]; along(a, 150, y + 20 + hh / 2, 90 + ((k * 29) % 60), hh, 110, new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 })); } }
+          for (let r = 0; r < rows; r++) { const y = ub + (uh / rows) * r + 20; along(eu.len / 2, 150, y, eu.len - 60, 40, 300, upMat);
+            for (let k = 0; k < Math.floor(eu.len / 520); k++) { const a = 200 + k * 520 + (r % 2) * 160; if (a > eu.len - 200) break; const hh = 110 + ((k * 37 + r * 53) % 120), col = [0xd9cdb8, 0x8a8f7d, 0xf1ede4, 0x5c5248][(k + r) % 4]; along(a, 150, y + 20 + hh / 2, 90 + ((k * 29) % 60), hh, 110, new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 })); } }
         } else if (upStyle === 'glass') {
           // ויטרינה: גוף פתוח, מדפים וחזית זכוכית בגוון נבחר
-          along(e.len / 2, 9, ub + uh / 2, e.len, uh, 18, upMat); along(e.len / 2, d / 2, ub + 9, e.len, 18, d, upMat); along(e.len / 2, d / 2, ub + uh - 9, e.len, 18, d, upMat);
-          for (const a of [9, e.len - 9]) along(a, d / 2, ub + uh / 2, 18, uh, d, upMat);
-          for (let r = 1; r < 3; r++) along(e.len / 2, d / 2, ub + (uh / 3) * r, e.len - 36, 10, d - 30, glass);
-          const n = Math.max(1, Math.round(e.len / 500)), w = e.len / n;
+          along(eu.len / 2, 9, ub + uh / 2, eu.len, uh, 18, upMat); along(eu.len / 2, d / 2, ub + 9, eu.len, 18, d, upMat); along(eu.len / 2, d / 2, ub + uh - 9, eu.len, 18, d, upMat);
+          for (const a of [9, eu.len - 9]) along(a, d / 2, ub + uh / 2, 18, uh, d, upMat);
+          for (let r = 1; r < 3; r++) along(eu.len / 2, d / 2, ub + (uh / 3) * r, eu.len - 36, 10, d - 30, glass);
+          const n = Math.max(1, Math.round(eu.len / 500)), w = eu.len / n;
           for (let i = 0; i < n; i++) { const a = w * (i + 0.5); along(a, d + 3, ub + uh / 2, w - 44, uh - 44, 5, glass);
             along(a, d + 3, ub + 11, w - 4, 22, 20, upMat); along(a, d + 3, ub + uh - 11, w - 4, 22, 20, upMat); along(a - w / 2 + 11, d + 3, ub + uh / 2, 22, uh, 20, upMat); along(a + w / 2 - 11, d + 3, ub + uh / 2, 22, uh, 20, upMat); }
         } else {
-          box(e.dx ? e.len : d, uh, e.dx ? d : e.len, upMat, ux, ub + uh / 2, uz);
+          box(eu.dx ? eu.len : d, uh, eu.dx ? d : eu.len, upMat, ux, ub + uh / 2, uz);
           if (upStyle === 'klapa') {
             // קלאפות: חזיתות רחבות שנפתחות למעלה, בשתי שורות כשהארון גבוה
-            const n = Math.max(1, Math.round(e.len / 900)), rows = uh >= 600 ? 2 : 1;
-            for (let i = 1; i < n; i++) along((e.len / n) * i, d + 1, ub + uh / 2, 4, uh - 4, 3, dark);
-            for (let r = 1; r < rows; r++) along(e.len / 2, d + 1, ub + (uh / rows) * r, e.len - 4, 4, 3, dark);
-          } else { const n = Math.max(1, Math.round(e.len / 600)); for (let i = 1; i < n; i++) along((e.len / n) * i, d + 1, ub + uh / 2, 4, uh - 4, 3, dark); }
+            const n = Math.max(1, Math.round(eu.len / 900)), rows = uh >= 600 ? 2 : 1;
+            for (let i = 1; i < n; i++) along((eu.len / n) * i, d + 1, ub + uh / 2, 4, uh - 4, 3, dark);
+            for (let r = 1; r < rows; r++) along(eu.len / 2, d + 1, ub + (uh / rows) * r, eu.len - 4, 4, 3, dark);
+          } else { const n = Math.max(1, Math.round(eu.len / 600)); for (let i = 1; i < n; i++) along((eu.len / n) * i, d + 1, ub + uh / 2, 4, uh - 4, 3, dark); }
         }
         if (project.underLight !== false && upStyle !== 'shelves') {
-          const lamp = new THREE.Mesh(new THREE.BoxGeometry((e.dx ? e.len - 80 : 14) * S, 6 * S, (e.dx ? 14 : e.len - 80) * S), new THREE.MeshBasicMaterial({ color: 0xfff1d6 })); lamp.position.set((ux - e.nx * 60) * S, (ub - 4) * S, (uz - e.ny * 60) * S); group.add(lamp);
-          for (const f of e.len > 2200 ? [0.2, 0.5, 0.8] : [0.3, 0.7]) lamps.push(new THREE.Vector3((e.x + e.dx * e.len * f - e.nx * 200) * S, (ub - 60) * S, (e.y + e.dy * e.len * f - e.ny * 200) * S));
+          const lamp = new THREE.Mesh(new THREE.BoxGeometry((eu.dx ? eu.len - 80 : 14) * S, 6 * S, (eu.dx ? 14 : eu.len - 80) * S), new THREE.MeshBasicMaterial({ color: 0xfff1d6 })); lamp.position.set((ux - eu.nx * 60) * S, (ub - 4) * S, (uz - eu.ny * 60) * S); group.add(lamp);
+          for (const f of eu.len > 2200 ? [0.2, 0.5, 0.8] : [0.3, 0.7]) lamps.push(new THREE.Vector3((eu.x + eu.dx * eu.len * f - eu.nx * 200) * S, (ub - 60) * S, (eu.y + eu.dy * eu.len * f - eu.ny * 200) * S));
         }
       }
     }
@@ -297,12 +299,12 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
   // --- חיפוי קיר ומפלים ---
   for (const q of project.pieces.filter(isVertical)) {
     const host = q.host ? byId.get(q.host) : undefined; if (!host || !q.side) continue;
-    const e = hostEdge(host, q.side), pls = plsOf(q.id), len = Math.min(q.w, e.len), splash = q.kind === 'splash', n = Math.max(1, Math.ceil(len / 200));
+    const e = hostEdge(host, q.side), pls = plsOf(q.id), len = q.kind === 'splash' ? q.w : Math.min(q.w, e.len), o0 = q.kind === 'splash' ? q.off || 0 : 0, splash = q.kind === 'splash', n = Math.max(1, Math.ceil(len / 200));
     const g = new THREE.BoxGeometry(len, q.h, T, n, 1, 1), pos = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) { const [u, v] = uvAt(q, pls, pos.getX(i) + len / 2, q.h / 2 - pos.getY(i)); uv.setXY(i, u, v); }
     g.scale(S, S, S);
     const m = new THREE.Mesh(g, stone), y0 = splash ? H : 0, hh = splash ? q.h : Math.min(q.h, H - T);
-    m.position.set((e.x + (e.dx * len) / 2 - (e.nx * T) / 2) * S, (y0 + hh / 2) * S, (e.y + (e.dy * len) / 2 - (e.ny * T) / 2) * S); if (!splash) m.scale.y = hh / q.h; if (e.dy) m.rotation.y = -Math.PI / 2; add(m);
+    m.position.set((e.x + e.dx * (o0 + len / 2) - (e.nx * T) / 2) * S, (y0 + hh / 2) * S, (e.y + e.dy * (o0 + len / 2) - (e.ny * T) / 2) * S); if (!splash) m.scale.y = hh / q.h; if (e.dy) m.rotation.y = -Math.PI / 2; add(m);
   }
 
   // --- רצפה ---

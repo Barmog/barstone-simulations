@@ -10,7 +10,7 @@ export const isLocal = !sb;
 
 export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; created_at: string; updated_at: string }
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
-export interface OrderMetrics { slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
+export interface OrderMetrics { rm?: number; slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
 export interface Order { id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
 export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null; en?: string | null; novo?: string | null; thumb?: string }
 /** שם דגם לתצוגה: עברית ולצידה השם באנגלית (LUCENTE). */
