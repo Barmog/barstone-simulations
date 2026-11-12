@@ -8,10 +8,10 @@ const KEY = import.meta.env.VITE_SUPABASE_KEY as string | undefined;
 export const sb: SupabaseClient | null = URL_ && KEY ? createClient(URL_, KEY) : null;
 export const isLocal = !sb;
 
-export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; created_at: string; updated_at: string }
+export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; fb_id?: string | null; created_at: string; updated_at: string }
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
 export interface OrderMetrics { rm?: number; slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
-export interface Order { id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
+export interface Order { fb_object?: number | null; fb_id?: string | null; fb_sent_at?: string | null; id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
 export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null; en?: string | null; novo?: string | null; thumb?: string; series?: string | null }
 /** שם דגם לתצוגה: עברית ולצידה השם באנגלית (LUCENTE). */
 export const stoneLabel = (s: { name: string; en?: string | null }) => (s.en ? `${s.name} · ${s.en}` : s.name);
@@ -99,12 +99,12 @@ export const repo = {
     if (error) throw new Error(error.message);
     return data as Order | null;
   },
-  async createOrder(o: { customer_id: string; title: string; order_no?: string; project: Project }): Promise<Order> {
+  async createOrder(o: { customer_id: string; title: string; order_no?: string; project: Project; fb_object?: number; fb_id?: string }): Promise<Order> {
     const base = { ...o, status: 'draft' as OrderStatus, stone_id: typeof o.project.stoneId === 'number' ? o.project.stoneId : null, metrics: {} };
     if (!sb) { const row: Order = { ...base, id: id(), created_at: now(), updated_at: now() }; W('bs.orders', [row, ...J<Order[]>('bs.orders', [])]); return row; }
     return ok(await sb.from('orders').insert(base).select().single());
   },
-  async updateOrder(oid: string, patch: Partial<Pick<Order, 'title' | 'order_no' | 'status' | 'project' | 'metrics' | 'stone_id'>>) {
+  async updateOrder(oid: string, patch: Partial<Pick<Order, 'title' | 'order_no' | 'status' | 'project' | 'metrics' | 'stone_id' | 'fb_sent_at'>>) {
     if (!sb) { W('bs.orders', J<Order[]>('bs.orders', []).map((o) => (o.id === oid ? { ...o, ...patch, updated_at: now() } : o))); return; }
     ok(await sb.from('orders').update(patch).eq('id', oid).select('id'));
   },

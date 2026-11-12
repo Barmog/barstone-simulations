@@ -9,18 +9,34 @@ import { Slabs } from './Slabs';
 import { useOrder } from './Studio';
 import { cm, m2, useStone } from './util';
 import { View3D } from './View3D';
+import { useRef, useState } from 'react';
+import { repo } from '../data/repo';
+import { fireberry } from '../data/fireberry';
+import { sheetToPdf } from './pdf';
 
 export function Doc({ id }: { id: string }) {
   const { order, customer, missing } = useOrder(id);
   const project = useStore((s) => s.project), nest = useStore((s) => s.nest), stone = useStone();
+  const sheet = useRef<HTMLDivElement>(null), [sending, setSending] = useState(false), setToast = useStore((s) => s.setToast), patchOrder = useStore((s) => s.patchOrder);
+  async function send() {
+    if (!order?.fb_id || !order.fb_object || !sheet.current) return;
+    setSending(true);
+    try {
+      const { base64 } = await sheetToPdf(sheet.current);
+      await fireberry.attach(order.fb_object, order.fb_id, `${order.title}${order.order_no ? ` ${order.order_no}` : ''} - הדמיה Barstone.pdf`, base64);
+      const at = new Date().toISOString(); await repo.updateOrder(order.id, { fb_sent_at: at }); useStore.setState({ order: { ...order, fb_sent_at: at } }); void patchOrder;
+      setToast('ה-PDF צורף להזמנה בפיירברי');
+    } catch (e) { setToast(`השליחה נכשלה: ${(e as Error).message}`); }
+    setSending(false);
+  }
   const rm = project ? runningMeters(project) : { rows: [], total: 0, extras: [] };
   if (missing) return <div className="login"><div className="box glass"><h1>ההזמנה לא נמצאה</h1><button className="btn primary" onClick={() => go('/')}>חזרה</button></div></div>;
   if (!order || !project) return <div className="login"><div className="spin dark" /></div>;
   return (
     <>
-      <header className="top noprint doctop"><img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" /><button className="btn primary" onClick={() => print()}><Icon.download /><span>שמירה כ-PDF / הדפסה</span></button></header>
+      <header className="top noprint doctop"><img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" />{order.fb_id && order.fb_object && <button className="btn" disabled={sending} onClick={send}>{sending ? <span className="spin dark" /> : <Icon.send />}{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף PDF להזמנה בפיירברי'}</button>}<button className="btn primary" onClick={() => print()}><Icon.download /><span>שמירה כ-PDF / הדפסה</span></button></header>
       <main className="doc">
-        <div className="sheet">
+        <div className="sheet" ref={sheet}>
           <div className="row"><img src={asset('logo.png')} alt="Barstone" style={{ height: 22 }} /><span className="sp" /><span className="cap">הדמיית משטח אבן</span></div>
           <div><h1>{order.title}</h1><p className="mute" style={{ fontSize: 16 }}>{[customer?.name, customer?.address].filter(Boolean).join(' · ')}</p></div>
           <div className="docshot"><View3D still /></div>
