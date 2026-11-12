@@ -14,6 +14,7 @@ import { ViewName, renderViews } from './render';
 import { COLORS, edgeDetailSvg, edgeProfileSvg, slabImages } from './drawings';
 import { DimPlan } from './DimPlan';
 import { pagesToPdf } from './pdf';
+import { FINISH_HE, stoneFinish } from '../data/lucente';
 
 const NOTES = [
   'אין התחייבות לגידים: מיקום, כיוון וגוון הגידים משתנים מלוח ללוח. ההדמיה להמחשה בלבד.',
@@ -28,14 +29,14 @@ export function Doc({ id }: { id: string }) {
   const { order, customer, missing } = useOrder(id);
   const project = useStore((s) => s.project), nest = useStore((s) => s.nest), stone = useStone(), setToast = useStore((s) => s.setToast);
   const [shots, setShots] = useState<Partial<Record<ViewName, string>>>({}), [slabs, setSlabs] = useState<string[]>([]);
-  const [internal, setInternal] = useState(false), [busy, setBusy] = useState<'' | 'pdf' | 'fb'>('');
+  const [internal, setInternal] = useState(false), [busy, setBusy] = useState<'' | 'pdf' | 'fb'>(''), [pro, setPro] = useState<number | null>(null);
   const book = useRef<HTMLDivElement>(null);
   const key = project ? JSON.stringify([project, stone.url]) : '';
   useEffect(() => {
     if (!project) return; let live = true;
     const t = setTimeout(async () => {
       const views: ViewName[] = ['hero', 'left', 'front', 'right', 'top', ...(project.cutouts.some((c) => c.kind === 'sink') ? ['sink' as const] : [])];
-      const s = await renderViews(project, nest, stone.url, views); if (live) setShots(s);
+      const s = await renderViews(project, nest, stone.url, views, 2200, 1400, stoneFinish(project, stone.en)); if (live) setShots(s);
       if (nest) { const im = await slabImages(project, nest, stone.url); if (live) setSlabs(im); }
     }, 250);
     return () => { live = false; clearTimeout(t); };
@@ -49,7 +50,7 @@ export function Doc({ id }: { id: string }) {
   const date = new Date(order.updated_at).toLocaleDateString('he-IL'), ready = !!shots.hero && (!nest || slabs.length > 0);
   const fileName = `${order.title}${order.order_no ? ` ${order.order_no}` : ''} - Barstone.pdf`;
 
-  const material = `${stone.name ? stoneLabel(stone) : '—'} · ${project.thickness} מ"מ`;
+  const material = `${stone.name ? stoneLabel(stone) : '—'} · ${FINISH_HE[stoneFinish(project, stone.en)]} · ${project.thickness} מ"מ`;
   const block = (
     <div className="tb">
       <div><h4>פרטי לקוח</h4><p><b>שם:</b> {customer?.name || '—'}</p><p><b>טלפון:</b> <span dir="ltr">{customer?.phone || '—'}</span></p><p><b>כתובת:</b> {customer?.address || '—'}</p></div>
@@ -70,6 +71,17 @@ export function Doc({ id }: { id: string }) {
   ); };
   const Shot = ({ v, label }: { v: ViewName; label: string }) => <figure className="shot">{shots[v] ? <img src={shots[v]} alt={label} /> : <div className="ph"><span className="spin dark" /></div>}<figcaption>{label}</figcaption></figure>;
 
+  // שדרוג תמונת השער לצילום פוטו־ריאליסטי (אור פיזיקלי) — דקה-שתיים על המחשב
+  async function proCover() {
+    if (!project) return; setPro(0);
+    try {
+      const { photoRender } = await import('./photo');
+      const img = await photoRender({ project, nest, stoneUrl: stone.url, finish: stoneFinish(project, stone.en), view: 'hero', W: 2200, H: 1400, samples: 160, onProgress: (p) => setPro(p) });
+      setShots((s) => ({ ...s, hero: img }));
+    } catch (e) { setToast(`הצילום נכשל: ${(e as Error).message}`); }
+    setPro(null);
+  }
+
   async function exportPdf(send: boolean) {
     if (!book.current) return; setBusy(send ? 'fb' : 'pdf');
     try {
@@ -89,6 +101,7 @@ export function Doc({ id }: { id: string }) {
       <header className="top noprint doctop">
         <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" />
         <label className="row mute" style={{ fontSize: 13 }}><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />כולל מטר רץ (פנימי)</label>
+        <button className="btn" disabled={!ready || pro !== null} onClick={proCover} title="מחשב את תמונת השער באור פיזיקלי אמיתי">{pro !== null ? <><span className="spin dark" /><span>צילום {Math.round(pro * 100)}%</span></> : <span>צילום מקצועי לשער</span>}</button>
         {order.fb_id && order.fb_object && <button className="btn" disabled={!ready || !!busy} onClick={() => exportPdf(true)}>{busy === 'fb' ? <span className="spin dark" /> : <Icon.send />}<span>{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף לפיירברי'}</span></button>}
         <button className="btn primary" disabled={!ready || !!busy} onClick={() => exportPdf(false)}>{busy === 'pdf' ? <span className="spin" /> : <Icon.download />}<span>{ready ? 'הורדת PDF' : 'מכין הדמיות…'}</span></button>
       </header>
@@ -100,7 +113,7 @@ export function Doc({ id }: { id: string }) {
               <span className="eyebrow">הדמיית משטח אבן</span>
               <h1>{order.title}</h1>
               <p className="sub">{[customer?.name, customer?.address].filter(Boolean).join(' · ')}</p>
-              <div className="stone-card"><i style={{ backgroundImage: `url("${stone.thumb || stone.url}")` }} /><div><b>{stone.name || '—'}</b><small>{[stone.en, stone.series].filter(Boolean).join(' · ')}</small><small>{project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'קנט ישר'}</small></div></div>
+              <div className="stone-card"><i style={{ backgroundImage: `url("${stone.thumb || stone.url}")` }} /><div><b>{stone.name || '—'}</b><small>{[stone.en, stone.series].filter(Boolean).join(' · ')}</small><small>{FINISH_HE[stoneFinish(project, stone.en)]} · {project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'קנט ישר'}</small></div></div>
               <dl className="kv">
                 <div><dt>חלקים</dt><dd>{project.pieces.length}</dd></div><div><dt>לוחות</dt><dd>{nest?.metrics.slabs ?? 0}</dd></div>
                 <div><dt>חיבורים</dt><dd>{(nest?.metrics.joints ?? 0) + corners(project).length}</dd></div><div><dt>בוק־מאץ׳</dt><dd>{project.bookmatch === 'yes' ? 'כן' : project.bookmatch === 'no' ? 'לא' : '—'}</dd></div>

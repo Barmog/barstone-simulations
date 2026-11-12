@@ -1,4 +1,5 @@
 // הפאנלים של הסטודיו. ימין: השלב הנוכחי במסלול (מידות › אבן › עיצוב › בדיקה › סיכום). שמאל: צ'אט ובודק חכם.
+import { FINISH_HE, finishesFor, stoneFinish } from '../data/lucente';
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { CABINETS, FAUCETS, FINISHES, FLOORS, GLASS, Swatch, WALLS, faucetById } from '../core/catalog';
 import { factorHe, runningMeters } from '../core/pricing';
@@ -111,8 +112,10 @@ export function LeftPanel() {
       <div style={{ height: 120, borderRadius: 14, background: `#ddd url("${stone.url}") center/cover`, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.2)' }} />
       {stone.stock === 'no' && <div className="note err">הדגם הזה מסומן "אין במלאי". כדאי להציע ללקוח דגם דומה.</div>}
       {!stone.hasImage && <div className="note">לדגם הזה אין עדיין תמונת לוח, ולכן ההדמיה מציגה אבן כללית.</div>}
+      <span className="cap">גימור</span>
+      <div className="seg">{finishesFor(stone.en).map((f) => <button key={f} className={stoneFinish(project, stone.en) === f ? 'on' : ''} onClick={() => set({ finish: f })}>{FINISH_HE[f]}</button>)}</div>
       <button className="btn sm" onClick={() => setCmp(true)}><Icon.grid />השוואת דגמים זה לצד זה</button>
-      
+
     </section>
     <section>
       <span className="cap">האם הדגם בוק־מאץ׳?</span>
@@ -153,6 +156,10 @@ export function LeftPanel() {
       {project.upperStyle === 'glass' && <><span className="mute" style={{ fontSize: 12 }}>גוון הזכוכית</span><Swatches items={GLASS} value={project.glassTint || GLASS[0].hex} onPick={(hex) => set({ glassTint: hex })} /></>}
       {project.upperStyle !== 'shelves' && <div className="chips"><button className={`chip ${project.underLight !== false ? 'on' : ''}`} onClick={() => set({ underLight: project.underLight === false })}>תאורה מתחת לארונות</button></div>}
     </section>}
+    <section>
+      <span className="cap">מכשירים</span>
+      <div className="chips"><button className={`chip ${project.appliances !== false ? 'on' : ''}`} onClick={() => set({ appliances: project.appliances === false })}>קולט אדים, תנור ומקרר</button></div>
+    </section>
     <section>
       <div className="row"><span className="cap">ריצוף</span><span className="sp" /><span className="mute" style={{ fontSize: 12 }}>{FLOORS.find((f) => f.id === project.floor)?.name}</span></div>
       <div className="swatches">{FLOORS.map((f) => <button key={f.id} className={`sw ${project.floor === f.id ? 'on' : ''}`} title={f.name} onClick={() => set({ floor: f.id })}><i style={{ background: f.type === 'checker' ? `conic-gradient(${f.a} 25%, ${f.b} 0 50%, ${f.a} 0 75%, ${f.b} 0) 0 0/50% 50%` : f.type === 'plank' ? `repeating-linear-gradient(0deg, ${f.a} 0 7px, ${f.b} 7px 14px)` : f.type === 'tile' ? `linear-gradient(${f.line} 1px, transparent 1px) 0 0/50% 50%, linear-gradient(90deg, ${f.line} 1px, ${f.a} 1px) 0 0/50% 50%` : `radial-gradient(${f.b} 15%, ${f.a} 16%) 0 0/9px 9px` }} /><span>{f.name}</span></button>)}</div>

@@ -101,6 +101,10 @@ export interface Project {
   glassTint?: string;
   /** צוקל מאבן (נכנס לנסטינג) במקום צוקל רגיל. */
   plinthStone?: boolean;
+  /** גימור פני האבן: מבריק / מט / סטרקצ׳ר (לפי מה שהדגם מגיע בו). */
+  finish?: 'polished' | 'matte' | 'structure';
+  /** מכשירים בהדמיה: קולט אדים, מקרר ותנור בארון גבוה. */
+  appliances?: boolean;
   /** דגם וגימור הברז מהקטלוג. */
   faucet?: string;
   faucetFinish?: string;
