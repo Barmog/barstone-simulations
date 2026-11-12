@@ -147,8 +147,8 @@ export function localAssist(p: Project, text: string): { project?: Project; repl
   if (/אור יום|יום/.test(text) && /תאור|אור/.test(text)) return { project: { ...p, light: 'day' }, reply: 'עברתי לאור יום.' };
   const k = text.match(/(3000|4000|6000)/); if (k) return { project: { ...p, kelvin: +k[1] as 3000 }, reply: `גוון התאורה עכשיו ${k[1]}K.` };
   if (/ארונות עליונים|ארונות למעלה/.test(text)) { const off = /בלי|להוריד|תוריד|ללא/.test(text); return { project: { ...p, uppers: !off }, reply: off ? 'הורדתי את הארונות העליונים.' : 'הוספתי ארונות עליונים.' }; }
-  if (/טוחן/.test(text)) return { project: { ...p, disposal: !/בלי|תוריד/.test(text), xray: true }, reply: 'עדכנתי טוחן אשפה. פנים הארון מוצג כדי שיראו אותו.' };
-  if (/מערכת מים|מים/.test(text) && /תוסיף|הוסף|רוצה|בלי|תוריד/.test(text)) return { project: { ...p, water: !/בלי|תוריד/.test(text), xray: true }, reply: 'עדכנתי מערכת מים בארון הכיור.' };
+  if (/טוחן/.test(text)) return { project: { ...p, disposal: !/בלי|תוריד/.test(text) }, reply: 'עדכנתי טוחן אשפה. כדי לראות אותו: "הצג את פנים הארון".' };
+  if (/מערכת מים|מים/.test(text) && /תוסיף|הוסף|רוצה|בלי|תוריד/.test(text)) return { project: { ...p, water: !/בלי|תוריד/.test(text) }, reply: 'עדכנתי מערכת מים בארון הכיור.' };
   if (/בוק/.test(text)) return { project: { ...p, bookmatch: /לא/.test(text) ? 'no' : 'yes' }, reply: /לא/.test(text) ? 'סימנתי שהדגם אינו בוק־מאץ׳.' : 'סימנתי שהדגם בוק־מאץ׳. הלוח השני מוצג במראה.' };
   if (/45|גרונג/.test(text)) { const leg = flat.find((q) => q.h > q.w); if (leg) return { project: { ...p, pieces: p.pieces.map((q) => (q.id === leg.id ? { ...q, corner: 'miter' as const } : q)) }, reply: 'חיבור הפינה עכשיו בגרונג 45°.' }; }
   if (/חיבור/.test(text) && /(כיור|כיריים)/.test(text)) { const kind = /כיור/.test(text) ? 'sink' as const : 'cooktop' as const, host = flat.find((q) => p.cutouts.some((c) => c.pieceId === q.id && c.kind === kind)); if (host) return { project: { ...p, pieces: p.pieces.map((q) => (q.id === host.id ? { ...q, joint: kind } : q)) }, reply: `אם יהיה חיבור ב"${host.name}", הוא יעבור במרכז ה${kind === 'sink' ? 'כיור' : 'כיריים'}.` }; }

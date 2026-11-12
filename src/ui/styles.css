@@ -191,6 +191,13 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 .slabbar { position: absolute; top: 8px; inset-inline-start: 10px; z-index: 3; display: flex; gap: 4px; align-items: center; } .slabbar .pill button { height: 28px; font-size: 12px; }
 .slab svg g.pl { cursor: grab; } .slab svg.drag g.pl { cursor: grabbing; }
 
+.stonegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; max-height: 360px; overflow: auto; padding: 3px; margin: 0 -3px; scrollbar-width: thin; }
+.stonegrid .stone { aspect-ratio: auto; background: #fff; padding: 4px 4px 6px; display: flex; flex-direction: column; gap: 3px; text-align: start; border-radius: 11px; min-width: 0; }
+.stonegrid .stone:hover { transform: translateY(-1px); }
+.stonegrid .stone i { display: grid; place-items: center; height: 54px; border-radius: 7px; background: #e7e2d9 center/cover; font: 10.5px Heebo; font-style: normal; color: var(--mute); }
+.stonegrid .stone b { font-size: 12px; font-weight: 500; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stonegrid .stone small { font-size: 10.5px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: ltr; text-align: right; }
+
 /* מסמך ללקוח */
 .doc { max-width: 900px; margin: 0 auto; padding: 10px 22px 70px; display: flex; flex-direction: column; gap: 18px; }
 .sheet { background: #fff; border-radius: var(--r4); padding: 40px 44px; box-shadow: var(--sh2); display: flex; flex-direction: column; gap: 22px; }

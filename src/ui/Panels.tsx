@@ -76,7 +76,9 @@ export function LeftPanel() {
   const project = useStore((s) => s.project)!, order = useStore((s) => s.order)!, sel = useStore((s) => s.sel), stones = useStore((s) => s.stones), step = useStore((s) => s.step), nest = useStore((s) => s.nest), issues = useStore((s) => s.issues);
   const { apply, select, patchOrder, setStep, flush } = useStore.getState();
   const stone = useStone(), set = (patch: Partial<Project>, key?: string) => apply((p) => ({ ...p, ...patch }), key);
-  const [cmp, setCmp] = useState(false);
+  const [cmp, setCmp] = useState(false), [q, setQ] = useState('');
+  const norm = (t?: string | null) => (t || '').toLowerCase().replace(/[׳'"\s-]/g, '');
+  const shown = stones.filter((s) => !q.trim() || [s.name, s.en, s.novo].some((t) => norm(t).includes(norm(q))));
   const flat = project.pieces.filter((p) => !isVertical(p)), i = STEPS.findIndex((s) => s.id === step), cur = STEPS[i], m = nest?.metrics;
   const errors = issues.filter((x) => x.level === 'error').length, warns = issues.filter((x) => x.level === 'warn').length;
   const dxf = () => { if (!nest) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([exportNestDxf(nest.slabs)], { type: 'application/dxf' })); a.download = `${order.title}-nesting.dxf`; a.click(); URL.revokeObjectURL(a.href); };
@@ -107,12 +109,17 @@ export function LeftPanel() {
   else if (step === 'stone') body = <>
     <section>
       <span className="cap">לוח</span>
-      <select className="input" value={String(stone.id)} onChange={(e) => { const s = stones.find((x) => String(x.id) === e.target.value); set({ stoneId: s ? s.id : null }); }}>{stones.map((s) => <option key={s.id} value={String(s.id)}>{stoneLabel(s)}{s.stock === 'no' ? ' · אין במלאי' : ''}{s.hasImage ? '' : ' · בלי תמונה'}</option>)}</select>
+      <input className="input" type="search" placeholder="חיפוש דגם: שם בעברית, באנגלית או השם הקודם…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="stonegrid">{shown.map((s) => <button key={s.id} className={`stone ${String(s.id) === String(stone.id) ? 'on' : ''}`} title={stoneLabel(s)} onClick={() => set({ stoneId: s.id })}>
+        <i style={{ backgroundImage: s.hasImage ? `url("${s.thumb || s.url}")` : undefined }}>{!s.hasImage && 'אין תמונה'}</i>
+        <b>{s.name}</b><small>{s.en || ' '}{s.stock === 'no' ? ' · אין במלאי' : ''}</small>
+      </button>)}{!shown.length && <div className="mute" style={{ fontSize: 13 }}>לא נמצא דגם בשם הזה.</div>}</div>
+      <div className="row"><b style={{ fontSize: 14 }}>{stoneLabel(stone)}</b></div>
       <div style={{ height: 120, borderRadius: 14, background: `#ddd url("${stone.url}") center/cover`, boxShadow: 'inset 0 0 0 .5px rgba(0,0,0,.2)' }} />
       {stone.stock === 'no' && <div className="note err">הדגם הזה מסומן "אין במלאי". כדאי להציע ללקוח דגם דומה.</div>}
       {!stone.hasImage && <div className="note">לדגם הזה אין עדיין תמונת לוח, ולכן ההדמיה מציגה אבן כללית.</div>}
       <button className="btn sm" onClick={() => setCmp(true)}><Icon.grid />השוואת דגמים זה לצד זה</button>
-      {isLocal && <div className="note">במצב הדגמה יש שלוש אבנים לדוגמה. באתר המחובר מופיע כל הקטלוג של Barstone.</div>}
+      
     </section>
     <section>
       <span className="cap">האם הדגם בוק־מאץ׳?</span>
@@ -175,11 +182,11 @@ export function LeftPanel() {
     <section>
       <span className="cap">מוצרים נלווים</span>
       <div className="chips">
-        <button className={`chip ${project.disposal ? 'on' : ''}`} onClick={() => set({ disposal: !project.disposal, xray: !project.disposal ? true : project.xray })}>טוחן אשפה</button>
-        <button className={`chip ${project.water ? 'on' : ''}`} onClick={() => set({ water: !project.water, xray: !project.water ? true : project.xray })}>מערכת מים</button>
+        <button className={`chip ${project.disposal ? 'on' : ''}`} onClick={() => set({ disposal: !project.disposal })}>טוחן אשפה</button>
+        <button className={`chip ${project.water ? 'on' : ''}`} onClick={() => set({ water: !project.water })}>מערכת מים</button>
         <button className={`chip ${project.xray ? 'on' : ''}`} onClick={() => set({ xray: !project.xray })}>הצג את פנים הארון</button>
       </div>
-      <div className="mute" style={{ fontSize: 12.5 }}>טוחן נובו (1 כ"ס) תלוי בקו התחתון של הכיור, עם כפתור אוויר על המשטח. מערכת המים: מחמם, מקרר ומסנן בארון הכיור, וברז ייעודי על המשטח. "פנים הארון" הופך את הארונות לשקופים.</div>
+      <div className="mute" style={{ fontSize: 12.5 }}>טוחן נובו (1 כ"ס) תלוי בקו התחתון של הכיור, עם כפתור אוויר על המשטח. מערכת המים: מחמם, מקרר ומסנן בארון הכיור, וברז ייעודי על המשטח. "פנים הארון" הופך לשקופות רק את הדלתות של ארון הכיור.</div>
       {project.cutouts.some((c) => c.kind === 'sink') && <button className="btn sm" onClick={() => dispatchEvent(new CustomEvent('bs-focus-sink'))}><Icon.max />זום לכיור</button>}
     </section>
     <section>

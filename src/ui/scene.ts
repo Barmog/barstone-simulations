@@ -52,7 +52,8 @@ function subtract(r: Rect, c: Rect): Rect[] {
 export function buildKitchen(project: Project, nest: NestResult | null, stoneTex: THREE.Texture | null): Built {
   const group = new THREE.Group(), H = project.counterH, T = project.thickness;
   const stone = new THREE.MeshPhysicalMaterial({ map: stoneTex, color: stoneTex ? 0xffffff : 0xe6e1d8, roughness: 0.26, clearcoat: 0.4, clearcoatRoughness: 0.22, envMapIntensity: 0.95 });
-  const cab = new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62, transparent: !!project.xray, opacity: project.xray ? 0.2 : 1, depthWrite: !project.xray });
+  const cab = new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62 });
+  const cabX = project.xray ? new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62, transparent: true, opacity: 0.18, depthWrite: false }) : cab;
   const upColor = project.upperColor || project.cabinetColor, upStyle = project.upperStyle || 'doors';
   const upMat = new THREE.MeshStandardMaterial({ color: upColor, roughness: 0.6 });
   const glass = new THREE.MeshPhysicalMaterial({ color: project.glassTint || '#cfe3e6', roughness: 0.06, metalness: 0, transparent: true, opacity: 0.32, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false });
@@ -130,7 +131,8 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
       const doors = Math.max(1, Math.round(e.len / 600)), dw = e.len / doors;
       for (let i = 0; i < doors; i++) {
         const a = dw * (i + 0.5), cx = e.x + e.dx * a + e.nx * 9, cz = e.y + e.dy * a + e.ny * 9;
-        box(e.dx ? dw - 5 : 18, ch - 6, e.dx ? 18 : dw - 5, cab, cx, toe + ch / 2, cz);
+        const a0 = (e.dx ? e.x : e.y) + a - dw / 2, a1 = a0 + dw, atSink = cuts.some((q) => q.kind === 'sink' && (e.dx ? p.x + q.x < a1 && p.x + q.x + q.w > a0 : p.y + q.y < a1 && p.y + q.y + q.h > a0));
+        box(e.dx ? dw - 5 : 18, ch - 6, e.dx ? 18 : dw - 5, atSink ? cabX : cab, cx, toe + ch / 2, cz);
         box(e.dx ? 150 : 10, 10, e.dx ? 10 : 150, dark, cx + e.nx * 16, toe + ch - 48, cz + e.ny * 16);
       }
     }
