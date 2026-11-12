@@ -39,7 +39,7 @@ export function Catalog() {
             {shown.map((s) => (
               <tr key={s.id}>
                 <td><div style={{ width: 84, height: 42, borderRadius: 6, background: s.hasImage ? `#ddd url("${s.url}") center/cover` : 'repeating-linear-gradient(45deg,#eee,#eee 6px,#e2e2e2 6px,#e2e2e2 12px)' }} /></td>
-                <td>{s.name}{s.en && <span className="mute"> · {s.en}</span>}{s.novo && <div className="mute" style={{ fontSize: 12 }}>לשעבר: {s.novo}</div>}{!s.hasImage && <div className="mute" style={{ fontSize: 12 }}>אין תמונת לוח</div>}</td>
+                <td>{s.name}{s.en && <span className="mute"> · {s.en}</span>}{s.series && <span className="badge sand" style={{ marginInlineStart: 6 }}>{s.series}</span>}{s.novo && <div className="mute" style={{ fontSize: 12 }}>לשעבר: {s.novo}</div>}{!s.hasImage && <div className="mute" style={{ fontSize: 12 }}>אין תמונת לוח</div>}</td>
                 <td><div className="seg">{([['yes', 'כן'], ['no', 'לא'], ['unknown', '?']] as const).map(([k, v]) => <button key={k} className={s.stock === k ? 'on' : ''} onClick={() => act('', () => repo.updateStone(s.id, { in_stock: k }))}>{v}</button>)}</div></td>
                 <td><div className="seg">{([[true, 'כן'], [false, 'לא'], [null, '?']] as const).map(([k, v]) => <button key={String(k)} className={(s.bookmatch ?? null) === k ? 'on' : ''} onClick={() => act('', () => repo.updateStone(s.id, { bookmatch: k }))}>{v}</button>)}</div></td>
                 <td style={{ textAlign: 'end' }}><label className="link" style={{ cursor: 'pointer' }}>{s.hasImage ? 'החלפת תמונה' : 'העלאת תמונה'}<input type="file" hidden accept="image/*" onChange={(e) => e.target.files?.[0] && act('מעלה…', () => repo.uploadSlab(s.id, e.target.files![0]))} /></label></td>
