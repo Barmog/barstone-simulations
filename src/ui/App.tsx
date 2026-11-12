@@ -9,6 +9,7 @@ import { Doc } from './Doc';
 import { Team } from './Team';
 import { Catalog } from './Catalog';
 import { Fireberry } from './Fireberry';
+import { Portal } from './Portal';
 
 export type Access = 'admin' | 'sales' | 'pending' | 'loading';
 
@@ -33,7 +34,9 @@ export function App() {
   }, [userId]);
 
   let body;
-  if (!isLocal && session === undefined) body = <div className="login"><div className="spin dark" /></div>;
+  // הקישור של הלקוח פתוח בלי התחברות
+  if (route.name === 'portal') body = <Portal key={route.token} token={route.token} />;
+  else if (!isLocal && session === undefined) body = <div className="login"><div className="spin dark" /></div>;
   else if (!isLocal && !session) body = <Login />;
   else if (access === 'loading') body = <div className="login"><div className="spin dark" /></div>;
   else if (access === 'pending') body = <Pending email={session?.user.email || ''} />;

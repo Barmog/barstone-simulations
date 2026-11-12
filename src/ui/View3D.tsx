@@ -21,6 +21,7 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
   const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), own = useStone(), stone = stoneUrl ? { url: stoneUrl } : own;
   const host = useRef<HTMLDivElement>(null), api = useRef<{ rebuild: (b: Built, light: string, kelvin: number) => void; cam: (c: Cam) => void; shot: () => string; focus: () => void; view: () => { pos: THREE.Vector3; target: THREE.Vector3; fov: number }; built?: Built } | null>(null);
   const [cam, setCam] = useState<Cam>('persp'), [err, setErr] = useState('');
+  const portal = useStore((s) => s.portal);
   const [photo, setPhoto] = useState<{ p: number; img?: string; done?: boolean; abort: AbortController } | null>(null);
   async function takePhoto() {
     const v = api.current?.view(), el = host.current; if (!v || !el) return;
@@ -109,7 +110,7 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
         <span className="tag badge">הדמיה חיה · תלת־ממד</span>
         <div className="tools">
           <div className="pill">{(['persp', 'top', 'front'] as Cam[]).map((c) => <button key={c} className={cam === c ? 'on' : ''} onClick={() => { setCam(c); api.current?.cam(c); }}>{c === 'persp' ? 'פרספקטיבה' : c === 'top' ? 'מלמעלה' : 'חזית'}</button>)}</div>
-          <div className="pill">{project.cutouts.some((c) => c.kind === 'sink') && <button title="זום לכיור" onClick={() => api.current?.focus()}>כיור</button>}<button title="שמירת תמונה ברזולוציית 4K" onClick={save}><Icon.download />4K</button><button title="צילום פוטו־ריאליסטי מהזווית הנוכחית (חצי דקה עד דקה וחצי)" onClick={takePhoto} disabled={!!photo}>צילום מקצועי</button>{onMax && <button title={max ? 'חזרה לתצוגה מפוצלת' : 'מסך מלא'} className={max ? 'on' : ''} onClick={onMax}><Icon.max /></button>}</div>
+          <div className="pill">{project.cutouts.some((c) => c.kind === 'sink') && <button title="זום לכיור" onClick={() => api.current?.focus()}>כיור</button>}<button title="שמירת תמונה ברזולוציית 4K" onClick={save}><Icon.download />4K</button>{!portal && <button title="צילום פוטו־ריאליסטי מהזווית הנוכחית (חצי דקה עד דקה וחצי)" onClick={takePhoto} disabled={!!photo}>צילום מקצועי</button>}{onMax && <button title={max ? 'חזרה לתצוגה מפוצלת' : 'מסך מלא'} className={max ? 'on' : ''} onClick={onMax}><Icon.max /></button>}</div>
         </div>
       </>}
       {photo && <div className="photo-ov">
