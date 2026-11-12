@@ -1,4 +1,5 @@
 // השוואת דגמים: אותו מטבח בשניים־שלושה דגמי אבן זה לצד זה, ובחירה בלחיצה.
+import { stoneLabel } from '../data/repo';
 import { useState } from 'react';
 import { useStore } from '../store';
 import { Modal } from './Home';
@@ -19,7 +20,7 @@ export function Compare({ onClose }: { onClose: () => void }) {
           const st = stones.find((s) => String(s.id) === id) || current;
           return (
             <div key={n} className="cmp">
-              <select className="input" value={id} onChange={(e) => setIds(ids.map((x, i) => (i === n ? e.target.value : x)))}>{withImg.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}</select>
+              <select className="input" value={id} onChange={(e) => setIds(ids.map((x, i) => (i === n ? e.target.value : x)))}>{withImg.map((s) => <option key={s.id} value={String(s.id)}>{stoneLabel(s)}</option>)}</select>
               <div className="cmpview"><View3D still stoneUrl={st.url} /></div>
               <div className="row"><span className={`badge ${st.stock === 'yes' ? 'ok' : st.stock === 'no' ? 'err' : ''}`}>{STOCK[st.stock]}</span><span className="sp" />
                 {String(current.id) === id ? <span className="badge sand">הדגם הנוכחי</span> : <button className="btn sm primary" onClick={() => { apply((p) => ({ ...p, stoneId: st.id })); onClose(); }}>בחר דגם זה</button>}</div>

@@ -74,7 +74,6 @@ select v.name, 'Barstone', v.in_stock from (values
 where not exists (select 1 from public.stones s where s.name = v.name);
 
 -- עריכת הקטלוג והעלאת תמונות לוחות: רק לצוות (במקום כל משתמש מחובר)
-drop policy if exists "stones write" on public.stones;
-create policy "stones write staff" on public.stones for all to authenticated using ((select public.is_staff())) with check ((select public.is_staff()));
-drop policy if exists "auth write assets" on storage.objects;
-create policy "staff write assets" on storage.objects for insert to authenticated with check (bucket_id in ('tiles','slabs','renders') and (select public.is_staff()));
+alter policy "stones write" on public.stones using ((select public.is_staff())) with check ((select public.is_staff()));
+alter policy "stones write" on public.stones rename to "stones write staff";
+-- הרשאת ההעלאה ל-storage ('auth write assets') נשארת כמו שהיא: שינוי שלה דורש בעלות על storage.objects.
