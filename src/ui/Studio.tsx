@@ -1,4 +1,5 @@
 // הסטודיו: מסך חי אחד — שרטוט, תלת־ממד ולוחות יחד. כל שינוי מתעדכן בכולם ונשמר אוטומטית.
+import { ShareModal } from './Share';
 import { useEffect, useRef, useState } from 'react';
 import { Customer, repo } from '../data/repo';
 import { go, useStore } from '../store';
@@ -29,7 +30,7 @@ export function Studio({ id }: { id: string }) {
   const step = useStore((s) => s.step), setStep = useStore((s) => s.setStep);
   const mobile = useMobile(), issues = useStore((s) => s.issues);
   const [mode, setMode] = useState<'split' | 'plan' | '3d' | 'slabs'>('split');
-  const [sheet, setSheet] = useState(false), [full, setFull] = useState(false);
+  const [sheet, setSheet] = useState(false), [full, setFull] = useState(false), [share, setShare] = useState(false);
   const stepsEl = useRef<HTMLElement>(null);
   // כל שלב פותח את התצוגה שמתאימה לו; אפשר תמיד להחליף ידנית. בטלפון מוצגת תצוגה אחת בכל פעם.
   useEffect(() => {
@@ -74,8 +75,10 @@ export function Studio({ id }: { id: string }) {
         <span className={`savestate ${save}`}><span>{SAVE_HE[save]}</span></span>
         <span className="sp" />
         <div className="pill"><button title="ביטול (Ctrl+Z)" aria-label="ביטול" disabled={!canUndo} style={{ opacity: canUndo ? 1 : 0.35 }} onClick={undo}><Icon.undo /><span>ביטול</span></button><button title="חזרה (Ctrl+Shift+Z)" aria-label="חזרה" disabled={!canRedo} style={{ opacity: canRedo ? 1 : 0.35 }} onClick={redo}><Icon.redo /><span>חזרה</span></button></div>
+        <button className="btn sm" onClick={() => setShare(true)} title="קישור ללקוח: תלת־ממד, בחירת גיד ואישור בחתימה">שליחה ללקוח</button>
         {!mobile && <div className="pill">{([['split', 'מפוצל'], ['plan', 'שרטוט'], ['3d', 'תלת־ממד']] as const).map(([k, v]) => <button key={k} className={mode === k ? 'on' : ''} onClick={() => setMode(k)}>{v}</button>)}</div>}
       </header>
+      {share && <ShareModal orderId={order.id} title={order.title} phone={customer?.phone} onClose={() => setShare(false)} />}
       <nav className="steps" ref={stepsEl} aria-label="שלבי העבודה">{STEPS.map((x, n) => <button key={x.id} className={n === si ? 'on' : n < si ? 'done' : ''} onClick={() => setStep(x.id)}><i>{n < si ? '✓' : n + 1}</i>{x.name}</button>)}</nav>
       <div className={`work ${mobile && full ? 'full' : ''} ${sheet ? 'sheet' : ''}`}>
         <LeftPanel />

@@ -306,3 +306,36 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 .photo-box { width: min(960px, 100%); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .photo-box img, .photo-box .ph { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 12px; display: grid; place-items: center; min-height: 200px; background: #ece6dc; }
 .photo-box .row { display: flex; align-items: center; gap: 10px; } .photo-box .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(0,0,0,.08); overflow: hidden; } .photo-box .bar i { display: block; height: 100%; background: var(--ink); transition: width .3s; }
+
+/* ===== הקישור של הלקוח ===== */
+.portal { max-width: 980px; margin: 0 auto; padding: 0 16px 60px; display: flex; flex-direction: column; gap: 18px; }
+.p-head { display: flex; align-items: center; gap: 10px; padding: 16px 0 4px; } .p-head img { height: 30px; } .plogo { height: 30px; align-self: center; }
+.p-hero { display: flex; flex-direction: column; gap: 6px; } .p-hero h1 { font-size: clamp(26px, 5vw, 40px); line-height: 1.08; letter-spacing: -.03em; font-weight: 600; margin: 0; } .p-hero p { margin: 0; }
+.portal .eyebrow { font-size: 12px; letter-spacing: .12em; color: var(--mute); font-weight: 500; }
+.p-ok { display: inline-flex; flex-wrap: wrap; gap: 10px; align-items: center; align-self: flex-start; background: #e5f3ea; color: #1d6b3b; border-radius: 999px; padding: 7px 14px; font-size: 14px; }
+.p-3d { height: min(62vh, 560px); border-radius: var(--r4); overflow: hidden; box-shadow: var(--sh2); position: relative; } .p-3d .view { height: 100%; }
+.p-tip { margin: -8px 4px 0; font-size: 13px; color: var(--mute); }
+.p-card { background: rgba(255,255,255,.75); border-radius: var(--r4); padding: 20px; box-shadow: var(--sh1); display: flex; flex-direction: column; gap: 12px; }
+.p-card h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.02em; } .p-card p { margin: 0; }
+.p-stone { display: flex; gap: 14px; align-items: center; } .p-stone i { width: 84px; height: 84px; border-radius: 12px; background-size: cover; background-position: center; flex: none; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.15); }
+.p-stone div { display: flex; flex-direction: column; gap: 3px; } .p-stone b { font-size: 18px; } .p-stone small { color: var(--mute); }
+.p-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.p-facts div { display: flex; gap: 8px; align-items: center; background: rgba(27,26,24,.04); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+.p-facts b { width: 24px; height: 24px; border-radius: 7px; background: var(--ink); color: #fff; display: grid; place-items: center; font-size: 12px; flex: none; } .p-facts small { margin-inline-start: auto; color: var(--mute); }
+.p-slabs { border-radius: var(--r3); position: relative; background: #f3eee7; } .p-slabs .view { height: auto; }
+.p-slabs .slabs { flex-direction: column; align-items: stretch; overflow: visible; height: auto; } .p-slabs .slab svg { width: 100%; height: auto; } .p-slabs .slabbar { flex-wrap: wrap; }
+.p-sign .terms { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--ink2); }
+.sigpad { position: relative; height: 170px; border: 1.5px dashed rgba(27,26,24,.25); border-radius: 14px; background: #fff; touch-action: none; }
+.sigpad canvas { width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+.sig-hint { position: absolute; bottom: 10px; right: 14px; font-size: 12px; color: var(--mute); pointer-events: none; } .sigpad .link { position: absolute; top: 8px; left: 12px; }
+.p-sign .chk { gap: 10px; font-size: 14px; align-items: flex-start; } .p-sign .chk input { margin-top: 3px; }
+.btn.big { padding: 14px 22px; font-size: 16px; justify-content: center; }
+.sig-done { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; } .sig-done img { max-width: 320px; width: 100%; background: #fff; border-radius: 10px; border: 1px solid #ece6dc; }
+.p-foot { text-align: center; color: var(--mute); font-size: 12px; padding-top: 10px; }
+.sharebox { display: flex; gap: 8px; } .sharebox .input { flex: 1; direction: ltr; font-size: 12.5px; }
+.track { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.track li { padding: 10px; border-radius: 12px; background: rgba(27,26,24,.04); display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--mute); } .track li b { color: var(--mute); font-weight: 600; }
+.track li.on { background: #e5f3ea; color: #1d6b3b; } .track li.on b { color: #1d6b3b; }
+.sigimg { max-width: 260px; background: #fff; border-radius: 10px; border: 1px solid #ece6dc; }
+.tb-sign.signed img { height: 46px; max-width: 100%; object-fit: contain; object-position: right; } .tb-sign.signed p { margin-top: 2px; }
+@media (max-width: 640px) { .track { grid-template-columns: 1fr; } .p-card { padding: 16px; } .p-3d { height: 52vh; } }

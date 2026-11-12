@@ -14,6 +14,7 @@ import { ViewName, renderViews } from './render';
 import { COLORS, edgeDetailSvg, edgeProfileSvg, slabImages } from './drawings';
 import { DimPlan } from './DimPlan';
 import { pagesToPdf } from './pdf';
+import { ShareModal, useShares } from './Share';
 import { FINISH_HE, stoneFinish } from '../data/lucente';
 
 const NOTES = [
@@ -30,7 +31,7 @@ export function Doc({ id }: { id: string }) {
   const project = useStore((s) => s.project), nest = useStore((s) => s.nest), stone = useStone(), setToast = useStore((s) => s.setToast);
   const [shots, setShots] = useState<Partial<Record<ViewName, string>>>({}), [slabs, setSlabs] = useState<string[]>([]);
   const [internal, setInternal] = useState(false), [busy, setBusy] = useState<'' | 'pdf' | 'fb'>(''), [pro, setPro] = useState<number | null>(null);
-  const book = useRef<HTMLDivElement>(null);
+  const book = useRef<HTMLDivElement>(null), [share, setShare] = useState(false), { signed, reload: reloadShares } = useShares(id);
   const key = project ? JSON.stringify([project, stone.url]) : '';
   useEffect(() => {
     if (!project) return; let live = true;
@@ -57,7 +58,8 @@ export function Doc({ id }: { id: string }) {
       <div><h4>פרטי הזמנה</h4><p><b>מס׳ הזמנה:</b> {order.order_no || '—'}</p><p><b>חומר:</b> {material}</p><p><b>קנט:</b> {project.apronH ? `${project.apronH} מ"מ בגרונג` : 'ישר'}</p>
         <p><b>כיור:</b> {sinks.length ? sinks.map((c) => `${c.built ? 'בנוי' : 'קנוי'} ${cm(c.w)}×${cm(c.h)}`).join(' · ') : '—'}</p><p><b>כיריים:</b> {cooktops.length ? cooktops.map((c) => `${cm(c.w)}×${cm(c.h)}`).join(' · ') : '—'}</p></div>
       <div className="tb-notes"><h4>הערות</h4>{NOTES.map((n) => <p key={n}>• {n}</p>)}</div>
-      <div className="tb-sign"><h4>אישור הלקוח</h4><p>שם: ____________________</p><p>חתימה: __________________</p><p>תאריך: _________________</p></div>
+      {signed?.signature ? <div className="tb-sign signed"><h4>אישור הלקוח · דיגיטלי</h4><img src={signed.signature} alt="חתימה" /><p><b>{signed.signer_name}</b> · {new Date(signed.signed_at!).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}</p></div>
+        : <div className="tb-sign"><h4>אישור הלקוח</h4><p>שם: ____________________</p><p>חתימה: __________________</p><p>תאריך: _________________</p></div>}
       <div className="tb-brand"><img src={asset('logo.png')} alt="Barstone" /><span className={`st ${forProduction ? 'go' : ''}`}><i className={!forProduction ? 'on' : ''} />לעיון <i className={forProduction ? 'on' : ''} />לביצוע</span><small>{date} · {STATUS_HE[order.status]}</small></div>
     </div>
   );
@@ -100,11 +102,13 @@ export function Doc({ id }: { id: string }) {
     <>
       <header className="top noprint doctop">
         <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" />
+        <button className="btn" onClick={() => setShare(true)}>{signed ? '✓ אושר בחתימה' : 'שליחה ללקוח לאישור'}</button>
         <label className="row mute" style={{ fontSize: 13 }}><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />כולל מטר רץ (פנימי)</label>
         <button className="btn" disabled={!ready || pro !== null} onClick={proCover} title="מחשב את תמונת השער באור פיזיקלי אמיתי">{pro !== null ? <><span className="spin dark" /><span>צילום {Math.round(pro * 100)}%</span></> : <span>צילום מקצועי לשער</span>}</button>
         {order.fb_id && order.fb_object && <button className="btn" disabled={!ready || !!busy} onClick={() => exportPdf(true)}>{busy === 'fb' ? <span className="spin dark" /> : <Icon.send />}<span>{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף לפיירברי'}</span></button>}
         <button className="btn primary" disabled={!ready || !!busy} onClick={() => exportPdf(false)}>{busy === 'pdf' ? <span className="spin" /> : <Icon.download />}<span>{ready ? 'הורדת PDF' : 'מכין הדמיות…'}</span></button>
       </header>
+      {share && <ShareModal orderId={id} title={order.title} phone={customer?.phone} onClose={() => { setShare(false); reloadShares(); }} />}
       <main className="book" ref={book}>
         {page('שער', <>
           <div className="cover">
@@ -177,7 +181,7 @@ export function Doc({ id }: { id: string }) {
             <tr className="sum"><td>סה"כ</td><td /><td /><td className="mono">{rm.total.toFixed(2)}</td></tr>
             {rm.extras.map((x) => <tr key={x.id}><td>תוספת · {x.name}</td><td /><td /><td className="mono">{x.qty} {x.unit}</td></tr>)}
           </tbody></table>
-          <p className="fine">לפי רוחב (בחיפוי — לפי הגובה): עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול · 150–170 פי 2.5. פינה נספרת בשתי הצלעות. מפל = גובה 90 לפי עומק האי.</p>
+          <p className="fine">לפי רוחב (בחיפוי — לפי הגובה): עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול · 150–170 פי 2.5 · מעל 170 פי 3. פינה נספרת בשתי הצלעות. מפל = גובה 90 לפי עומק האי.</p>
         </>)}
       </main>
     </>

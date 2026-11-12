@@ -24,6 +24,9 @@ interface State {
   toast: string;
   step: Step;
   chat: ChatMsg[];
+  /** מצב לקוח (קישור אישור): שינויים נשארים בדפדפן ולא נשמרים אוטומטית. */
+  portal: boolean;
+  openPortal(order: Order): void;
   setStep(s: Step): void;
   say(m: ChatMsg): void;
   open(order: Order): void;
@@ -49,10 +52,11 @@ export const useStore = create<State>((set, get) => {
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => get().flush(), 900); };
   const commit = (project: Project, extra: Partial<State> = {}) => { set({ project, ...derive(project), save: 'dirty', ...extra }); schedule(); };
   return {
-    order: null, project: null, past: [], future: [], sel: null, save: 'saved', stones: [], nest: null, issues: [], toast: '', step: 'dims', chat: [],
+    order: null, project: null, past: [], future: [], sel: null, save: 'saved', stones: [], nest: null, issues: [], toast: '', step: 'dims', chat: [], portal: false,
     setStep(step) { set({ step, sel: null }); },
     say(m) { set({ chat: [...get().chat, m] }); },
-    open(order) { lastKey = ''; set({ step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
+    openPortal(order) { lastKey = ''; set({ portal: true, step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
+    open(order) { lastKey = ''; set({ portal: false, step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
     close() { get().flush(); set({ order: null, project: null, past: [], future: [], sel: null, nest: null, issues: [] }); },
     apply(fn, coalesce) {
       const cur = get().project; if (!cur) return;
@@ -78,7 +82,8 @@ export const useStore = create<State>((set, get) => {
     patchOrder(patch) { const o = get().order; if (!o) return; set({ order: { ...o, ...patch }, save: 'dirty' }); schedule(); },
     async flush() {
       clearTimeout(timer);
-      const { order, project, save, nest: n, issues } = get();
+      const { order, project, save, nest: n, issues, portal } = get();
+      if (portal) return;
       if (!order || !project || save === 'saved' || save === 'saving') return;
       set({ save: 'saving' });
       try {
@@ -95,9 +100,10 @@ export const useStore = create<State>((set, get) => {
 });
 
 // ניתוב פשוט לפי hash: #/ · #/c/<לקוח> · #/o/<הזמנה> · #/o/<הזמנה>/doc
-export type Route = { name: 'home'; customer?: string } | { name: 'studio'; id: string } | { name: 'doc'; id: string } | { name: 'team' } | { name: 'catalog' } | { name: 'fireberry' };
+export type Route = { name: 'portal'; token: string } | { name: 'home'; customer?: string } | { name: 'studio'; id: string } | { name: 'doc'; id: string } | { name: 'team' } | { name: 'catalog' } | { name: 'fireberry' };
 export function parseRoute(hash: string): Route {
   const [a, b, c] = hash.replace(/^#\/?/, '').split('/');
+  if (a === 'p' && b) return { name: 'portal', token: b };
   if (a === 'o' && b) return c === 'doc' ? { name: 'doc', id: b } : { name: 'studio', id: b };
   if (a === 'c' && b) return { name: 'home', customer: b };
   if (a === 'team') return { name: 'team' };

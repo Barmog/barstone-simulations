@@ -13,9 +13,9 @@ export function rmFactor(widthMm: number): number {
   if (widthMm <= 700) return 1;
   if (widthMm <= 1500) return 2;
   if (widthMm <= 1700) return 2.5;
-  return 3; // מעל 170 ס"מ: חריג, לבדוק מול המחירון
+  return 3; // מעל 170 ס"מ: פי 3
 }
-export const factorHe = (f: number) => (f < 0.4 ? 'שליש' : f === 0.5 ? 'חצי' : f === 1 ? 'רגיל' : f === 2 ? 'כפול' : f === 2.5 ? 'פי 2.5' : '×3 (חריג)');
+export const factorHe = (f: number) => (f < 0.4 ? 'שליש' : f === 0.5 ? 'חצי' : f === 1 ? 'רגיל' : f === 2 ? 'כפול' : f === 2.5 ? 'פי 2.5' : 'פי 3');
 
 /** כמה להוסיף לאורך של משטח בגלל פינה: משטח ניצב שנוגע בקצה שלו (כך כל צלע נמדדת עד הקיר). */
 export function cornerAdd(p: Project, x: Piece): number {

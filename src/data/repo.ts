@@ -9,6 +9,8 @@ export const sb: SupabaseClient | null = URL_ && KEY ? createClient(URL_, KEY) :
 export const isLocal = !sb;
 
 export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; fb_id?: string | null; created_at: string; updated_at: string }
+export interface Share { token: string; order_id: string; created_at: string; expires_at: string; viewed_at?: string | null; signed_at?: string | null; signer_name?: string | null; signature?: string | null; customer_note?: string | null; layout_changed?: boolean }
+export interface PortalData { order: { id: string; title: string; order_no?: string | null; status: OrderStatus; project: Project; updated_at: string }; customer: { name: string; address: string }; share: { signed_at?: string | null; signer_name?: string | null; signature?: string | null; expires_at: string } }
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
 export interface OrderMetrics { rm?: number; slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
 export interface Order { fb_object?: number | null; fb_id?: string | null; fb_sent_at?: string | null; id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
@@ -114,6 +116,33 @@ export const repo = {
   },
 
   // ----- צוות -----
+  // --- קישור ללקוח: צפייה, בחירת גיד ואישור בחתימה ---
+  async shares(oid: string): Promise<Share[]> {
+    if (!sb) return J<Share[]>('bs.shares', []).filter((x) => x.order_id === oid).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return ok(await sb.from('order_shares').select('token,order_id,created_at,expires_at,viewed_at,signed_at,signer_name,signature,customer_note,layout_changed').eq('order_id', oid).order('created_at', { ascending: false }));
+  },
+  async createShare(oid: string): Promise<Share> {
+    if (!sb) { const row: Share = { token: id(), order_id: oid, created_at: now(), expires_at: new Date(Date.now() + 45 * 864e5).toISOString() }; W('bs.shares', [row, ...J<Share[]>('bs.shares', [])]); return row; }
+    return ok(await sb.from('order_shares').insert({ order_id: oid }).select('token,order_id,created_at,expires_at').single());
+  },
+  async portal<T>(body: Record<string, unknown>): Promise<T> {
+    if (!sb) {
+      // מצב הדגמה: אותו התנהגות מול localStorage
+      const shares = J<Share[]>('bs.shares', []), sh = shares.find((x) => x.token === body.token);
+      if (!sh) throw new Error('הקישור לא נמצא. בקשו מהנציג קישור חדש.');
+      const orders = J<Order[]>('bs.orders', []), o = orders.find((x) => x.id === sh.order_id); if (!o) throw new Error('ההזמנה לא נמצאה.');
+      if (body.mode === 'get') { const c = J<Customer[]>('bs.customers', []).find((x) => x.id === o.customer_id); return { order: o, customer: { name: c?.name || '', address: c?.address || '' }, share: sh } as T; }
+      if (sh.signed_at) throw new Error('ההדמיה כבר אושרה.');
+      const at = now(), manual = body.manual as Project['manual'], changed = !!manual && JSON.stringify(manual) !== JSON.stringify(o.project.manual || {});
+      W('bs.shares', shares.map((x) => (x === sh ? { ...x, signed_at: at, signer_name: String(body.name), signature: String(body.signature), customer_note: String(body.note || '') || null, layout_changed: changed } : x)));
+      W('bs.orders', orders.map((x) => (x === o ? { ...x, status: 'approved', project: changed ? { ...o.project, manual } : o.project, updated_at: at } : x)));
+      return { ok: true, signed_at: at } as T;
+    }
+    const { data, error } = await sb.functions.invoke('portal', { body });
+    if (error) { let msg = error.message; try { msg = (await (error as { context?: Response }).context?.json())?.error || msg; } catch { /* */ } throw new Error(msg); }
+    if (data?.error) throw new Error(data.error);
+    return data as T;
+  },
   async claimAccess(): Promise<'admin' | 'sales' | 'pending'> {
     if (!sb) return 'admin';
     const { data, error } = await sb.rpc('claim_access');
