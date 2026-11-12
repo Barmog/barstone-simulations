@@ -115,3 +115,30 @@ describe('DXF', () => {
     expect(back.info.pieces).toBe(nest(p).slabs.length);
   });
 });
+
+describe('מטר רץ, סידור ידני, צוקל וחיבורים ידניים', () => {
+  it('מקדם המטר הרץ לפי רוחב', async () => {
+    const { rmFactor, runningMeters } = await import('../src/core/pricing');
+    expect(rmFactor(200)).toBeCloseTo(1 / 3); expect(rmFactor(250)).toBe(0.5); expect(rmFactor(300)).toBe(0.5); expect(rmFactor(620)).toBe(1); expect(rmFactor(700)).toBe(1); expect(rmFactor(1000)).toBe(2);
+    const p = emptyProject(); p.pieces.push(piece({ kind: 'counter', w: 3000, h: 620 }), piece({ kind: 'island', w: 2000, h: 1000 }));
+    expect(runningMeters(p).total).toBeCloseTo(3 + 4);
+  });
+  it('חלק שסודר ידנית נשאר במקומו, והשאר לא עולים עליו', () => {
+    const p = fromTemplate('l-island'), r0 = nest(p), pl = r0.slabs[0].placements[0];
+    p.manual = { [pl.key]: { slab: 0, x: 500, y: 300 } };
+    const r = nest(p), moved = r.slabs.flatMap((s) => s.placements).find((q) => q.key === pl.key)!;
+    expect(moved.block.x).toBe(500); expect(moved.block.y).toBe(300); expect(r.unplaced.length).toBe(0); expect(r.overlaps.length).toBe(0);
+    for (const s of r.slabs) for (let i = 0; i < s.placements.length; i++) for (let j = i + 1; j < s.placements.length; j++) expect(overlap(s.placements[i].block, s.placements[j].block, -1)).toBe(false);
+    // שני חלקים ידניים באותו מקום: מדווח כחפיפה
+    const other = r0.slabs[0].placements[1]; p.manual[other.key] = { slab: 0, x: 520, y: 320 };
+    expect(nest(p).overlaps.length).toBeGreaterThan(0);
+    expect(check(p, nest(p)).some((i) => i.id === 'manual-overlap')).toBe(true);
+  });
+  it('צוקל מאבן מוסיף חלקים, וחיבור ידני קובע את נקודת החיבור', () => {
+    const p = fromTemplate('straight'), n0 = nest(p).slabs.flatMap((s) => s.placements).length;
+    p.plinthStone = true; expect(nest(p).slabs.flatMap((s) => s.placements).filter((q) => q.extra === 'צוקל').length).toBe(1);
+    expect(nest(p).slabs.flatMap((s) => s.placements).length).toBe(n0 + 1);
+    p.pieces[0].w = 4200; p.pieces[0].jointAt = [1500];
+    expect(nest(p).joints.map((j) => j.at)).toEqual([1500]);
+  });
+});

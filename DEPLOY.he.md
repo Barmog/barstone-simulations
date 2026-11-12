@@ -2,16 +2,13 @@
 
 כל שלב נעשה פעם אחת. אחרי זה כל עדכון קוד עולה לבד.
 
-## 1. לחבר את GitHub (5 דקות)
-1. נכנסים ל-https://claude.ai/connect-github ומחברים את חשבון GitHub.
-2. אם מתבקשים — מתקינים את אפליקציית Claude על המאגר `Barmog/barstone-simulations` (https://github.com/apps/claude/installations/select_target).
-3. חוזרים לשיחה וכותבים "תדחוף". הקוד עולה לענף `claude/zen-pasteur-h8zaet`.
-4. ב-GitHub פותחים Pull Request מהענף הזה ל-`main` וממזגים (או מבקשים מ-Claude לפתוח אותו).
+## 1. הקוד (כבר נעשה)
+GitHub מחובר, והקוד ממוזג לענף `main` במאגר `Barmog/barstone-simulations`. מכאן כל שינוי עולה דרך מיזוג ל-`main`.
 
 ## 2. להעלות את האתר ב-Render (10 דקות)
 1. נרשמים ב-https://render.com ומחברים את GitHub.
-2. New › Blueprint › בוחרים את המאגר `barstone-simulations`. Render קורא את `render.yaml` לבד.
-3. לוחצים Apply. אחרי 2–3 דקות מתקבלת כתובת, למשל `https://barstone-simulations.onrender.com`.
+2. New › Blueprint › בוחרים את המאגר `barstone-simulations` (אם הוא לא ברשימה: Configure account › מסמנים את המאגר ב-GitHub › Save). Render קורא את `render.yaml` לבד.
+3. נותנים שם (למשל barstone) ולוחצים Apply. בלשונית Logs רואים את הבנייה; כשמופיע Live — האתר באוויר. אחרי 2–3 דקות מתקבלת כתובת, למשל `https://barstone-simulations.onrender.com`.
 4. מעכשיו כל מיזוג ל-`main` מעדכן את האתר אוטומטית.
 
 אין צורך להגדיר משתני סביבה: כתובת Supabase והמפתח הציבורי כבר בקובץ `.env.production`.
@@ -33,7 +30,7 @@
 
 ## בדיקה אחרי העלייה
 - נכנסים, יוצרים לקוח והזמנה מתבנית, משנים מידה, יוצאים ונכנסים שוב — ההזמנה נשמרה.
-- בשלב "אבן" מופיעים לוחות Barstone האמיתיים.
+- בשלב "אבן" מופיעים דגמי LUCENTE עם תמונות, ואפשר לחפש דגם לפי שם.
 - כותבים לעוזר "תזיז את הכיור 20 ס"מ שמאלה".
 - בסיכום: "מסמך ללקוח" › שמירה כ-PDF.
 

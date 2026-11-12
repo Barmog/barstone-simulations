@@ -116,6 +116,13 @@ export function check(p: Project, nest: NestResult): Issue[] {
   const last = nest.slabs[nest.slabs.length - 1];
   if (nest.slabs.length > 1 && last && last.used < 18) out.push({ id: 'waste', level: 'tip', title: `הלוח האחרון מנוצל רק ב-${last.used}%`, detail: 'קיצור קטן של אחד החלקים, ויתור על קנט בצד נסתר, או שחרור כיוון גיד בחלק קטן — עשויים לחסוך לוח שלם.' });
 
+  // --- סידור ידני על הלוח ---
+  if (nest.overlaps.length) out.push({ id: 'manual-overlap', level: 'error', title: 'חלקים חופפים או חורגים בלוח', detail: `${nest.overlaps.length} חלקים שסודרו ידנית עולים על חלק אחר או יוצאים משולי הלוח. הם מסומנים באדום בלוחות.`, fix: { label: 'אפס סידור ידני', apply: (pr) => ({ ...pr, manual: undefined }) } });
+  // --- דלפק / אי: מעל 80 ס"מ רוחב בדרך כלל יש ישיבה ---
+  for (const q of flat) if (pieceWid(q) > 800 && !q.seat && !q.outline) {
+    const side: Side = q.kind === 'island' ? (longIsX(q) ? 'front' : 'right') : q.wall === 'back' ? 'front' : q.wall === 'front' ? 'back' : q.wall === 'left' ? 'right' : q.wall === 'right' ? 'left' : longIsX(q) ? 'front' : 'right';
+    out.push({ id: `seat-${q.id}`, level: 'tip', pieceId: q.id, title: `"${q.name}" · רוחב ${Math.round(pieceWid(q) / 10)} ס"מ — דלפק או אי?`, detail: 'מעל 80 ס"מ רוחב זה בדרך כלל דלפק או אי עם ישיבה: בליטה של 30 ס"מ וכיסא לכל 60 ס"מ.', fix: { label: 'הוסף ישיבה', apply: patchPiece(q.id, () => ({ seat: side })) } });
+  }
   const rank = { error: 0, warn: 1, tip: 2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
 }

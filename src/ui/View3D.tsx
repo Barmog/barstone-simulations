@@ -14,7 +14,7 @@ const loadTex = (url: string) => { if (!texCache.has(url)) texCache.set(url, new
 
 export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax?: () => void; max?: boolean; stoneUrl?: string }) {
   const project = useStore((s) => s.project)!, nest = useStore((s) => s.nest), own = useStone(), stone = stoneUrl ? { url: stoneUrl } : own;
-  const host = useRef<HTMLDivElement>(null), api = useRef<{ rebuild: (b: Built, light: string, kelvin: number) => void; cam: (c: Cam) => void; shot: () => string; built?: Built } | null>(null);
+  const host = useRef<HTMLDivElement>(null), api = useRef<{ rebuild: (b: Built, light: string, kelvin: number) => void; cam: (c: Cam) => void; shot: () => string; focus: () => void; built?: Built } | null>(null);
   const [cam, setCam] = useState<Cam>('persp'), [err, setErr] = useState('');
 
   useEffect(() => {
@@ -60,6 +60,7 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
         if (first) { place('persp', b); first = false; } dirty = true;
       },
       cam(c) { if (api.current?.built) place(c, api.current.built); },
+      focus() { const b = api.current?.built, s = b?.sinks[0]; if (!b || !s) return; const k = s.z > b.center.z ? -1 : 1; controls.target.set(s.x, s.y - 0.08, s.z); camera.position.set(s.x - 0.25, s.y + 0.95, s.z + 0.95 * k); controls.update(); dirty = true; },
       shot() {
         const w = el.clientWidth, h = el.clientHeight, W = 3840, Hh = Math.round((W * h) / w), pr = renderer.getPixelRatio();
         renderer.setPixelRatio(1); renderer.setSize(W, Hh, false); renderer.render(scene, camera);
@@ -77,6 +78,7 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
     return () => { live = false; clearTimeout(t); };
   }, [project, nest, stone.url]);
 
+  useEffect(() => { if (still) return; const f = () => setTimeout(() => api.current?.focus(), 120); addEventListener('bs-focus-sink', f); return () => removeEventListener('bs-focus-sink', f); }, [still]);
   const save = () => { const url = api.current?.shot(); if (!url) return; const a = document.createElement('a'); a.href = url; a.download = `${project.name || 'barstone'}-4K.jpg`; a.click(); };
   return (
     <div className="view" ref={host} style={{ background: '#ece6dc' }}>
@@ -84,7 +86,7 @@ export function View3D({ still, onMax, max, stoneUrl }: { still?: boolean; onMax
         <span className="tag badge">הדמיה חיה · תלת־ממד</span>
         <div className="tools">
           <div className="pill">{(['persp', 'top', 'front'] as Cam[]).map((c) => <button key={c} className={cam === c ? 'on' : ''} onClick={() => { setCam(c); api.current?.cam(c); }}>{c === 'persp' ? 'פרספקטיבה' : c === 'top' ? 'מלמעלה' : 'חזית'}</button>)}</div>
-          <div className="pill"><button title="שמירת תמונה ברזולוציית 4K" onClick={save}><Icon.download />4K</button>{onMax && <button title={max ? 'חזרה לתצוגה מפוצלת' : 'מסך מלא'} className={max ? 'on' : ''} onClick={onMax}><Icon.max /></button>}</div>
+          <div className="pill">{project.cutouts.some((c) => c.kind === 'sink') && <button title="זום לכיור" onClick={() => api.current?.focus()}>כיור</button>}<button title="שמירת תמונה ברזולוציית 4K" onClick={save}><Icon.download />4K</button>{onMax && <button title={max ? 'חזרה לתצוגה מפוצלת' : 'מסך מלא'} className={max ? 'on' : ''} onClick={onMax}><Icon.max /></button>}</div>
         </div>
       </>}
       {err && <div className="empty" style={{ position: 'absolute', inset: 0, display: 'grid', placeContent: 'center' }}>{err}</div>}

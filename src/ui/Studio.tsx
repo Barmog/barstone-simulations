@@ -36,6 +36,7 @@ export function Studio({ id }: { id: string }) {
     setMode(mobile ? (step === 'dims' ? 'plan' : step === 'check' ? 'slabs' : '3d') : step === 'design' ? '3d' : step === 'check' ? 'plan' : 'split');
     stepsEl.current?.querySelector('.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
   }, [step, mobile]);
+  useEffect(() => { const f = () => setMode((m) => (m === 'plan' || m === 'slabs' ? (mobile ? '3d' : 'split') : m)); addEventListener('bs-focus-sink', f); return () => removeEventListener('bs-focus-sink', f); }, [mobile]);
   const flagged = issues.filter((i) => i.level !== 'tip').length;
   const si = STEPS.findIndex((x) => x.id === step);
 
@@ -62,7 +63,7 @@ export function Studio({ id }: { id: string }) {
           {mode !== '3d' && <Plan2D />}
           {mode !== 'plan' && <View3D max={mode === '3d'} onMax={() => setMode(mode === '3d' ? 'split' : '3d')} />}
         </div>
-        {mode !== '3d' && <Slabs />}
+        <Slabs />
       </>;
 
   return (
@@ -78,7 +79,7 @@ export function Studio({ id }: { id: string }) {
       <nav className="steps" ref={stepsEl} aria-label="שלבי העבודה">{STEPS.map((x, n) => <button key={x.id} className={n === si ? 'on' : n < si ? 'done' : ''} onClick={() => setStep(x.id)}><i>{n < si ? '✓' : n + 1}</i>{x.name}</button>)}</nav>
       <div className={`work ${mobile && full ? 'full' : ''} ${sheet ? 'sheet' : ''}`}>
         <LeftPanel />
-        <div className={`center ${mode === '3d' || mobile ? 'max' : ''}`}>{views}</div>
+        <div className={`center ${mobile ? 'max' : ''}`}>{views}</div>
         {mobile && sheet && <div className="sheetscrim" onClick={() => setSheet(false)} />}
         <RightPanel onClose={mobile ? () => setSheet(false) : undefined} />
         {mobile && !sheet && !full && <button className="fab" onClick={() => setSheet(true)}><Icon.spark />העוזר{flagged > 0 && <em>{flagged}</em>}</button>}

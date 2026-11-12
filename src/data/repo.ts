@@ -1,6 +1,7 @@
 // שכבת הנתונים: Supabase כשמוגדר, ואחרת מצב הדגמה מקומי (localStorage) — אותו ממשק בשני המצבים.
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Project, fromTemplate, piece } from '../core/model';
+import { LUCENTE } from './lucente';
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const KEY = import.meta.env.VITE_SUPABASE_KEY as string | undefined;
@@ -11,7 +12,7 @@ export interface Customer { id: string; name: string; phone?: string | null; ema
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
 export interface OrderMetrics { slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
 export interface Order { id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
-export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null; en?: string | null; novo?: string | null }
+export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null; en?: string | null; novo?: string | null; thumb?: string }
 /** שם דגם לתצוגה: עברית ולצידה השם באנגלית (LUCENTE). */
 export const stoneLabel = (s: { name: string; en?: string | null }) => (s.en ? `${s.name} · ${s.en}` : s.name);
 export const STATUS_HE: Record<OrderStatus, string> = { draft: 'טיוטה', review: 'לעיון הלקוח', approved: 'אושר', production: 'בייצור', done: 'הושלם' };
@@ -22,7 +23,7 @@ const now = () => new Date().toISOString();
 const id = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 const ok = <T,>(r: { data: T | null; error: { message: string } | null }): T => { if (r.error) throw new Error(r.error.message); return r.data as T; };
 
-const STONE_FALLBACK = import.meta.env.BASE_URL + 'stone.jpg';
+const STONE_FALLBACK = import.meta.env.BASE_URL + 'stone.jpg', SITE = import.meta.env.BASE_URL;
 const LOCAL_STONES: Stone[] = [
   { id: 'l1', name: 'אבן בהירה (דוגמה)', url: STONE_FALLBACK, slab: true, stock: 'yes', hasImage: true },
 ];
@@ -42,23 +43,9 @@ function seedDemo() {
 }
 try { seedDemo(); } catch { /* אחסון חסום — ממשיכים בלי דוגמה */ }
 
-/** מצב הדגמה: שלוש אבנים (האבן לדוגמה ועוד שני גוונים שנוצרים ממנה), כדי שאפשר יהיה להשוות דגמים. */
-let demoCache: Promise<Stone[]> | null = null;
-function demoStones(): Promise<Stone[]> {
-  demoCache ||= new Promise<Stone[]>((res) => {
-    const img = new Image();
-    img.onload = () => {
-      const mk = (filter: string) => { const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const g = c.getContext('2d')!; g.filter = filter; g.drawImage(img, 0, 0); return c.toDataURL('image/jpeg', 0.85); };
-      try { res([...LOCAL_STONES, { id: 'l2', name: 'אבן כהה (דוגמה)', url: mk('invert(1) brightness(.75) contrast(1.15)'), slab: true, stock: 'yes', hasImage: true }, { id: 'l3', name: 'אבן חמה (דוגמה)', url: mk('sepia(.75) saturate(1.5) brightness(.93)'), slab: true, stock: 'no', hasImage: true }]); } catch { res(LOCAL_STONES); }
-    };
-    img.onerror = () => res(LOCAL_STONES); img.src = STONE_FALLBACK;
-  });
-  return demoCache;
-}
-
 export const repo = {
   async stones(): Promise<Stone[]> {
-    if (!sb) return demoStones();
+    if (!sb) return LUCENTE.map(([slug, name, en], i): Stone => ({ id: `lu${i}`, name, en, url: `${SITE}slabs/${slug}.jpg`, thumb: `${SITE}slabs/t/${slug}.jpg`, slab: true, stock: 'unknown', hasImage: true }));
     // מנסים את העמודות החדשות קודם, ונופלים אחורה אם המסד עוד לא עודכן
     const cols = ['id,name,color,tile_path,slab_path,supplier,in_stock,bookmatch,name_en,novo_name,novo_no,active', 'id,name,color,tile_path,slab_path,supplier,in_stock,bookmatch', 'id,name,color,tile_path,slab_path,supplier'];
     let data: any[] | null = null;
@@ -66,10 +53,10 @@ export const repo = {
     if (!data?.length) return LOCAL_STONES;
     const rank = { yes: 0, unknown: 1, no: 2 };
     // slab_path שמתחיל ב-site: הוא תמונה שמגיעה עם האתר (public/slabs); אחרת קובץ באחסון של Supabase
-    const slabUrl = (path: string) => (path.startsWith('site:') ? import.meta.env.BASE_URL + path.slice(5) : sb!.storage.from('slabs').getPublicUrl(path).data.publicUrl);
+    const slabUrl = (path: string) => (path.startsWith('site:') ? SITE + path.slice(5) : sb!.storage.from('slabs').getPublicUrl(path).data.publicUrl);
     return data
       .filter((s: any) => s.active !== false)
-      .map((s: any): Stone => ({ id: s.id, name: s.name, en: s.name_en, novo: [s.novo_name, s.novo_no].filter(Boolean).join(' · ') || null, color: s.color, slab: !!s.slab_path, stock: s.in_stock || 'unknown', hasImage: !!(s.slab_path || s.tile_path), bookmatch: s.bookmatch, url: s.slab_path ? slabUrl(s.slab_path) : s.tile_path ? sb!.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : STONE_FALLBACK }))
+      .map((s: any): Stone => ({ id: s.id, name: s.name, en: s.name_en, novo: [s.novo_name, s.novo_no].filter(Boolean).join(' · ') || null, color: s.color, slab: !!s.slab_path, stock: s.in_stock || 'unknown', hasImage: !!(s.slab_path || s.tile_path), bookmatch: s.bookmatch, thumb: s.slab_path?.startsWith('site:slabs/') ? SITE + 'slabs/t/' + s.slab_path.slice(11) : undefined, url: s.slab_path ? slabUrl(s.slab_path) : s.tile_path ? sb!.storage.from('tiles').getPublicUrl(s.tile_path).data.publicUrl : STONE_FALLBACK }))
       .sort((a, b) => Number(b.hasImage) - Number(a.hasImage) || rank[a.stock] - rank[b.stock] || a.name.localeCompare(b.name, 'he'));
   },
   async updateStone(sid: number | string, patch: { in_stock?: string; bookmatch?: boolean | null; name?: string }) { if (sb) ok(await sb.from('stones').update(patch).eq('id', sid).select('id')); },
