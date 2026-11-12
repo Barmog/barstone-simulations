@@ -1,13 +1,14 @@
 // הצעות שדרוג לאיש המכירות: כל הצעה מראה מה היא מוסיפה ומה המחיר שלה באבן (מ"ר ולוחות).
+import { runningMeters } from './pricing';
 import { Project, SIDE_HE, Side, isVertical, piece as mkPiece } from './model';
 import { NestResult, nest } from './nesting';
 
-export interface Upgrade { id: string; title: string; pitch: string; active: boolean; apply: (p: Project) => Project; dSlabs: number; dArea: number }
+export interface Upgrade { id: string; title: string; pitch: string; active: boolean; apply: (p: Project) => Project; dSlabs: number; dArea: number; /** תוספת מטר רץ. */ dRm: number }
 
 const area = (p: Project, n: NestResult) => n.metrics.pieceArea + p.cutouts.filter((c) => c.kind === 'sink' && c.built).reduce((s, c) => s + c.w * c.h + 2 * (c.w + c.h) * 200, 0);
 
 export function upgrades(p: Project, base: NestResult): Upgrade[] {
-  const flat = p.pieces.filter((q) => !isVertical(q)), out: Omit<Upgrade, 'dSlabs' | 'dArea'>[] = [];
+  const flat = p.pieces.filter((q) => !isVertical(q)), out: Omit<Upgrade, 'dSlabs' | 'dArea' | 'dRm'>[] = [];
   const islands = flat.filter((q) => q.kind === 'island'), walled = flat.filter((q) => q.kind === 'counter' && q.wall);
   const falls = (id: string) => p.pieces.filter((w) => w.kind === 'waterfall' && w.host === id);
   const splash = (id: string) => p.pieces.find((w) => w.kind === 'splash' && w.host === id);
@@ -41,6 +42,6 @@ export function upgrades(p: Project, base: NestResult): Upgrade[] {
     out.push({ id: 'water', title: 'מערכת מים', pitch: 'מים מסוננים ישר מהברז. היחידה יושבת בארון הכיור.', active: !!p.water, apply: (pr) => ({ ...pr, water: !pr.water }) });
     out.push({ id: 'disposal', title: 'טוחן אשפה', pitch: 'מותקן מתחת לכיור. בלי פח רטוב ובלי ריחות.', active: !!p.disposal, apply: (pr) => ({ ...pr, disposal: !pr.disposal }) });
   }
-  const a0 = area(p, base);
-  return out.map((u) => { const q = u.apply(p), n = nest(q); return { ...u, dSlabs: n.metrics.slabs - base.metrics.slabs, dArea: +((area(q, n) - a0) / 1e6).toFixed(2) }; });
+  const a0 = area(p, base), r0 = runningMeters(p).total;
+  return out.map((u) => { const q = u.apply(p), n = nest(q); return { ...u, dSlabs: n.metrics.slabs - base.metrics.slabs, dArea: +((area(q, n) - a0) / 1e6).toFixed(2), dRm: +(runningMeters(q).total - r0).toFixed(2) }; });
 }

@@ -102,7 +102,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
               <div key={o.id} className="ocard" role="button" tabIndex={0} onClick={() => go(`/o/${o.id}`)} onKeyDown={(e) => e.key === 'Enter' && go(`/o/${o.id}`)}>
                 <div className="row"><span className={`badge ${o.status === 'approved' || o.status === 'done' ? 'ok' : o.status === 'draft' ? '' : 'sand'}`}>{STATUS_HE[o.status]}</span><span className="sp" />{o.order_no && <span className="mono mute">#{o.order_no}</span>}</div>
                 <div><h3>{o.title}</h3>{!current && <span className="mute">{customers?.find((c) => c.id === o.customer_id)?.name}</span>}</div>
-                <div className="nums"><div><b>{o.metrics.slabs ?? '–'}</b>לוחות</div><div><b>{o.metrics.utilization != null ? `${o.metrics.utilization}%` : '–'}</b>ניצולת</div><div><b>{o.metrics.area ?? '–'}</b>מ"ר</div></div>
+                <div className="nums"><div><b>{o.metrics.slabs ?? '–'}</b>לוחות</div><div><b>{o.metrics.utilization != null ? `${o.metrics.utilization}%` : '–'}</b>ניצולת</div><div><b>{o.metrics.rm ?? '–'}</b>מטר רץ</div></div>
                 <div className="row mute" style={{ fontSize: 12 }}><span>עודכן {day(o.updated_at)}</span><span className="sp" />{!!o.metrics.issues && <span className="badge err">{o.metrics.issues} לבדיקה</span>}
                   <button className="link" onClick={(e) => { e.stopPropagation(); removeOrder(o); }}>מחיקה</button></div>
               </div>

@@ -37,7 +37,7 @@ export function applyDraft(base: Project, d: Draft): Project {
       x: n(q.x, -20000, 20000, 0), y: n(q.y, -20000, 20000, 0), w: n(q.w, 30, 12000, 600), h: n(q.h, 30, 12000, 600),
       wall: !vertical && q.wall && SIDES.includes(q.wall) ? q.wall : undefined,
       host: vertical && q.host && ids.has(q.host) ? ids.get(q.host) : undefined, side: vertical && q.side && SIDES.includes(q.side) ? q.side : undefined,
-      aprons: (q.aprons || []).filter((s) => SIDES.includes(s)), grainLock: q.grainLock !== false, joint: q.joint === 'sink' || q.joint === 'cooktop' ? q.joint : undefined, corner: q.corner === 'miter' ? ('miter' as const) : undefined, outline: old && old.w === q.w && old.h === q.h ? old.outline : undefined,
+      aprons: (q.aprons || []).filter((s) => SIDES.includes(s)), grainLock: q.grainLock !== false, joint: q.joint === 'sink' || q.joint === 'cooktop' ? q.joint : undefined, corner: q.corner === 'miter' ? ('miter' as const) : undefined, outline: old && old.w === q.w && old.h === q.h ? old.outline : undefined, off: vertical && old && old.w === q.w ? old.off : undefined,
       seat: !vertical && q.seat && SIDES.includes(q.seat) ? q.seat : undefined, seatDepth: old?.seatDepth, chairs: !vertical && q.seat && q.chairs ? n(q.chairs, 1, 12, 2) : undefined, jointAt: old && old.w === q.w && old.h === q.h ? old.jointAt : undefined,
     };
   }).filter((q) => !(q.kind === 'splash' || q.kind === 'waterfall') || q.host);

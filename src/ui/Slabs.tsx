@@ -46,11 +46,11 @@ export function Slabs({ readOnly }: { readOnly?: boolean }) {
               <image href={stone.url} width={s.w} height={s.h} preserveAspectRatio="none" transform={project.bookmatch === 'yes' && i % 2 ? `translate(${s.w},0) scale(-1,1)` : undefined} />
               <rect width={s.w} height={s.h} fill="rgba(245,241,234,.62)" mask={`url(#m${i})`} />
               {s.placements.map((p) => {
-                const on = pick === p.key || (!pick && sel?.type === 'piece' && sel.id === p.pieceId), pi = idx.get(p.pieceId) ?? 0, small = Math.min(p.body.w, p.body.h) < 240, d = drag?.key === p.key ? drag : null, err = bad.has(p.key);
+                const on = pick === p.key || (!!p.attached && pick === p.attached) || (!pick && sel?.type === 'piece' && sel.id === p.pieceId), pi = idx.get(p.pieceId) ?? 0, small = Math.min(p.body.w, p.body.h) < 240, d = drag?.key === p.key ? drag : null, err = bad.has(p.key);
                 return (
                   <g key={p.key} className={readOnly ? undefined : 'pl'} transform={d ? `translate(${d.dx},${d.dy})` : undefined} opacity={d ? 0.85 : 1}
-                    onPointerDown={readOnly ? undefined : (e) => { const svg = e.currentTarget.ownerSVGElement!; svg.setPointerCapture(e.pointerId); start.current = { key: p.key, sx: e.clientX, sy: e.clientY, k: s.w / svg.getBoundingClientRect().width, pl: p, moved: false }; setPick(p.key); select({ type: 'piece', id: p.pieceId }); }}>
-                    <rect x={p.body.x} y={p.body.y} width={p.body.w} height={p.body.h} fill={err ? 'rgba(229,72,77,.3)' : on ? 'rgba(180,155,116,.22)' : 'transparent'} stroke={err ? '#E5484D' : on ? '#B49B74' : p.stripOf ? '#E0428F' : p.extra ? '#5B7FD6' : '#1f8f5a'} strokeWidth={on || err ? 14 : 7} />
+                    onPointerDown={readOnly ? undefined : (e) => { const t = (p.attached && all.find((x) => x.key === p.attached)) || p, svg = e.currentTarget.ownerSVGElement!; svg.setPointerCapture(e.pointerId); start.current = { key: t.key, sx: e.clientX, sy: e.clientY, k: s.w / svg.getBoundingClientRect().width, pl: t, moved: false }; setPick(t.key); select({ type: 'piece', id: t.pieceId }); }}>
+                    <rect x={p.body.x} y={p.body.y} width={p.body.w} height={p.body.h} fill={err ? 'rgba(229,72,77,.3)' : on ? 'rgba(180,155,116,.22)' : 'transparent'} stroke={err ? '#E5484D' : on ? '#B49B74' : p.stripOf ? '#E0428F' : p.extra ? '#5B7FD6' : p.attached ? '#C08A2E' : '#1f8f5a'} strokeDasharray={p.attached ? '28 14' : undefined} strokeWidth={on || err ? 14 : 7} />
                     {p.strips.map((st, m) => <rect key={m} x={st.rect.x} y={st.rect.y} width={st.rect.w} height={st.rect.h} fill="rgba(224,66,143,.16)" stroke="#E0428F" strokeWidth={5} />)}
                     {manual[p.key] && <circle cx={p.body.x + 36} cy={p.body.y + 36} r={16} fill="#B49B74" stroke="#fff" strokeWidth={6} />}
                     {!small && <g style={{ direction: 'ltr' }} textAnchor="middle" pointerEvents="none">

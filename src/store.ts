@@ -4,6 +4,7 @@ import { Cutout, Piece, Project } from './core/model';
 import { NestResult, nest } from './core/nesting';
 import { Issue, check } from './core/checks';
 import { Order, Stone, repo } from './data/repo';
+import { runningMeters } from './core/pricing';
 
 export type Sel = { type: 'piece' | 'cutout'; id: string } | null;
 export type Step = 'dims' | 'stone' | 'design' | 'check' | 'summary';
@@ -84,7 +85,7 @@ export const useStore = create<State>((set, get) => {
         await repo.updateOrder(order.id, {
           title: order.title, order_no: order.order_no, status: order.status, project,
           stone_id: typeof project.stoneId === 'number' ? project.stoneId : null,
-          metrics: { slabs: n?.metrics.slabs, utilization: n?.metrics.utilization, joints: n?.metrics.joints, area: n ? +(n.metrics.pieceArea / 1e6).toFixed(2) : 0, issues: issues.filter((i) => i.level !== 'tip').length },
+          metrics: { rm: +runningMeters(project).total.toFixed(2), slabs: n?.metrics.slabs, utilization: n?.metrics.utilization, joints: n?.metrics.joints, area: n ? +(n.metrics.pieceArea / 1e6).toFixed(2) : 0, issues: issues.filter((i) => i.level !== 'tip').length },
         });
         set({ save: get().project === project && get().order === order ? 'saved' : 'dirty' });
         if (get().save === 'dirty') schedule();
