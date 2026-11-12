@@ -240,6 +240,11 @@ export function corners(p: Project): { a: Piece; b: Piece; x1: number; y1: numbe
   for (const b of flat) for (const a of flat) {
     if (a === b || b.h <= b.w) continue; // b = הרגל (ארוכה לאורך y)
     const below = Math.abs(b.y - (a.y + a.h)) < 3, above = Math.abs(b.y + b.h - a.y) < 3;
+    // רגל בגובה מלא (המשטח הראשי נצמד לצד שלה): החיבור אנכי, בקצה המשטח הראשי
+    const sideR = Math.abs(b.x - (a.x + a.w)) < 3, sideL = Math.abs(b.x + b.w - a.x) < 3;
+    if ((sideR || sideL) && !(below || above) && a.w > a.h && b.y <= a.y + 3 && b.y + b.h >= a.y + a.h - 3) {
+      const ex = sideR ? b.x : b.x + b.w; out.push({ a, b, x1: ex, y1: a.y, x2: ex, y2: a.y + a.h, miter: b.corner === 'miter' }); continue;
+    }
     if (!(below || above) || b.x < a.x - 3 || b.x + b.w > a.x + a.w + 3) continue;
     const ey = below ? a.y + a.h : a.y, miter = b.corner === 'miter';
     if (!miter) { out.push({ a, b, x1: b.x, y1: ey, x2: b.x + b.w, y2: ey, miter }); continue; }

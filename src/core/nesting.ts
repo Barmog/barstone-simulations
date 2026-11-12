@@ -83,25 +83,40 @@ function toBlocks(project: Project, o: Opts): Block[] {
   const maxL = o.W - 2 * o.margin;
   // חיפוי קיר נחתך צמוד לצלע הקיר של המשטח שמתחתיו, כדי שהגיד ימשיך מהמשטח אל החיפוי
   const byId = new Map(project.pieces.map((q) => [q.id, q])), attached = new Map<string, Piece>();
+  /** נקודות החיתוך של חלק (חיבורים): ידניים אם כל מקטע נכנס בלוח, אחרת אוטומטי. extra = הארכת החיפוי בפינה (לפני/אחרי). */
+  const split = (p: Piece, lead = 0, tail = 0) => {
+    const wid = pieceWid(p), lx = longIsX(p), len = pieceLen(p) + (p.corner === 'miter' ? wid : 0); // גרונג 45°: החלק ארוך יותר בעומק המשטח
+    const prefer = p.joint === 'sink' || p.joint === 'cooktop' ? project.cutouts.filter((c) => c.pieceId === p.id && c.kind === p.joint).map((c) => (lx ? c.x + c.w / 2 : c.y + c.h / 2)) : [];
+    const custom = [...new Set((p.jointAt || []).map(Math.round))].filter((v) => v > 20 && v < len - 20).sort((a, b) => a - b), cpts = [0, ...custom, len];
+    const fits = (pts: number[]) => pts.every((v, i) => !i || v - pts[i - 1] + (i === 1 ? lead : 0) + (i === pts.length - 1 ? tail : 0) <= maxL);
+    if (custom.length && fits(cpts)) return { len, pts: cpts };
+    // הארכת החיפוי בפינה נכנסת לבלוק של המקטע הראשון/האחרון — מחלקים כאילו החלק ארוך יותר, ומזיזים חזרה
+    const raw = splitPoints(len + lead + tail, maxL, keepZones(p, project.cutouts).map(([a, b]) => [a + lead, b + lead] as [number, number]), prefer.map((v) => v + lead));
+    const pts = raw.map((v, i) => (i === 0 ? 0 : i === raw.length - 1 ? len : Math.max(0, Math.min(len, v - lead))));
+    return { len, pts: fits(pts) ? pts : splitPoints(len, maxL, keepZones(p, project.cutouts), prefer) };
+  };
+  const ext = (q: Piece, h: Piece) => { const len = pieceLen(h) + (h.corner === 'miter' ? pieceWid(h) : 0), o0 = q.off || 0; return { lead: Math.max(0, -o0), tail: Math.max(0, o0 + q.w - len) }; };
   for (const q of project.pieces) {
     if (q.kind !== 'splash' || !q.host || !q.side) continue;
     const h = byId.get(q.host); if (!h || isVertical(h) || h.outline) continue;
     const longSides: Side[] = longIsX(h) ? ['back', 'front'] : ['left', 'right'];
     const aprH = o.apronH > 0 ? h.aprons.filter((sd) => longSides.includes(sd)).length * (o.kerf + o.apronH) : 0;
     if (!longSides.includes(q.side) || attached.has(h.id) || pieceWid(h) + aprH + o.kerf + q.h > o.H - 2 * o.margin) continue;
+    // חיפוי שממשיך לפינה מאריך את המקטע הראשון/האחרון; אם גם כך הוא לא נכנס בלוח — החיפוי נחתך בנפרד
+    const { lead, tail } = ext(q, h), { pts } = split(h, lead, tail);
+    if (pts[1] - pts[0] + lead > maxL || pts[pts.length - 1] - pts[pts.length - 2] + tail > maxL) continue;
     attached.set(h.id, q);
   }
   const glued = new Set([...attached.values()].map((q) => q.id));
   for (const p of project.pieces) {
     if (glued.has(p.id)) continue;
-    const wid = pieceWid(p), lx = longIsX(p), len = pieceLen(p) + (p.corner === 'miter' ? wid : 0); // גרונג 45°: החלק ארוך יותר בעומק המשטח
+    const wid = pieceWid(p), lx = longIsX(p);
     const longSides: Side[] = lx ? ['back', 'front'] : ['left', 'right'];
-    const aprons = o.apronH > 0 ? p.aprons : [];
+    // מפל על צלע מבטל את הקנט שם (המפל הוא הסיום של הצלע)
+    const wfSides = new Set(project.pieces.filter((w) => w.kind === 'waterfall' && w.host === p.id).map((w) => w.side));
+    const aprons = o.apronH > 0 ? p.aprons.filter((s) => !wfSides.has(s)) : [];
     const before = aprons.filter((s) => s === longSides[0]), after = aprons.filter((s) => s === longSides[1]);
-    const prefer = p.joint === 'sink' || p.joint === 'cooktop' ? project.cutouts.filter((c) => c.pieceId === p.id && c.kind === p.joint).map((c) => (lx ? c.x + c.w / 2 : c.y + c.h / 2)) : [];
-    const custom = [...new Set((p.jointAt || []).map(Math.round))].filter((v) => v > 20 && v < len - 20).sort((a, b) => a - b), cpts = [0, ...custom, len];
-    // חיבורים ידניים תקפים רק אם כל מקטע נכנס בלוח; אחרת חוזרים לאוטומטי
-    const pts = custom.length && cpts.every((v, i) => !i || v - cpts[i - 1] <= maxL) ? cpts : splitPoints(len, maxL, keepZones(p, project.cutouts), prefer);
+    const sq0 = attached.get(p.id), e0 = sq0 ? ext(sq0, p) : { lead: 0, tail: 0 }, { pts } = split(p, e0.lead, e0.tail);
     const segs = pts.length - 1;
     for (let i = 0; i < segs; i++) {
       const L = pts[i + 1] - pts[i];

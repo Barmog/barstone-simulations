@@ -5,7 +5,7 @@
 // · חיפוי ומפל: הגובה הוא ה"רוחב" (חיפוי 60 = רגיל, חיפוי עד התקרה = כפול).
 // · פינה נספרת פעמיים: ב-L של 3 על 4 מטר (כל צלע עד הקיר) מחשבים 7 מטר.
 // · קנט: תוספת נפרדת לפי מטר אורך. כיור בנוי: תוספת. פתחים (כיור קנוי, כיריים, ברז): בלי תוספת.
-import { PLINTH_H, Piece, Project, isVertical, longIsX, pieceLen, pieceWid } from './model';
+import { PLINTH_H, Piece, Project, Side, isVertical, longIsX, pieceLen, pieceWid } from './model';
 
 export function rmFactor(widthMm: number): number {
   if (widthMm <= 200) return 1 / 3;
@@ -37,7 +37,9 @@ export function runningMeters(p: Project): { rows: RmRow[]; total: number; extra
   const rows = p.pieces.map((q) => (q.kind === 'waterfall' ? row(q.id, q.name, p.counterH, q.w) : row(q.id, q.name, pieceLen(q), pieceWid(q), cornerAdd(p, q))));
   if (p.plinthStone && p.cabinets) { const len = p.pieces.filter((q) => !isVertical(q) && q.kind !== 'panel').reduce((s, q) => s + (q.kind === 'island' ? 2 * (q.w + q.h) : pieceLen(q)), 0); if (len) rows.push(row('plinth', 'צוקל מאבן', len, PLINTH_H)); }
   const extras: Extra[] = [];
-  const apron = p.apronH > 0 ? p.pieces.reduce((s, q) => s + q.aprons.reduce((t, sd) => t + (sd === 'front' || sd === 'back' ? q.w : q.h), 0), 0) : 0;
+  // קנט לא נספר בצלע שיש עליה מפל (המפל הוא הסיום שלה)
+  const wf = (q: Piece, sd: Side) => p.pieces.some((w) => w.kind === 'waterfall' && w.host === q.id && w.side === sd);
+  const apron = p.apronH > 0 ? p.pieces.reduce((s, q) => s + q.aprons.reduce((t, sd) => t + (wf(q, sd) ? 0 : sd === 'front' || sd === 'back' ? q.w : q.h), 0), 0) : 0;
   if (apron) extras.push({ id: 'apron', name: `קנט ${p.apronH / 10} ס"מ`, qty: +(apron / 1000).toFixed(2), unit: 'מטר' });
   const built = p.cutouts.filter((c) => c.kind === 'sink' && c.built);
   if (built.length) extras.push({ id: 'built', name: 'כיור בנוי', qty: built.length, unit: built.length > 1 ? 'כיורים' : 'כיור' });

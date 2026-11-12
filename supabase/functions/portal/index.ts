@@ -56,8 +56,13 @@ Deno.serve(async (req) => {
       if (body.manual != null && !manual) return json({ error: "הסידור על הלוחות לא תקין." }, 400);
       const prev = JSON.stringify(order.project?.manual || {}), changed = !!manual && JSON.stringify(manual) !== prev;
       const now = new Date().toISOString();
-      const { error: e1 } = await db.from("order_shares").update({ signed_at: now, signer_name: name, signature: sig, customer_note: note || null, layout: manual, layout_changed: changed }).eq("token", token).is("signed_at", null);
+      // סידור שיוצא מהלוח לא נחתם (הבדיקה המלאה של חפיפות נעשית בדפדפן של הלקוח לפני החתימה)
+      const W = Number(order.project?.slabW) || 3200, H = Number(order.project?.slabH) || 1600;
+      if (manual && Object.values(manual).some((v) => v.x < 0 || v.y < 0 || v.x > W || v.y > H)) return json({ error: "חלק יוצא מגבולות הלוח. מזיזים אותו ומנסים שוב." }, 400);
+      // חתימה אחת בלבד: רק בקשה שבאמת עדכנה את השורה ממשיכה לעדכן את ההזמנה
+      const { data: upd, error: e1 } = await db.from("order_shares").update({ signed_at: now, signer_name: name, signature: sig, customer_note: note || null, layout: manual, layout_changed: changed }).eq("token", token).is("signed_at", null).select("token");
       if (e1) throw e1;
+      if (!upd?.length) return json({ error: "ההדמיה כבר אושרה." }, 409);
       const project = changed ? { ...order.project, manual } : order.project;
       const { error: e2 } = await db.from("orders").update({ status: "approved", project }).eq("id", order.id);
       if (e2) throw e2;

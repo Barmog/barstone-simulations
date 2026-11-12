@@ -55,8 +55,9 @@ export const useStore = create<State>((set, get) => {
     order: null, project: null, past: [], future: [], sel: null, save: 'saved', stones: [], nest: null, issues: [], toast: '', step: 'dims', chat: [], portal: false,
     setStep(step) { set({ step, sel: null }); },
     say(m) { set({ chat: [...get().chat, m] }); },
-    openPortal(order) { lastKey = ''; set({ portal: true, step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
-    open(order) { lastKey = ''; set({ portal: false, step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
+    openPortal(order) { const g = get(); if (g.order && !g.portal && g.save !== 'saved') void g.flush(); clearTimeout(timer); lastKey = ''; set({ portal: true, step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
+    // לפני שמחליפים הזמנה: שומרים את השינויים האחרונים של הקודמת (לא מאבדים עריכה שעוד ממתינה לשמירה)
+    open(order) { const g = get(); if (g.order && !g.portal && g.order.id !== order.id && g.save !== 'saved') void g.flush(); clearTimeout(timer); lastKey = ''; set({ portal: false, step: 'dims', chat: [], order, project: order.project, past: [], future: [], sel: null, save: 'saved', ...derive(order.project) }); },
     close() { get().flush(); set({ order: null, project: null, past: [], future: [], sel: null, nest: null, issues: [] }); },
     apply(fn, coalesce) {
       const cur = get().project; if (!cur) return;

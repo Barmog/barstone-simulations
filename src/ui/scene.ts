@@ -114,7 +114,7 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
       const line = new THREE.Mesh(new THREE.BoxGeometry((lx ? 1.6 : wid) * S, 0.6 * S, (lx ? wid : 1.6) * S), seam); line.position.set((p.x + (lx ? j.at : wid / 2)) * S, (H + 0.4) * S, (p.y + (lx ? wid / 2 : j.at)) * S); group.add(line);
     }
     // --- קנט ---
-    if (project.apronH > T) for (const side of p.aprons) {
+    if (project.apronH > T) for (const side of p.aprons.filter((sd) => !project.pieces.some((w) => w.kind === 'waterfall' && w.host === p.id && w.side === sd))) {
       const e = hostEdge(p, side), ah = project.apronH - T, n = Math.max(1, Math.ceil(e.len / 120));
       const g = new THREE.BoxGeometry(e.len, ah, T, n, 1, 1), pos = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
       for (let i = 0; i < pos.count; i++) { const a = pos.getX(i) + e.len / 2, lx = e.x - p.x + e.dx * a, ly = e.y - p.y + e.dy * a, [u, v] = uvAt(p, pls, lx, ly); uv.setXY(i, u, v - ((ah / 2 - pos.getY(i)) / project.slabH) * 0.6); }
