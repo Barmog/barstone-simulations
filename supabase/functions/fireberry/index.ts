@@ -1,7 +1,7 @@
 // פונקציית קצה: חיבור לפיירברי.
 // כל משתמש שומר את טוקן ה-API האישי שלו (טבלה fireberry_tokens, נקראת רק כאן), ולכן רואה ומשנה בפיירברי
 // בדיוק את מה שההרשאות שלו בפיירברי מאפשרות.
-// פעולות: status · objects · search (לקוחות) · records (רשומות של לקוח באובייקט ההזמנות) · attach (צירוף PDF לרשומה).
+// פעולות: status · objects · search (לקוחות) · records (רשומות של לקוח באובייקט ההזמנות) · find (חיפוש אחד: שם לקוח או מספר הזמנה) · attach (צירוף PDF לרשומה).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const API = "https://api.fireberry.com";
@@ -76,6 +76,41 @@ Deno.serve(async (req) => {
         title: pick(r, [pf, "name", "subject", "title"]), number: pick(r, ["ordernumber", "number", "pcfsystemfield1"]),
         date: pick(r, ["createdon", "modifiedon"]),
       })).filter((x) => x.id) });
+    }
+    if (mode === "find") {
+      // חיפוש אחד לאנשי המכירות: שם לקוח, טלפון או מספר הזמנה — ומחזירים הזמנות מוכנות לקישור
+      const object = Number(body.object), q = esc(str(body.q)), digits = q.replace(/\D/g, "");
+      if (!object) return json({ error: "המנהל עוד לא בחר במסך \"פיירברי\" באיזה אובייקט נמצאות ההזמנות." }, 400);
+      if (q.length < 2) return json({ orders: [], accounts: [] });
+      // שדות "מספר" באובייקט ההזמנות (לפי שם השדה או התווית), כדי לחפש גם לפי מספר הזמנה
+      let numFields: string[] = [];
+      try {
+        const md = await fb(`/metadata/records/${object}/fields`);
+        numFields = rows(md).map((f) => ({ n: pick(f, ["systemName", "fieldName", "name"]), l: pick(f, ["label", "displayName", "Label"]) }))
+          .filter((f) => f.n && (/number|num|^no$|_no$|code/i.test(f.n) || /מספר|מס'|מס׳/.test(f.l))).map((f) => f.n).slice(0, 4);
+      } catch { /* בלי מטא־דאטה: מחפשים בשדה הראשי */ }
+      const acc = async (where: string, n: number) => { const d = await query(1, where, n), m = meta(d), pk = str(m.PrimaryKey) || "accountid";
+        return rows(d).map((r) => ({ id: pick(r, [pk, "accountid"]), name: pick(r, [str(m.PrimaryField) || "accountname", "accountname"]), phone: pick(r, ["telephone1", "telephone2", "mobilephone"]), email: pick(r, ["emailaddress1", "emailaddress2"]),
+          address: [pick(r, ["billingstreet", "billingaddress", "address1_line1"]), pick(r, ["billingcity", "address1_city"])].filter(Boolean).join(", ") })).filter((a) => a.id); };
+      const ordersWhere = async (where: string, n: number) => { const d = await query(object, where, n), m = meta(d), pk = str(m.PrimaryKey), pf = str(m.PrimaryField);
+        return { pf, list: rows(d).map((r) => ({ id: pick(r, [pk, ...Object.keys(r).filter((k) => /id$/i.test(k) && k !== "accountid" && k !== "ownerid")]), title: pick(r, [pf, "name", "subject", "title"]),
+          number: pick(r, [...numFields, "ordernumber", "number", "pcfsystemfield1"]), date: pick(r, ["createdon", "modifiedon"]), accountId: pick(r, ["accountid"]), accountName: pick(r, ["accountidname", "accountname"]) })).filter((x) => x.id) }; };
+      const accWhere = [`(accountname like '%${q}%')`, ...(digits.length >= 4 ? [`(telephone1 like '%${digits}%')`, `(telephone2 like '%${digits}%')`] : [])].join(" or ");
+      const [accounts, byText] = await Promise.all([
+        acc(accWhere, 8).catch((e) => { if ((e as { status?: number }).status === 401) throw e; return []; }),
+        (async () => { const probe = await ordersWhere("", 1).catch(() => ({ pf: "", list: [] })); const pf = probe.pf || "name";
+          const conds = [`(${pf} like '%${q}%')`, ...numFields.map((f) => `(${f} like '%${q}%')`)].join(" or ");
+          return (await ordersWhere(conds, 20).catch(() => ordersWhere(`(${pf} like '%${q}%')`, 20).catch(() => ({ pf, list: [] })))).list; })(),
+      ]);
+      // הזמנות של הלקוחות שנמצאו לפי שם
+      const ofAccounts = (await Promise.all(accounts.slice(0, 4).map((a) => ordersWhere(`(accountid = '${esc(a.id)}')`, 15).then((r) => r.list).catch(() => [])))).flat();
+      const seen = new Set<string>(), all = [...byText, ...ofAccounts].filter((o) => !seen.has(o.id) && seen.add(o.id));
+      // פרטי הלקוח של כל הזמנה (שם, טלפון, כתובת) — לפתיחה אוטומטית של הלקוח במערכת
+      const need = [...new Set(all.map((o) => o.accountId).filter((id) => id && !accounts.some((a) => a.id === id)))].slice(0, 15);
+      const more = need.length ? await acc(need.map((id) => `(accountid = '${esc(id)}')`).join(" or "), need.length).catch(() => []) : [];
+      const byId = new Map([...accounts, ...more].map((a) => [a.id, a]));
+      const orders = all.slice(0, 30).map((o) => ({ id: o.id, title: o.title, number: o.number, date: o.date, account: byId.get(o.accountId) || (o.accountId ? { id: o.accountId, name: o.accountName, phone: "", email: "", address: "" } : null) }));
+      return json({ orders, accounts: accounts.filter((a) => !orders.some((o) => o.account?.id === a.id)) });
     }
     if (mode === "attach") {
       const object = Number(body.object), id = str(body.id), b64 = str(body.data);

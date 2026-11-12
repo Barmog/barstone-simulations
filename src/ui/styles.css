@@ -339,3 +339,7 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 .sigimg { max-width: 260px; background: #fff; border-radius: 10px; border: 1px solid #ece6dc; }
 .tb-sign.signed img { height: 46px; max-width: 100%; object-fit: contain; object-position: right; } .tb-sign.signed p { margin-top: 2px; }
 @media (max-width: 640px) { .track { grid-template-columns: 1fr; } .p-card { padding: 16px; } .p-3d { height: 52vh; } }
+.fbfind { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; }
+.fbrow { display: flex; align-items: center; gap: 12px; text-align: start; padding: 10px 12px; border-radius: 12px; border: 0; background: rgba(27,26,24,.04); cursor: pointer; font: inherit; color: inherit; }
+.fbrow:hover { background: rgba(27,26,24,.08); } .fbrow div { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; } .fbrow small { color: var(--mute); }
+.fbrow .num { min-width: 70px; font-size: 13px; color: var(--ink2); } .fbrow .go { font-size: 13px; color: var(--ink2); white-space: nowrap; } .fbrow.acc .num { color: var(--mute); }

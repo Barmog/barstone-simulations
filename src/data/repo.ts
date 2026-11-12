@@ -93,7 +93,7 @@ export const repo = {
   /** רשימת הזמנות בלי גוף הפרויקט (קל וטוען מהר). */
   async orders(): Promise<Omit<Order, 'project'>[]> {
     if (!sb) return J<Order[]>('bs.orders', []).map(({ project, ...o }) => o).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    return ok(await sb.from('orders').select('id,customer_id,title,order_no,status,stone_id,metrics,created_at,updated_at').order('updated_at', { ascending: false }));
+    return ok(await sb.from('orders').select('id,customer_id,title,order_no,status,stone_id,metrics,created_at,updated_at,fb_id').order('updated_at', { ascending: false }));
   },
   async order(oid: string): Promise<Order | null> {
     if (!sb) return J<Order[]>('bs.orders', []).find((o) => o.id === oid) || null;
