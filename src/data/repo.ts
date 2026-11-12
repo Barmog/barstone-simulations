@@ -11,6 +11,11 @@ export const isLocal = !sb;
 export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; fb_id?: string | null; created_at: string; updated_at: string }
 export interface Share { token: string; order_id: string; created_at: string; expires_at: string; viewed_at?: string | null; signed_at?: string | null; signer_name?: string | null; signature?: string | null; customer_note?: string | null; layout_changed?: boolean }
 export interface PortalData { order: { id: string; title: string; order_no?: string | null; status: OrderStatus; project: Project; updated_at: string }; customer: { name: string; address: string }; share: { signed_at?: string | null; signer_name?: string | null; signature?: string | null; expires_at: string } }
+export type FbKind = 'bug' | 'idea' | 'design' | 'other';
+export type FbStatus = 'new' | 'doing' | 'done' | 'wontfix';
+export interface Feedback { id: number | string; created_at: string; email?: string | null; kind: FbKind; text: string; route?: string | null; screen?: string | null; order_id?: string | null; status: FbStatus; reply?: string | null }
+export const FB_KIND_HE: Record<FbKind, string> = { bug: 'תקלה', idea: 'רעיון לשיפור', design: 'עיצוב / נוחות', other: 'אחר' };
+export const FB_STATUS_HE: Record<FbStatus, string> = { new: 'חדש', doing: 'בטיפול', done: 'שופר', wontfix: 'לא נעשה' };
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
 export interface OrderMetrics { rm?: number; slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
 export interface Order { fb_object?: number | null; fb_id?: string | null; fb_sent_at?: string | null; id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
@@ -142,6 +147,19 @@ export const repo = {
     if (error) { let msg = error.message; try { msg = (await (error as { context?: Response }).context?.json())?.error || msg; } catch { /* */ } throw new Error(msg); }
     if (data?.error) throw new Error(data.error);
     return data as T;
+  },
+  // --- משובים מהצוות ---
+  async sendFeedback(f: Pick<Feedback, 'kind' | 'text' | 'route' | 'screen' | 'order_id'> & { email?: string }) {
+    if (!sb) { W('bs.feedback', [{ ...f, id: id(), created_at: now(), status: 'new' }, ...J<Feedback[]>('bs.feedback', [])]); return; }
+    ok(await sb.from('feedback').insert(f).select('id'));
+  },
+  async feedback(): Promise<Feedback[]> {
+    if (!sb) return J<Feedback[]>('bs.feedback', []);
+    return ok(await sb.from('feedback').select('*').order('created_at', { ascending: false }).limit(500));
+  },
+  async updateFeedback(fid: Feedback['id'], patch: Partial<Pick<Feedback, 'status' | 'reply'>>) {
+    if (!sb) { W('bs.feedback', J<Feedback[]>('bs.feedback', []).map((x) => (x.id === fid ? { ...x, ...patch } : x))); return; }
+    ok(await sb.from('feedback').update(patch).eq('id', fid).select('id'));
   },
   async claimAccess(): Promise<'admin' | 'sales' | 'pending'> {
     if (!sb) return 'admin';

@@ -10,6 +10,7 @@ import { Team } from './Team';
 import { Catalog } from './Catalog';
 import { Fireberry } from './Fireberry';
 import { Portal } from './Portal';
+import { FeedbackButton, FeedbackPage } from './Feedback';
 
 export type Access = 'admin' | 'sales' | 'pending' | 'loading';
 
@@ -44,10 +45,12 @@ export function App() {
   else if (route.name === 'doc') body = <Doc key={route.id} id={route.id} />;
   else if (route.name === 'team' && access === 'admin') body = <Team me={userId || ''} />;
   else if (route.name === 'catalog' && access === 'admin' && !isLocal) body = <Catalog />;
+  else if (route.name === 'feedback') body = <FeedbackPage admin={access === 'admin'} />;
   else if (route.name === 'fireberry' && !isLocal) body = <Fireberry admin={access === 'admin'} />;
   else body = <Home customerId={route.name === 'home' ? route.customer : undefined} admin={access === 'admin'} email={session?.user.email} />;
 
-  return <>{body}{toast && <div className="toast" role="status">{toast}</div>}</>;
+  const inApp = route.name !== 'portal' && (isLocal || (!!session && (access === 'admin' || access === 'sales')));
+  return <>{body}{inApp && route.name !== 'feedback' && <FeedbackButton route={route} email={session?.user.email} />}{toast && <div className="toast" role="status">{toast}</div>}</>;
 }
 
 export const signOut = async () => { await sb?.auth.signOut(); go('/'); };

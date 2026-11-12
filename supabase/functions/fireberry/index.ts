@@ -1,7 +1,8 @@
 // פונקציית קצה: חיבור לפיירברי.
 // כל משתמש שומר את טוקן ה-API האישי שלו (טבלה fireberry_tokens, נקראת רק כאן), ולכן רואה ומשנה בפיירברי
 // בדיוק את מה שההרשאות שלו בפיירברי מאפשרות.
-// פעולות: status · objects · search (לקוחות) · records (רשומות של לקוח באובייקט ההזמנות) · find (חיפוש אחד: שם לקוח או מספר הזמנה) · attach (צירוף PDF לרשומה).
+// פעולות: status · objects · search (לקוחות) · records (רשומות של לקוח באובייקט ההזמנות) · find (חיפוש אחד: שם לקוח או מספר הזמנה)
+// · measures (מדידות של לקוח והקבצים שלהן) · file (הורדת קובץ מדידה) · attach (צירוף PDF לרשומה).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const API = "https://api.fireberry.com";
@@ -111,6 +112,58 @@ Deno.serve(async (req) => {
       const byId = new Map([...accounts, ...more].map((a) => [a.id, a]));
       const orders = all.slice(0, 30).map((o) => ({ id: o.id, title: o.title, number: o.number, date: o.date, account: byId.get(o.accountId) || (o.accountId ? { id: o.accountId, name: o.accountName, phone: "", email: "", address: "" } : null) }));
       return json({ orders, accounts: accounts.filter((a) => !orders.some((o) => o.account?.id === a.id)) });
+    }
+    // --- מדידות: רשומות הלקוח באובייקט המדידות, והקבצים שצורפו אליהן (PDF / DXF / תמונה) ---
+    const FILE_EXT = /\.(pdf|dxf|dwg|jpe?g|png|webp|heic)(\?|$)/i;
+    const asFiles = (x: unknown) => rows(x).map((f) => ({
+      id: pick(f, ["fileid", "fileId", "FileId", "id", "Id", "documentid"]),
+      name: pick(f, ["filename", "fileName", "FileName", "name", "Name", "title", "originalname"]),
+      url: pick(f, ["url", "Url", "fileurl", "fileUrl", "downloadUrl", "downloadurl", "link", "path", "fileLink"]),
+      date: pick(f, ["createdon", "createdOn", "date", "modifiedon"]),
+    })).filter((f) => f.id || f.url);
+    if (mode === "measures") {
+      const object = Number(body.object) || 1001, account = esc(str(body.accountId)), orderId = str(body.orderId);
+      if (!account) return json({ error: "חסר לקוח." }, 400);
+      const d = await query(object, `(accountid = '${account}')`, 15), m = meta(d), pk = str(m.PrimaryKey), pf = str(m.PrimaryField);
+      const recs = rows(d).map((r) => ({ r, id: pick(r, [pk, ...Object.keys(r).filter((k) => /id$/i.test(k) && k !== "accountid" && k !== "ownerid")]) })).filter((x) => x.id);
+      const out = [];
+      for (const { r, id } of recs.slice(0, 8)) {
+        let files: { id: string; name: string; url: string; date: string }[] = [];
+        for (const path of [`/api/v2/record/${object}/${encodeURIComponent(id)}/files`, `/api/record/${object}/${encodeURIComponent(id)}/files`]) {
+          try { files = asFiles(await fb(path)); if (files.length) break; } catch (e) { if ((e as { status?: number }).status === 401) throw e; }
+        }
+        // שדות קובץ / קישור בתוך הרשומה עצמה
+        for (const [k, v] of Object.entries(r)) { const u = str(v); if (/^https:\/\//.test(u) && FILE_EXT.test(u) && !files.some((f) => f.url === u)) files.push({ id: "", name: decodeURIComponent(u.split("/").pop()!.split("?")[0]) || k, url: u, date: "" }); }
+        out.push({ id, title: pick(r, [pf, "name", "subject", "title"]) || "מדידה", date: pick(r, ["createdon", "modifiedon"]),
+          order: !!orderId && Object.values(r).some((v) => str(v) === orderId), files: files.filter((f) => !f.name || FILE_EXT.test(f.name) || FILE_EXT.test(f.url)) });
+      }
+      out.sort((a, b) => Number(b.order) - Number(a.order) || b.date.localeCompare(a.date));
+      return json({ measures: out });
+    }
+    /** רק קישורים מאובטחים של פיירברי ושל שירותי האחסון שלו. מחזיר את שם השרת, או "" אם לא מותר. */
+    const okHost = (u: string) => { try { const x = new URL(u); return x.protocol === "https:" && /(^|\.)(fireberry\.com|powerlink\.co\.il|amazonaws\.com|blob\.core\.windows\.net|cloudfront\.net)$/i.test(x.hostname) ? x.hostname : ""; } catch { return ""; } };
+    if (mode === "file") {
+      const object = Number(body.object) || 1001, rec = str(body.recordId), fid = str(body.fileId), url = str(body.url);
+      let r: Response | null = null;
+      if (url) {
+        // רק קישורים מאובטחים של פיירברי ושל שירותי האחסון שלו
+        const host = okHost(url);
+        if (!host) return json({ error: "קישור הקובץ לא מוכר." }, 400);
+        r = await fetch(url, { headers: /fireberry|powerlink/i.test(host) ? { tokenid: tok.token } : {} });
+      } else if (rec && fid) {
+        for (const path of [`/api/v2/record/${object}/${encodeURIComponent(rec)}/files/${encodeURIComponent(fid)}`, `/api/record/${object}/${encodeURIComponent(rec)}/files/${encodeURIComponent(fid)}`, `/api/v2/file/${encodeURIComponent(fid)}`]) {
+          const x = await fetch(API + path, { headers: { tokenid: tok.token } }); if (x.ok) { r = x; break; }
+        }
+      } else return json({ error: "חסר קובץ." }, 400);
+      if (!r || !r.ok) return json({ error: `לא הצלחתי להוריד את הקובץ מפיירברי (${r?.status ?? "?"}).` }, 502);
+      const type = r.headers.get("content-type") || "";
+      let buf = new Uint8Array(await r.arrayBuffer());
+      // לפעמים חוזר JSON עם קישור להורדה
+      if (/json/i.test(type)) { const j = JSON.parse(new TextDecoder().decode(buf)); const u = pick(j as Rec, ["url", "downloadUrl", "fileUrl"]) || pick(meta(j), ["url", "downloadUrl", "fileUrl"]);
+        if (!u || !okHost(u)) return json({ error: "פיירברי לא החזיר את הקובץ." }, 502); const x = await fetch(u); if (!x.ok) return json({ error: "הורדת הקובץ נכשלה." }, 502); buf = new Uint8Array(await x.arrayBuffer()); }
+      if (buf.length > 15_000_000) return json({ error: "הקובץ גדול מ-15MB." }, 400);
+      let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      return json({ data: btoa(bin), type: /json/i.test(type) ? "" : type, size: buf.length });
     }
     if (mode === "attach") {
       const object = Number(body.object), id = str(body.id), b64 = str(body.data);

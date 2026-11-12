@@ -16,6 +16,7 @@ export function Fireberry({ admin }: { admin: boolean }) {
     try { await fireberry.setToken(token); setToken(''); setHas(!!token.trim()); if (token.trim()) await check(); else setOk(''); setToast(token.trim() ? 'הטוקן נשמר' : 'החיבור הוסר'); } catch (e) { setToast((e as Error).message); }
     setBusy(false);
   }
+  async function pickMeasure(measureObject: number, measureName: string) { const v = { ...settings, measureObject, measureName }; try { await fireberry.saveSettings(v); setSettings(v); setToast(`מדידות יילקחו מ"${measureName}"`); } catch (e) { setToast((e as Error).message); } }
   async function loadObjects() { try { setObjects(await fireberry.objects()); } catch (e) { setToast((e as Error).message); setObjects([]); } }
   async function pickObject(object: number, objectName: string) { const v = { ...settings, object, objectName }; try { await fireberry.saveSettings(v); setSettings(v); setToast(`הזמנות יילקחו מ"${objectName}"`); } catch (e) { setToast((e as Error).message); } }
 
@@ -46,6 +47,12 @@ export function Fireberry({ admin }: { admin: boolean }) {
               <div className="row"><input className="input" dir="ltr" placeholder="מספר אובייקט (למשל 13)" value={manual} onChange={(e) => setManual(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: 200 }} /><button className="btn sm" disabled={!manual} onClick={() => pickObject(+manual, `אובייקט ${manual}`)}>שמירה</button></div>
               {!has && <div className="note">קודם מחברים את הטוקן שלך, ואז אפשר לראות את רשימת האובייקטים.</div>}
             </> : <div className="mute" style={{ fontSize: 13 }}>המנהל בוחר את האובייקט.</div>}
+          </section>
+          <section className="col">
+            <div className="row"><b>מאיפה לוקחים מדידות</b><span className="sp" /><span className="badge sand">{settings.measureName ? `${settings.measureName} (${settings.measureObject})` : 'מדידה (1001) · ברירת מחדל'}</span></div>
+            <p className="mute" style={{ fontSize: 13.5 }}>בהזמנה חדשה מוצגות המדידות של הלקוח מהאובייקט הזה, עם הקבצים שצורפו אליהן (PDF, DXF או תמונה). בלחיצה הקובץ נכנס ישר לבניית המטבח.</p>
+            {admin && objects && objects.length > 0 && <div className="chips">{objects.map((o) => <button key={o.objecttype} className={`chip ${(settings.measureObject || 1001) === o.objecttype ? 'on' : ''}`} onClick={() => pickMeasure(o.objecttype, o.name)}>{o.name} · {o.objecttype}</button>)}</div>}
+            {admin && objects === null && <button className="btn sm" disabled={!has} onClick={loadObjects}>הצגת האובייקטים מפיירברי</button>}
           </section>
         </div>
       </main>
