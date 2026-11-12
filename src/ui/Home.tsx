@@ -8,7 +8,7 @@ import { go, useStore } from '../store';
 import { Icon } from './icons';
 import { asset } from './util';
 import { signOut } from './App';
-import { FbAccount, FbRecord, fireberry } from '../data/fireberry';
+import { FbAccount, FbOrder, FbRecord, fireberry } from '../data/fireberry';
 
 type OrderRow = Omit<Order, 'project'>;
 const initials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
@@ -28,7 +28,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<Partial<Customer> | null>(null);
-  const [newOrder, setNewOrder] = useState(false);
+  const [newOrder, setNewOrder] = useState<boolean | FbRecord>(false), [find, setFind] = useState(false);
   const setToast = useStore((s) => s.setToast);
 
   const load = () => Promise.all([repo.customers(), repo.orders()]).then(([c, o]) => { setCustomers(c); setOrders(o); }).catch((e) => { setCustomers([]); setToast(e.message); });
@@ -56,7 +56,8 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
         <span className="sp" />
         {isLocal && <span className="badge sand">מצב הדגמה · נשמר בדפדפן הזה בלבד</span>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/catalog')}><Icon.grid />קטלוג ומלאי</button>}
-        {!isLocal && <button className="btn sm" onClick={() => go('/fireberry')}><Icon.link />פיירברי</button>}
+        {!isLocal && <button className="btn sm primary" onClick={() => setFind(true)}><Icon.link />פתיחה מהזמנה בפיירברי</button>}
+        {!isLocal && <button className="btn sm" onClick={() => go('/fireberry')}>פיירברי</button>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/team')}><Icon.team />צוות</button>}
         {email && <button className="btn sm" title={email} onClick={signOut}><Icon.out />יציאה</button>}
       </header>
@@ -127,7 +128,19 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
           <div className="row">{editing.id && <button className="btn danger" onClick={() => removeCustomer(editing as Customer)}><Icon.trash />מחיקת לקוח</button>}<span className="sp" /><button className="btn" onClick={() => setEditing(null)}>ביטול</button><button className="btn primary" disabled={!editing.name?.trim()} onClick={saveCustomer}>שמירה</button></div>
         </Modal>
       )}
-      {newOrder && current && <NewOrder customer={current} onClose={() => setNewOrder(false)} />}
+      {newOrder && current && <NewOrder customer={current} preset={typeof newOrder === 'object' ? newOrder : undefined} onClose={() => setNewOrder(false)} />}
+      {find && <FbFind onClose={() => setFind(false)} onOpen={async (o) => {
+        // הזמנה שכבר נפתחה במערכת — נכנסים אליה; אחרת: הלקוח (קיים או חדש) והזמנה חדשה מקושרת
+        const exist = orders.find((x) => (x as { fb_id?: string }).fb_id === o.id); if (exist) { setFind(false); go(`/o/${exist.id}`); return; }
+        let c = (customers || []).find((x) => o.account && x.fb_id === o.account.id);
+        if (!c && o.account) c = await repo.saveCustomer({ name: o.account.name || 'לקוח מפיירברי', phone: o.account.phone || null, email: o.account.email || null, address: o.account.address || null, fb_id: o.account.id });
+        if (!c) { setToast('להזמנה הזו אין לקוח בפיירברי.'); return; }
+        await load(); setFind(false); go(`/c/${c.id}`); setNewOrder({ id: o.id, title: o.title, number: o.number, date: o.date });
+      }} onAccount={async (a) => {
+        let c = (customers || []).find((x) => x.fb_id === a.id);
+        if (!c) c = await repo.saveCustomer({ name: a.name, phone: a.phone || null, email: a.email || null, address: a.address || null, fb_id: a.id });
+        await load(); setFind(false); go(`/c/${c.id}`); setNewOrder(true);
+      }} />}
     </>
   );
 }
@@ -137,17 +150,17 @@ const SHAPES: Record<TemplateId, string> = {
   island: '<rect x="4" y="6" width="46" height="9" rx="1.5"/><rect x="14" y="24" width="26" height="10" rx="1.5"/>', 'l-island': '<path d="M4 6h46v28h-9V15H4z"/><rect x="6" y="24" width="26" height="10" rx="1.5"/>',
 };
 
-function NewOrder({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: () => void; preset?: FbRecord }) {
   const [way, setWay] = useState<'template' | 'dxf' | 'plan' | 'photo'>('template');
   const [tpl, setTpl] = useState<TemplateId>('straight');
-  const [title, setTitle] = useState('מטבח'), [no, setNo] = useState('');
+  const [title, setTitle] = useState(preset?.title || 'מטבח'), [no, setNo] = useState(preset?.number || '');
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const [dxf, setDxf] = useState<{ text: string; name: string; project: Project; info: DxfInfo } | null>(null);
   const [plan, setPlan] = useState<File | null>(null);
-  const [fbObj, setFbObj] = useState<number | null>(null), [fbRecs, setFbRecs] = useState<FbRecord[] | null>(null), [fbRec, setFbRec] = useState<FbRecord | null>(null), [fbErr, setFbErr] = useState('');
+  const [fbObj, setFbObj] = useState<number | null>(null), [fbRecs, setFbRecs] = useState<FbRecord[] | null>(null), [fbRec, setFbRec] = useState<FbRecord | null>(preset || null), [fbErr, setFbErr] = useState('');
   useEffect(() => {
     if (!customer.fb_id || !fireberry.available()) return;
-    fireberry.settings().then((st) => { if (!st.object) return; setFbObj(st.object); return fireberry.records(st.object, customer.fb_id!).then(setFbRecs); }).catch((e) => setFbErr((e as Error).message));
+    fireberry.settings().then((st) => { if (!st.object) return; setFbObj(st.object); return fireberry.records(st.object, customer.fb_id!).then((r) => setFbRecs(preset && !r.some((x) => x.id === preset.id) ? [preset, ...r] : r)); }).catch((e) => setFbErr((e as Error).message));
   }, [customer.fb_id]);
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -249,5 +262,37 @@ function FbPicker({ onPick }: { onPick: (a: FbAccount) => void }) {
       {res && (res.length ? <div className="fbres">{res.map((a) => <button key={a.id} className="citem" onClick={() => { onPick(a); setQ(''); setRes(null); }}><div><b>{a.name}</b><small>{[a.phone, a.address].filter(Boolean).join(' · ')}</small></div></button>)}</div>
         : <div className="mute" style={{ fontSize: 13 }}>לא נמצא לקוח בשם הזה בפיירברי.</div>)}
     </div>
+  );
+}
+
+/** חיפוש אחד בפיירברי: שם לקוח, טלפון או מספר הזמנה. בוחרים הזמנה — והיא נפתחת כבר מקושרת. */
+function FbFind({ onClose, onOpen, onAccount }: { onClose: () => void; onOpen: (o: FbOrder) => Promise<void>; onAccount: (a: FbAccount) => Promise<void> }) {
+  const [q, setQ] = useState(''), [obj, setObj] = useState<number | null | undefined>(undefined), [res, setRes] = useState<{ orders: FbOrder[]; accounts: FbAccount[] } | null>(null);
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [opening, setOpening] = useState('');
+  useEffect(() => { fireberry.settings().then((s) => setObj(s.object || null)).catch(() => setObj(null)); }, []);
+  useEffect(() => {
+    if (!obj || q.trim().length < 2) { setRes(null); return; }
+    const t = setTimeout(() => { setBusy(true); setErr(''); fireberry.find(obj, q.trim()).then(setRes).catch((e) => { setErr((e as Error).message); setRes(null); }).finally(() => setBusy(false)); }, 450);
+    return () => clearTimeout(t);
+  }, [q, obj]);
+  const run = async (key: string, f: () => Promise<void>) => { setOpening(key); try { await f(); } catch (e) { setErr((e as Error).message); } setOpening(''); };
+  return (
+    <Modal title="פתיחה מהזמנה בפיירברי" onClose={onClose} wide>
+      {obj === null ? <div className="note">המנהל צריך לבחור פעם אחת במסך "פיירברי" באיזה אובייקט נמצאות ההזמנות. <a className="link" onClick={() => go('/fireberry')}>למסך פיירברי</a></div> : <>
+        <input className="input" autoFocus placeholder="שם לקוח, טלפון או מספר הזמנה" value={q} onChange={(e) => setQ(e.target.value)} />
+        {busy && <span className="spin dark" />}
+        {err && <div className="note err">{err}{/טוקן|חיברת/.test(err) && <> · <a className="link" onClick={() => go('/fireberry')}>חיבור פיירברי</a></>}</div>}
+        {res && <div className="fbfind">
+          {res.orders.map((o) => <button key={o.id} className="fbrow" disabled={!!opening} onClick={() => run(o.id, () => onOpen(o))}>
+            <span className="mono num">{o.number ? `#${o.number}` : '—'}</span><div><b>{o.title || 'הזמנה'}</b><small>{[o.account?.name, o.account?.phone, o.date && new Date(o.date).toLocaleDateString('he-IL')].filter(Boolean).join(' · ')}</small></div>
+            {opening === o.id ? <span className="spin dark" /> : <span className="go">פתיחה ›</span>}</button>)}
+          {res.accounts.map((a) => <button key={a.id} className="fbrow acc" disabled={!!opening} onClick={() => run(a.id, () => onAccount(a))}>
+            <span className="num">לקוח</span><div><b>{a.name}</b><small>{[a.phone, a.address].filter(Boolean).join(' · ') || 'אין לו הזמנות באובייקט ההזמנות'}</small></div>
+            {opening === a.id ? <span className="spin dark" /> : <span className="go">הזמנה חדשה ›</span>}</button>)}
+          {!res.orders.length && !res.accounts.length && <div className="mute" style={{ fontSize: 13 }}>לא נמצאו הזמנות או לקוחות. נסו חלק מהשם או את מספר ההזמנה המלא.</div>}
+        </div>}
+        <small className="mute">רואים רק מה שמותר לכם בפיירברי. בחירת הזמנה פותחת אותה כאן מקושרת: הלקוח נוצר אוטומטית, ובסוף המסמך נשלח ישר להזמנה.</small>
+      </>}
+    </Modal>
   );
 }
