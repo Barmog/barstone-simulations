@@ -119,9 +119,12 @@ describe('DXF', () => {
 describe('מטר רץ, סידור ידני, צוקל וחיבורים ידניים', () => {
   it('מקדם המטר הרץ לפי רוחב', async () => {
     const { rmFactor, runningMeters } = await import('../src/core/pricing');
-    expect(rmFactor(200)).toBeCloseTo(1 / 3); expect(rmFactor(250)).toBe(0.5); expect(rmFactor(300)).toBe(0.5); expect(rmFactor(620)).toBe(1); expect(rmFactor(700)).toBe(1); expect(rmFactor(1000)).toBe(2);
+    expect(rmFactor(200)).toBeCloseTo(1 / 3); expect(rmFactor(250)).toBe(0.5); expect(rmFactor(300)).toBe(0.5); expect(rmFactor(620)).toBe(1); expect(rmFactor(700)).toBe(1); expect(rmFactor(1000)).toBe(2); expect(rmFactor(1600)).toBe(2.5);
     const p = emptyProject(); p.pieces.push(piece({ kind: 'counter', w: 3000, h: 620 }), piece({ kind: 'island', w: 2000, h: 1000 }));
     expect(runningMeters(p).total).toBeCloseTo(3 + 4);
+    // מפל באי בעומק 100 = 1.8 מטר רץ
+    const w = fromTemplate('island'); const isl = w.pieces.find((q) => q.kind === 'island')!; w.pieces.push(piece({ kind: 'waterfall', w: isl.h, h: 888, host: isl.id, side: 'left' }));
+    expect(runningMeters(w).rows.find((r) => r.id === w.pieces[w.pieces.length - 1].id)!.rm).toBeCloseTo(1.8);
     // L של 3 על 4 מטר (כל צלע עד הקיר): הפינה נספרת פעמיים = 7
     const l = fromTemplate('l'); l.pieces = l.pieces.filter((q) => q.kind === 'counter'); l.pieces[1].h = 4000 - 620;
     expect(runningMeters(l).total).toBeCloseTo(7);
