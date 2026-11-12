@@ -8,9 +8,18 @@ import { go, useStore } from '../store';
 import { Icon } from './icons';
 import { asset } from './util';
 import { signOut } from './App';
-import { FbAccount, FbOrder, FbRecord, fireberry } from '../data/fireberry';
+import { FbAccount, FbFile, FbMeasure, FbOrder, FbRecord, fireberry } from '../data/fireberry';
 
 type OrderRow = Omit<Order, 'project'>;
+const norm = (x?: string | null) => (x || '').replace(/[\s"'׳״.,\-()]/g, '').toLowerCase();
+const tail = (x?: string | null) => (x || '').replace(/\D/g, '').slice(-9);
+/** לקוח קיים במערכת שמתאים ללקוח מפיירברי: לפי הקישור, לפי טלפון או לפי שם זהה. */
+function matchLocal(list: Customer[], a: FbAccount | null): { c: Customer; how: 'fb' | 'phone' | 'name' } | null {
+  if (!a) return null;
+  const byFb = list.find((x) => x.fb_id === a.id); if (byFb) return { c: byFb, how: 'fb' };
+  const t = tail(a.phone), byPhone = t.length >= 9 ? list.find((x) => tail(x.phone) === t) : undefined; if (byPhone) return { c: byPhone, how: 'phone' };
+  const n = norm(a.name), byName = n.length >= 3 ? list.find((x) => norm(x.name) === n) : undefined; return byName ? { c: byName, how: 'name' } : null;
+}
 const initials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
 const day = (iso: string) => new Date(iso).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
 
@@ -58,6 +67,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/catalog')}><Icon.grid />קטלוג ומלאי</button>}
         {!isLocal && <button className="btn sm primary" onClick={() => setFind(true)}><Icon.link />פתיחה מהזמנה בפיירברי</button>}
         {!isLocal && <button className="btn sm" onClick={() => go('/fireberry')}>פיירברי</button>}
+        <button className="btn sm" onClick={() => go('/feedback')}>משובים</button>
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/team')}><Icon.team />צוות</button>}
         {email && <button className="btn sm" title={email} onClick={signOut}><Icon.out />יציאה</button>}
       </header>
@@ -129,15 +139,17 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
         </Modal>
       )}
       {newOrder && current && <NewOrder customer={current} preset={typeof newOrder === 'object' ? newOrder : undefined} onClose={() => setNewOrder(false)} />}
-      {find && <FbFind onClose={() => setFind(false)} onOpen={async (o) => {
+      {find && <FbFind customers={customers || []} onClose={() => setFind(false)} onOpen={async (o) => {
         // הזמנה שכבר נפתחה במערכת — נכנסים אליה; אחרת: הלקוח (קיים או חדש) והזמנה חדשה מקושרת
         const exist = orders.find((x) => (x as { fb_id?: string }).fb_id === o.id); if (exist) { setFind(false); go(`/o/${exist.id}`); return; }
-        let c = (customers || []).find((x) => o.account && x.fb_id === o.account.id);
+        const hit = matchLocal(customers || [], o.account); let c = hit?.c;
+        if (c && o.account && !c.fb_id) c = await repo.saveCustomer({ ...c, fb_id: o.account.id, phone: c.phone || o.account.phone || null, address: c.address || o.account.address || null });
         if (!c && o.account) c = await repo.saveCustomer({ name: o.account.name || 'לקוח מפיירברי', phone: o.account.phone || null, email: o.account.email || null, address: o.account.address || null, fb_id: o.account.id });
         if (!c) { setToast('להזמנה הזו אין לקוח בפיירברי.'); return; }
         await load(); setFind(false); go(`/c/${c.id}`); setNewOrder({ id: o.id, title: o.title, number: o.number, date: o.date });
       }} onAccount={async (a) => {
-        let c = (customers || []).find((x) => x.fb_id === a.id);
+        const hit = matchLocal(customers || [], a); let c = hit?.c;
+        if (c && !c.fb_id) c = await repo.saveCustomer({ ...c, fb_id: a.id, phone: c.phone || a.phone || null, address: c.address || a.address || null });
         if (!c) c = await repo.saveCustomer({ name: a.name, phone: a.phone || null, email: a.email || null, address: a.address || null, fb_id: a.id });
         await load(); setFind(false); go(`/c/${c.id}`); setNewOrder(true);
       }} />}
@@ -162,6 +174,24 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
     if (!customer.fb_id || !fireberry.available()) return;
     fireberry.settings().then((st) => { if (!st.object) return; setFbObj(st.object); return fireberry.records(st.object, customer.fb_id!).then((r) => setFbRecs(preset && !r.some((x) => x.id === preset.id) ? [preset, ...r] : r)); }).catch((e) => setFbErr((e as Error).message));
   }, [customer.fb_id]);
+  // מדידות של הלקוח בפיירברי, עם הקבצים שלהן — קובץ נבחר נכנס ישר לבניית המטבח
+  const [meas, setMeas] = useState<FbMeasure[] | null>(null), [measObj, setMeasObj] = useState(1001), [measErr, setMeasErr] = useState(''), [measBusy, setMeasBusy] = useState(''), [measNote, setMeasNote] = useState('');
+  useEffect(() => {
+    if (!customer.fb_id || !fireberry.available()) return;
+    setMeas(null); setMeasErr('');
+    fireberry.settings().then((st) => { const mo = st.measureObject || 1001; setMeasObj(mo); return fireberry.measures(mo, customer.fb_id!, fbRec?.id); }).then(setMeas).catch((e) => setMeasErr((e as Error).message));
+  }, [customer.fb_id, fbRec?.id]);
+  async function fromMeasure(m: FbMeasure, f: FbFile) {
+    setMeasBusy(f.id || f.url); setErr('');
+    try {
+      const file = await fireberry.file(measObj, m.id, f);
+      if (/\.dxf$/i.test(file.name)) { const text = await file.text(); setWay('dxf'); setPlan(null); setDxf({ text, name: file.name, ...parseDxf(text, title) }); }
+      else if (/\.dwg$/i.test(file.name)) throw new Error('קובץ DWG: צריך לייצא אותו ל-DXF. אפשר גם לצלם את התוכנית.');
+      else { setWay('plan'); setDxf(null); setPlan(file); }
+      setMeasNote(`מדידה מפיירברי: ${m.title} · ${file.name}`);
+    } catch (e) { setErr((e as Error).message); }
+    setMeasBusy('');
+  }
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const setToast = useStore((s) => s.setToast);
@@ -189,6 +219,7 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
         if (!r.draft?.pieces?.length) throw new Error(r.reply || 'לא הצלחתי לזהות משטחים.');
         project = { ...applyDraft(emptyProject(title), r.draft), source: 'plan', notes: [r.reply, ...(r.assumptions || []).map((a) => `• ${a}`)].filter(Boolean).join('\n') };
       }
+      if (measNote) project = { ...project, notes: [measNote, project.notes].filter(Boolean).join('\n') };
       const o = await repo.createOrder({ customer_id: customer.id, title: title.trim() || 'מטבח', order_no: no.trim() || undefined, project, ...(fbRec && fbObj ? { fb_object: fbObj, fb_id: fbRec.id } : {}) });
       if (way === 'plan') setToast('התוכנית זוהתה — כדאי לעבור על המידות');
       if (way === 'photo') setToast('המידות מהצילום משוערות — חובה לאמת במדידה');
@@ -207,6 +238,18 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
         {fbErr ? <div className="note err">{fbErr}</div> : !fbObj ? <div className="note">כדי לקשר להזמנה בפיירברי, המנהל בוחר במסך "פיירברי" מאיזה אובייקט לוקחים הזמנות.</div>
           : fbRecs === null ? <span className="spin dark" /> : !fbRecs.length ? <div className="mute" style={{ fontSize: 13 }}>אין רשומות ללקוח הזה בפיירברי.</div>
           : <div className="chips">{fbRecs.map((r) => <button key={r.id} className={`chip ${fbRec?.id === r.id ? 'on' : ''}`} onClick={() => { setFbRec(fbRec?.id === r.id ? null : r); if (fbRec?.id !== r.id) { if (r.title && title === 'מטבח') setTitle(r.title); if (r.number && !no) setNo(r.number); } }}>{r.title || r.number || 'רשומה'}{r.number && r.title ? ` · ${r.number}` : ''}</button>)}</div>}
+      </div>}
+      {customer.fb_id && fireberry.available() && <div className="col">
+        <span className="cap">מדידות בפיירברי</span>
+        {measErr ? <div className="note err">{measErr}</div> : meas === null ? <span className="spin dark" />
+          : !meas.some((m) => m.files.length) ? <div className="mute" style={{ fontSize: 13 }}>{meas.length ? 'יש מדידות ללקוח, אבל בלי קבצי PDF / DXF / תמונה. אפשר להתחיל מתבנית או לצלם את דף המדידה.' : 'אין מדידות ללקוח הזה בפיירברי. מתחילים מתבנית, מ-DXF או מצילום.'}</div>
+          : <div className="fbfind">{meas.filter((m) => m.files.length).map((m) => m.files.map((f) => (
+            <button key={m.id + (f.id || f.url)} className="fbrow" disabled={!!measBusy} onClick={() => fromMeasure(m, f)}>
+              <span className="num">{/\.dxf/i.test(f.name) ? 'DXF' : /\.pdf/i.test(f.name) ? 'PDF' : 'תמונה'}</span>
+              <div><b>{f.name || 'קובץ'}</b><small>{[m.title, m.order ? 'מקושר להזמנה הזו' : '', (f.date || m.date) && new Date(f.date || m.date).toLocaleDateString('he-IL')].filter(Boolean).join(' · ')}</small></div>
+              {measBusy === (f.id || f.url) ? <span className="spin dark" /> : <span className="go">שימוש בקובץ ›</span>}
+            </button>)))}</div>}
+        {measNote && <span className="badge ok" style={{ alignSelf: 'flex-start' }}>✓ {measNote}</span>}
       </div>}
       <div className="ways">
         <button className={`way ${way === 'template' ? 'on' : ''}`} onClick={() => pickWay('template')}><Icon.grid /><b>התחלה מתבנית</b><small>בוחרים צורה ומשנים מידות בגרירה</small></button>
@@ -266,7 +309,7 @@ function FbPicker({ onPick }: { onPick: (a: FbAccount) => void }) {
 }
 
 /** חיפוש אחד בפיירברי: שם לקוח, טלפון או מספר הזמנה. בוחרים הזמנה — והיא נפתחת כבר מקושרת. */
-function FbFind({ onClose, onOpen, onAccount }: { onClose: () => void; onOpen: (o: FbOrder) => Promise<void>; onAccount: (a: FbAccount) => Promise<void> }) {
+function FbFind({ customers, onClose, onOpen, onAccount }: { customers: Customer[]; onClose: () => void; onOpen: (o: FbOrder) => Promise<void>; onAccount: (a: FbAccount) => Promise<void> }) {
   const [q, setQ] = useState(''), [obj, setObj] = useState<number | null | undefined>(undefined), [res, setRes] = useState<{ orders: FbOrder[]; accounts: FbAccount[] } | null>(null);
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [opening, setOpening] = useState('');
   useEffect(() => { fireberry.settings().then((s) => setObj(s.object || null)).catch(() => setObj(null)); }, []);
@@ -284,10 +327,10 @@ function FbFind({ onClose, onOpen, onAccount }: { onClose: () => void; onOpen: (
         {err && <div className="note err">{err}{/טוקן|חיברת/.test(err) && <> · <a className="link" onClick={() => go('/fireberry')}>חיבור פיירברי</a></>}</div>}
         {res && <div className="fbfind">
           {res.orders.map((o) => <button key={o.id} className="fbrow" disabled={!!opening} onClick={() => run(o.id, () => onOpen(o))}>
-            <span className="mono num">{o.number ? `#${o.number}` : '—'}</span><div><b>{o.title || 'הזמנה'}</b><small>{[o.account?.name, o.account?.phone, o.date && new Date(o.date).toLocaleDateString('he-IL')].filter(Boolean).join(' · ')}</small></div>
+            <span className="mono num">{o.number ? `#${o.number}` : '—'}</span><div><b>{o.title || 'הזמנה'}</b><small>{[o.account?.name, o.account?.phone, o.date && new Date(o.date).toLocaleDateString('he-IL')].filter(Boolean).join(' · ')}</small><Hint m={matchLocal(customers, o.account)} /></div>
             {opening === o.id ? <span className="spin dark" /> : <span className="go">פתיחה ›</span>}</button>)}
           {res.accounts.map((a) => <button key={a.id} className="fbrow acc" disabled={!!opening} onClick={() => run(a.id, () => onAccount(a))}>
-            <span className="num">לקוח</span><div><b>{a.name}</b><small>{[a.phone, a.address].filter(Boolean).join(' · ') || 'אין לו הזמנות באובייקט ההזמנות'}</small></div>
+            <span className="num">לקוח</span><div><b>{a.name}</b><small>{[a.phone, a.address].filter(Boolean).join(' · ') || 'אין לו הזמנות באובייקט ההזמנות'}</small><Hint m={matchLocal(customers, a)} /></div>
             {opening === a.id ? <span className="spin dark" /> : <span className="go">הזמנה חדשה ›</span>}</button>)}
           {!res.orders.length && !res.accounts.length && <div className="mute" style={{ fontSize: 13 }}>לא נמצאו הזמנות או לקוחות. נסו חלק מהשם או את מספר ההזמנה המלא.</div>}
         </div>}
@@ -295,4 +338,9 @@ function FbFind({ onClose, onOpen, onAccount }: { onClose: () => void; onOpen: (
       </>}
     </Modal>
   );
+}
+
+function Hint({ m }: { m: ReturnType<typeof matchLocal> }) {
+  if (!m) return <em className="hint new">לקוח חדש במערכת</em>;
+  return <em className="hint">{m.how === 'fb' ? 'כבר במערכת' : `נראה שזה "${m.c.name}" שכבר במערכת (לפי ${m.how === 'phone' ? 'טלפון' : 'שם'}) — יקושר אליו`}</em>;
 }

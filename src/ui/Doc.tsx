@@ -43,6 +43,14 @@ export function Doc({ id }: { id: string }) {
     return () => { live = false; clearTimeout(t); };
   }, [key]);
 
+  // מסמך שהלקוח חתם עליו נשלח אוטומטית להזמנה בפיירברי (רק להזמנה — לא לכרטיס הלקוח ולא למדידה)
+  const autoSent = useRef(false);
+  useEffect(() => {
+    if (autoSent.current || !signed?.signed_at || !order?.fb_id || !order.fb_object || !shots.hero || (nest && !slabs.length)) return;
+    if (order.fb_sent_at && order.fb_sent_at >= signed.signed_at) return;
+    autoSent.current = true; exportPdf(true);
+  }, [signed?.signed_at, shots.hero, slabs.length, order?.fb_sent_at]);
+
   if (missing) return <div className="login"><div className="box glass"><h1>ההזמנה לא נמצאה</h1><button className="btn primary" onClick={() => go('/')}>חזרה</button></div></div>;
   if (!order || !project) return <div className="login"><div className="spin dark" /></div>;
   const rm = runningMeters(project), flat = project.pieces.filter((p) => !isVertical(p)), sinks = project.cutouts.filter((c) => c.kind === 'sink'), cooktops = project.cutouts.filter((c) => c.kind === 'cooktop');
@@ -92,7 +100,7 @@ export function Doc({ id }: { id: string }) {
       if (send && order?.fb_id && order.fb_object) {
         await fireberry.attach(order.fb_object, order.fb_id, fileName, base64);
         const at = new Date().toISOString(); await repo.updateOrder(order.id, { fb_sent_at: at }); useStore.setState({ order: { ...order, fb_sent_at: at } });
-        setToast('המסמך צורף להזמנה בפיירברי');
+        setToast(signed?.signed_at ? 'המסמך החתום צורף להזמנה בפיירברי' : 'המסמך צורף להזמנה בפיירברי');
       } else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
     } catch (e) { setToast(`${send ? 'השליחה' : 'יצירת ה-PDF'} נכשלה: ${(e as Error).message}`); }
     setBusy('');
