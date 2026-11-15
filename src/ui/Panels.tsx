@@ -6,12 +6,12 @@ import { factorHe, runningMeters } from '../core/pricing';
 import { exportNestDxf } from '../core/dxf';
 import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
 import { upgrades } from '../core/upgrades';
-import { OrderStatus, STATUS_HE, isLocal, stoneLabel } from '../data/repo';
+import { OrderStatus, STATUS_HE, isLocal, repo, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
 import { ai, applyDraft, localAssist } from '../ai';
 import { Step, go, useStore } from '../store';
 import { Icon } from './icons';
-import { cm, m2, parseCm, useStone } from './util';
+import { cm, m2, parseCm, shrinkImage, useStone } from './util';
 
 const SIDES: Side[] = ['back', 'front', 'left', 'right'];
 export const STEPS: { id: Step; name: string; hint: string }[] = [
@@ -72,6 +72,18 @@ export function LeftPanel() {
   const stone = useStone(), set = (patch: Partial<Project>, key?: string) => apply((p) => ({ ...p, ...patch }), key);
   const [cmp, setCmp] = useState(false), [q, setQ] = useState('');
   const norm = (t?: string | null) => (t || '').toLowerCase().replace(/[׳'"\s-]/g, '');
+  const natInput = useRef<HTMLInputElement>(null), [natBusy, setNatBusy] = useState(false);
+  // אבן טבעית: מצלמים את הלוח (או בוחרים תמונה), והיא נהיית האבן של ההזמנה — בנסטינג, בתלת־ממד ובמסמך
+  async function addNatural(f?: File) {
+    if (!f) return; setNatBusy(true);
+    try {
+      const img = await shrinkImage(f, 2400); if (!img) throw new Error('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.');
+      const url = await repo.uploadCustomStone(isLocal ? (await shrinkImage(f, 1400, 0.8)) || img : img);
+      set({ stoneId: 'custom', customStone: { name: project.customStone?.name || 'אבן טבעית', url } });
+      useStore.getState().setToast('האבן הטבעית נוספה. אפשר לתת לה שם, ולסדר את החלקים על הלוח.');
+    } catch (e) { useStore.getState().setToast((e as Error).message); }
+    setNatBusy(false);
+  }
   const shown = stones.filter((s) => !q.trim() || [s.name, s.en, s.novo].some((t) => norm(t).includes(norm(q))));
   const flat = project.pieces.filter((p) => !isVertical(p)), i = STEPS.findIndex((s) => s.id === step), cur = STEPS[i], m = nest?.metrics;
   const errors = issues.filter((x) => x.level === 'error').length, warns = issues.filter((x) => x.level === 'warn').length;
@@ -104,6 +116,12 @@ export function LeftPanel() {
     <section>
       <span className="cap">לוח</span>
       <input className="input" type="search" placeholder="חיפוש דגם: שם בעברית, באנגלית או השם הקודם…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input ref={natInput} type="file" hidden accept="image/*" capture="environment" onChange={(e) => { addNatural(e.target.files?.[0]); e.target.value = ''; }} />
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        <button className="btn sm" disabled={natBusy} onClick={() => natInput.current?.click()}>{natBusy ? <span className="spin dark" /> : <Icon.camera />}אבן טבעית · צילום הלוח</button>
+        {project.customStone && project.stoneId !== 'custom' && <button className="link" onClick={() => set({ stoneId: 'custom' })}>חזרה ל"{project.customStone.name}"</button>}
+      </div>
+      {project.stoneId === 'custom' && project.customStone && <label className="field">שם האבן הטבעית<input value={project.customStone.name} onChange={(e) => set({ customStone: { ...project.customStone!, name: e.target.value } }, 'natname')} /></label>}
       <div className="stonegrid">{shown.map((s) => <button key={s.id} className={`stone ${String(s.id) === String(stone.id) ? 'on' : ''}`} title={stoneLabel(s)} onClick={() => set({ stoneId: s.id })}>
         <i style={{ backgroundImage: s.hasImage ? `url("${s.thumb || s.url}")` : undefined }}>{!s.hasImage && 'אין תמונה'}</i>
         <b>{s.name}</b><small>{s.en || ' '}{s.series ? ` · ${s.series}` : ''}{s.stock === 'no' ? ' · אין במלאי' : ''}</small>
@@ -137,6 +155,7 @@ export function LeftPanel() {
     <section>
       <div className="row"><span className="cap">צבע ארונות</span><span className="sp" /><span className="mute" style={{ fontSize: 12 }}>{CABINETS.find((c) => c.hex.toLowerCase() === project.cabinetColor.toLowerCase())?.name || 'מותאם'}</span></div>
       <Swatches items={CABINETS} value={project.cabinetColor} onPick={(hex) => set({ cabinetColor: hex })} />
+      <div className="seg"><button className={!project.cabinetGloss ? 'on' : ''} onClick={() => set({ cabinetGloss: false })}>מט</button><button className={project.cabinetGloss ? 'on' : ''} onClick={() => set({ cabinetGloss: true })}>מבריק</button></div>
       <label className="row" style={{ fontSize: 12.5, color: 'var(--mute)' }}>גוון אחר<input type="color" value={project.cabinetColor} onChange={(e) => set({ cabinetColor: e.target.value }, 'cab')} style={{ width: 34, height: 26, border: 0, background: 'none', padding: 0 }} /></label>
       <div className="chips">
         <button className={`chip ${project.cabinets ? 'on' : ''}`} onClick={() => set({ cabinets: !project.cabinets })}>ארונות תחתונים</button>
@@ -291,9 +310,15 @@ function Inspector() {
           <div className="field"><span>אם צריך חיבור (חלק מעל אורך הלוח)</span><div className="chips">{([['auto', 'אוטומטי'], ['sink', 'במרכז הכיור'], ['cooktop', 'במרכז הכיריים']] as const).map(([k, v]) => <button key={k} className={`chip ${(p.joint || 'auto') === k ? 'on' : ''}`} onClick={() => up({ joint: k })}>{v}</button>)}</div></div>
           <div className="field"><span>חיבור פינה עם המשטח הסמוך</span><div className="chips">{([['butt', 'ישר'], ['miter', 'גרונג 45°']] as const).map(([k, v]) => <button key={k} className={`chip ${(p.corner || 'butt') === k ? 'on' : ''}`} onClick={() => up({ corner: k })}>{v}</button>)}</div></div>
         </>}
+        {!vert && <div className="field"><span>כיור / כיריים בחלק הזה{project.cutouts.filter((c) => c.pieceId === p.id && c.kind !== 'faucet').length ? ` · יש ${project.cutouts.filter((c) => c.pieceId === p.id && c.kind !== 'faucet').map((c) => c.name || CUT_HE[c.kind]).join(', ')}` : ''}</span><div className="chips"><button className="chip" onClick={() => addCutout('sink')}>+ כיור</button><button className="chip" onClick={() => addCutout('sink', true)}>+ כיור בנוי</button><button className="chip" onClick={() => addCutout('cooktop')}>+ כיריים</button><button className="chip" onClick={() => addCutout('faucet')}>+ ברז</button></div></div>}
         {!vert && <div className="field"><span>ישיבה (בליטה לכיסאות){Math.min(p.w, p.h) > 800 && !p.seat ? ' · מומלץ מעל 80 ס"מ' : ''}</span><div className="chips"><button className={`chip ${!p.seat ? 'on' : ''}`} onClick={() => up({ seat: undefined, chairs: undefined })}>בלי</button>{SIDES.filter((s) => s !== p.wall).map((s) => <button key={s} className={`chip ${p.seat === s ? 'on' : ''}`} onClick={() => up({ seat: s, chairs: undefined })}>{SIDE_HE[s]}</button>)}</div></div>}
         {!vert && p.seat && <div className="grid2"><Num label="עומק הבליטה" value={p.seatDepth || SEAT_DEPTH} min={150} onChange={(v) => up({ seatDepth: Math.min(600, v) })} /><label className="field"><span>כיסאות<i style={{ fontStyle: 'normal', opacity: 0.7 }}>60 ס"מ לכיסא</i></span><input type="number" min={0} max={12} key={chairCount(p)} defaultValue={chairCount(p)} onBlur={(e) => up({ chairs: Math.max(0, Math.min(12, Math.round(+e.target.value))) })} /></label></div>}
-        {(() => { const js = (nest?.joints || []).filter((j) => j.pieceId === p.id).map((j) => j.at); if (!js.length && !p.jointAt?.length) return null; return <div className="field"><span>מיקום החיבורים (ס"מ מתחילת החלק)</span><div className="grid2">{js.map((at, n) => <Num key={n} label={`חיבור ${n + 1}`} value={at} min={30} onChange={(v) => up({ jointAt: js.map((x, i) => (i === n ? Math.min(pieceLen(p) - 30, v) : x)) })} />)}</div><div className="row">{p.jointAt?.length ? <button className="link" style={{ fontSize: 12.5 }} onClick={() => up({ jointAt: undefined })}>חזרה לחיבור אוטומטי</button> : <span className="mute" style={{ fontSize: 12 }}>שינוי המיקום מעדכן מיד את הלוחות למטה.</span>}</div></div>; })()}
+        {!vert && (() => { const js = (nest?.joints || []).filter((j) => j.pieceId === p.id).map((j) => j.at).sort((x, y) => x - y), L = pieceLen(p);
+          // חיבור חדש: באמצע המקטע הארוך ביותר
+          const add = () => { const pts = [0, ...js, L]; let k = 1; for (let i = 2; i < pts.length; i++) if (pts[i] - pts[i - 1] > pts[k] - pts[k - 1]) k = i; up({ jointAt: [...js, Math.round((pts[k] + pts[k - 1]) / 20) * 10].sort((x, y) => x - y) }); };
+          return <div className="field"><span>חיבורים{js.length ? ' (ס"מ מתחילת החלק)' : ' · אין חיבור בחלק הזה'}</span>
+            {js.length > 0 && <div className="grid2">{js.map((at, n) => <div key={n} className="row" style={{ gap: 4 }}><Num label={`חיבור ${n + 1}`} value={at} min={30} onChange={(v) => up({ jointAt: js.map((x, i) => (i === n ? Math.min(L - 30, v) : x)) })} /><button className="link" title="הסרת החיבור" style={{ alignSelf: 'flex-end', padding: '0 4px 8px' }} onClick={() => up({ jointAt: js.filter((_, i) => i !== n) })}>×</button></div>)}</div>}
+            <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}><button className="chip" disabled={L < 400} onClick={add}>+ חיבור</button>{p.jointAt !== undefined && <button className="link" style={{ fontSize: 12.5 }} onClick={() => up({ jointAt: undefined })}>חזרה לחיבור אוטומטי</button>}<span className="mute" style={{ fontSize: 12 }}>אפשר גם לגרור את קו החיבור בשרטוט.</span></div></div>; })()}
         <div className="chips"><button className={`chip ${p.grainLock ? 'on' : ''}`} onClick={() => up({ grainLock: !p.grainLock })}>{p.grainLock ? 'כיוון גיד נעול' : 'גיד חופשי (מותר לסובב)'}</button></div>
         {p.outline && <div className="note">החלק בצורה לא מלבנית (מה-DXF). שינוי מידות יהפוך אותו למלבן.</div>}
       </section>

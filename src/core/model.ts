@@ -101,6 +101,10 @@ export interface Project {
   glassTint?: string;
   /** צוקל מאבן (נכנס לנסטינג) במקום צוקל רגיל. */
   plinthStone?: boolean;
+  /** אבן טבעית שצולמה להזמנה הזו (stoneId = 'custom'): שם ותמונת הלוח. */
+  customStone?: { name: string; url: string };
+  /** חזיתות ארונות מבריקות (לכה) במקום מט. */
+  cabinetGloss?: boolean;
   /** גימור פני האבן: מבריק / מט / סטרקצ׳ר (לפי מה שהדגם מגיע בו). */
   finish?: 'polished' | 'matte' | 'structure';
   /** מכשירים בהדמיה: קולט אדים, מקרר ותנור בארון גבוה. */

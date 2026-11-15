@@ -1,4 +1,5 @@
 // לקוח ליכולות ה-AI. הקריאה למודל נעשית בפונקציית קצה ב-Supabase (המפתח נשמר שם בלבד, לא בדפדפן).
+import { shrinkImage } from './ui/util';
 import { CABINETS, FAUCETS, FINISHES, FLOORS, WALLS } from './core/catalog';
 import { Cutout, CutoutKind, Piece, PieceKind, Project, Side, UPPER_HE, UpperStyle, chairCount, fromTemplate, piece as mkP, uid, upperBottom } from './core/model';
 import { sb } from './data/repo';
@@ -76,10 +77,22 @@ async function call(body: Record<string, unknown>): Promise<AiReply> {
 const fileB64 = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = () => rej(new Error('קריאת הקובץ נכשלה')); r.readAsDataURL(f); });
 
 export const ai = {
-  /** צילום / PDF של תוכנית או דף מדידה → מטבח. */
-  async fromPlan(file: File, photo = false): Promise<AiReply> {
-    if (file.size > 12 * 1024 * 1024) throw new Error('הקובץ גדול מדי (עד 12MB).');
-    return call({ mode: photo ? 'photo' : 'plan', media_type: file.type || 'image/jpeg', data: await fileB64(file) });
+  /** תוכניות ודפי מדידה של אותו מטבח — כמה קבצים שרוצים, תמונות מכל סוג ו-PDF — נאספים למטבח אחד. */
+  async fromPlan(files: File | File[], photo = false): Promise<AiReply> {
+    const list = Array.isArray(files) ? files : [files];
+    if (!list.length) throw new Error('בחרו לפחות קובץ אחד.');
+    if (list.length > 10) throw new Error('אפשר עד 10 קבצים בבת אחת.');
+    const out: { media_type: string; data: string; name: string }[] = [];
+    for (const f of list) {
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      if (isPdf) { out.push({ media_type: 'application/pdf', data: await fileB64(f), name: f.name }); continue; }
+      // כל תמונה (PNG, JPG, WEBP, HEIC...) מומרת ל-JPEG מוקטן: קטן יותר ונתמך תמיד
+      const img = await shrinkImage(f, 2400, 0.85);
+      if (!img) throw new Error(`לא הצלחתי לקרוא את "${f.name}". אפשר תמונות (JPG, PNG, WEBP, HEIC) ו-PDF; קובץ DXF מעלים ב"מדידה קיימת · DXF".`);
+      out.push({ media_type: 'image/jpeg', data: await fileB64(new File([img], f.name, { type: 'image/jpeg' })), name: f.name });
+    }
+    if (out.reduce((t, x) => t + x.data.length, 0) > 16_000_000) throw new Error('הקבצים יחד גדולים מדי (עד כ-12MB). נסו פחות קבצים או PDF קטן יותר.');
+    return call({ mode: photo ? 'photo' : 'plan', files: out });
   },
   /** צ'אט: שאלה, בקשה לשינוי או להזזה. history = ההודעות הקודמות בשיחה. */
   chat: (p: Project, text: string, history: { role: 'user' | 'ai'; text: string }[], facts: Record<string, unknown>) => call({ mode: 'chat', text, history: history.slice(-10), draft: toDraft(p), facts }),

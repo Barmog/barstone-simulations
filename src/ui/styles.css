@@ -364,3 +364,4 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 }
 .demo-short { display: none; }
 .top .link, .top .btn { white-space: nowrap; }
+.chip .x { border: 0; background: none; color: inherit; font-size: 15px; line-height: 1; margin-inline-start: 6px; cursor: pointer; padding: 0 2px; opacity: .75; }
