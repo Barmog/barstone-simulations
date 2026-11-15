@@ -234,3 +234,32 @@ describe('ממצאי הבדיקה', () => {
     expect(corners(p)).toHaveLength(1);
   });
 });
+
+describe('סיבוב חלק והוספת משטח צמוד', () => {
+  it('סיבוב ב-90° מחליף מידות, צלעות ופתחים ושומר על המרכז', async () => {
+    const { rotatePiece } = await import('../src/core/model');
+    const pr = emptyProject(), a = piece({ kind: 'counter', name: 'A', x: 0, y: 0, w: 2000, h: 600, wall: 'back', aprons: ['front'] });
+    const sp = piece({ kind: 'splash', name: 'S', x: 0, y: 0, w: 2000, h: 600, host: a.id, side: 'back' });
+    const p0 = { ...pr, pieces: [a, sp], cutouts: [{ id: 'c', pieceId: a.id, kind: 'sink' as const, x: 300, y: 100, w: 760, h: 400 }] };
+    const r = rotatePiece(p0, a.id), b = r.pieces.find((q) => q.id === a.id)!;
+    expect([b.w, b.h, b.x + b.w / 2, b.y + b.h / 2]).toEqual([600, 2000, 1000, 300]);
+    expect([b.wall, b.aprons]).toEqual(['right', ['left']]);
+    expect(r.pieces.find((q) => q.id === sp.id)!.side).toBe('right');
+    const c = r.cutouts[0]; expect([c.x, c.y, c.w, c.h]).toEqual([600 - 100 - 400, 300, 400, 760]);
+    expect(c.x + c.w <= b.w && c.y + c.h <= b.h).toBe(true);
+    const back = rotatePiece(rotatePiece(rotatePiece(r, a.id), a.id), a.id);
+    expect(back.pieces.find((q) => q.id === a.id)).toMatchObject({ x: 0, y: 0, w: 2000, h: 600, wall: 'back', aprons: ['front'] });
+    expect(back.cutouts[0]).toMatchObject({ x: 300, y: 100, w: 760, h: 400 });
+  });
+  it('המשך ימינה ורגל L נצמדים בלי חפיפה, והפינה מזוהה', async () => {
+    const { attachPiece, corners } = await import('../src/core/model');
+    const pr = emptyProject(), a = piece({ kind: 'counter', name: 'A', x: 0, y: 0, w: 2000, h: 620, wall: 'back', aprons: ['front'] });
+    const p0 = { ...pr, pieces: [a], cutouts: [] };
+    const r1 = attachPiece(p0, a.id, 'right')!, n1 = r1.project.pieces.find((q) => q.id === r1.id)!;
+    expect([n1.x, n1.y, n1.w, n1.h]).toEqual([2000, 0, 1000, 620]);
+    const r2 = attachPiece(p0, a.id, 'legRight')!, n2 = r2.project.pieces.find((q) => q.id === r2.id)!;
+    expect([n2.x, n2.y, n2.w, n2.h, n2.wall]).toEqual([1380, 620, 620, 1000, 'right']);
+    expect(corners(r2.project).length).toBe(1);
+    assertValid(r2.project);
+  });
+});
