@@ -29,7 +29,7 @@ export const fireberry = {
   search: (q: string) => call<{ accounts: FbAccount[] }>({ mode: 'search', q }).then((r) => r.accounts),
   records: (object: number, accountId: string) => call<{ records: FbRecord[] }>({ mode: 'records', object, accountId }).then((r) => r.records),
   find: (object: number, q: string) => call<{ orders: FbOrder[]; accounts: FbAccount[] }>({ mode: 'find', object, q }),
-  measures: (object: number, accountId: string, orderId?: string) => call<{ measures: FbMeasure[] }>({ mode: 'measures', object, accountId, orderId }).then((r) => r.measures),
+  measures: (object: number, orderObject: number, orderId: string) => call<{ measures: FbMeasure[] }>({ mode: 'measures', object, orderObject, orderId }).then((r) => r.measures),
   /** מוריד קובץ מדידה מפיירברי ומחזיר אותו כקובץ רגיל (כמו שנבחר מהמחשב). */
   async file(object: number, recordId: string, f: FbFile): Promise<File> {
     const r = await call<{ data: string; type: string }>({ mode: 'file', object, recordId, fileId: f.id, url: f.url });
