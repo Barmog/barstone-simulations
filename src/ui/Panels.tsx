@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { CABINETS, FAUCETS, FINISHES, FLOORS, GLASS, Swatch, WALLS, faucetById } from '../core/catalog';
 import { factorHe, runningMeters } from '../core/pricing';
 import { exportNestDxf } from '../core/dxf';
-import { SLAB, CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
+import { SLAB, Attach, attachPiece, rotatePiece, CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
 import { upgrades } from '../core/upgrades';
 import { OrderStatus, STATUS_HE, isLocal, repo, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
@@ -331,6 +331,14 @@ function Inspector() {
           {p.kind === 'counter' && <div className="field"><span>הצד שצמוד לקיר</span><div className="chips">{SIDES.map((s) => <button key={s} className={`chip ${p.wall === s ? 'on' : ''}`} onClick={() => up({ wall: p.wall === s ? undefined : s })}>{SIDE_HE[s]}</button>)}</div></div>}
           <div className="field"><span>קנט בצדדים</span><div className="chips">{SIDES.map((s) => <button key={s} className={`chip ${p.aprons.includes(s) ? 'on' : ''}`} onClick={() => up({ aprons: p.aprons.includes(s) ? p.aprons.filter((x) => x !== s) : [...p.aprons, s] })}>{SIDE_HE[s]}</button>)}</div></div>
         </>}
+        {!vert && (() => {
+          const horiz = p.w >= p.h, add = (w: Attach) => { let nid = ''; apply((pr) => { const r = attachPiece(pr, p.id, w); if (!r) return pr; nid = r.id; return r.project; }); if (nid) useStore.getState().select({ type: 'piece', id: nid }); };
+          const opts: [Attach, string][] = horiz ? [['right', 'המשך ימינה'], ['left', 'המשך שמאלה'], ['legRight', 'רגל L מימין'], ['legLeft', 'רגל L משמאל']] : [['right', 'המשך למטה'], ['left', 'המשך למעלה'], ['legRight', 'יציאה ימינה מהקצה'], ['legLeft', 'יציאה שמאלה מהקצה']];
+          return <>
+            <div className="field"><span>סיבוב</span><div className="chips"><button className="chip" onClick={() => apply((pr) => rotatePiece(pr, p.id))}>↻ סיבוב ב-90°</button></div></div>
+            <div className="field"><span>הוספת משטח צמוד לחלק הזה</span><div className="chips">{opts.map(([k, v]) => <button key={k} className="chip" onClick={() => add(k)}>+ {v}</button>)}</div></div>
+          </>;
+        })()}
         {!vert && p.kind === 'counter' && <>
           <div className="field"><span>אם צריך חיבור (חלק מעל אורך הלוח)</span><div className="chips">{([['auto', 'אוטומטי'], ['sink', 'במרכז הכיור'], ['cooktop', 'במרכז הכיריים']] as const).map(([k, v]) => <button key={k} className={`chip ${(p.joint || 'auto') === k ? 'on' : ''}`} onClick={() => up({ joint: k })}>{v}</button>)}</div></div>
           <div className="field"><span>חיבור פינה עם המשטח הסמוך</span><div className="chips">{([['butt', 'ישר'], ['miter', 'גרונג 45°']] as const).map(([k, v]) => <button key={k} className={`chip ${(p.corner || 'butt') === k ? 'on' : ''}`} onClick={() => up({ corner: k })}>{v}</button>)}</div></div>

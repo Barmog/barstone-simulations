@@ -14,7 +14,10 @@ async function toJpeg(src: CanvasImageSource, w: number, h: number): Promise<str
   const cv = document.createElement('canvas'); cv.width = rot ? H : W; cv.height = rot ? W : H;
   const g = cv.getContext('2d')!; if (rot) { g.translate(H, 0); g.rotate(Math.PI / 2); }
   g.drawImage(src, 0, 0, W, H);
-  const b = await new Promise<Blob | null>((r) => cv.toBlob(r, 'image/jpeg', 0.86));
+  // דוגמת אבן ריבועית: חותכים לצורת לוח (2:1) במקום למתוח את הגידים
+  let out = cv;
+  if (cv.width / cv.height < 1.9) { out = document.createElement('canvas'); out.width = cv.width; out.height = Math.round(cv.width / 2); out.getContext('2d')!.drawImage(cv, 0, Math.round((cv.height - out.height) / 2), out.width, out.height, 0, 0, out.width, out.height); }
+  const b = await new Promise<Blob | null>((r) => out.toBlob(r, 'image/jpeg', 0.86));
   return b ? URL.createObjectURL(b) : null;
 }
 
@@ -45,14 +48,17 @@ export async function scanCatalog(file: File, stones: Stone[], progress: (text: 
   }
   const byLen = [...stones].filter((s) => s.en || s.name).sort((a, b) => (b.en || b.name).length - (a.en || a.name).length);
   const pageOf = new Map<Stone, number>();
-  texts.forEach((t, i) => {
+  // תוכן העניינים מזכיר את כל הדגמים: עמוד עם יותר מ-3 שמות לא נחשב לעמוד של דגם
+  const hits = texts.map((t0) => {
+    const t = { en: t0.en, he: [...t0.he] }, got: Stone[] = [];
     for (const s of byLen) {
-      if (pageOf.has(s)) continue;
       const key = s.en ? en(s.en) : '', hk = ` ${heWords(s.name).join(' ')} `;
-      if (key.trim() && t.en.includes(key)) { pageOf.set(s, i + 1); t.en = t.en.split(key).join(' # '); continue; }
-      if (hk.trim() && t.he.some((l) => l.includes(hk))) { pageOf.set(s, i + 1); t.he = t.he.map((l) => l.split(hk).join(' # ')); }
+      if (key.trim() && t.en.includes(key)) { got.push(s); t.en = t.en.split(key).join(' # '); t.he = t.he.map((l) => l.split(hk).join(' # ')); continue; }
+      if (hk.trim() && t.he.some((l) => l.includes(hk))) { got.push(s); t.he = t.he.map((l) => l.split(hk).join(' # ')); }
     }
+    return got;
   });
+  hits.forEach((got, i) => { if (got.length <= 3) for (const s of got) if (!pageOf.has(s)) pageOf.set(s, i + 1); });
 
   // 2. תמונות: מהעמוד של הדגם ומהעמוד שלידו. לוח שלם הוא בערך פי 2 באורך מהרוחב, ולכן הוא מקבל עדיפות
   const out: CatalogMatch[] = []; let n = 0;

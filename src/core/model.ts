@@ -288,3 +288,37 @@ export function setSplash(pr: Project, mode: 'none' | '60' | 'uppers' | 'ceiling
     return piece({ kind: 'splash', name: 'חיפוי קיר', w: sideLen(q, q.wall!) + a + b, h, host: q.id, side: q.wall, off: a ? -a : undefined });
   })] };
 }
+
+/** סיבוב צלע ב-90° עם כיוון השעון (בתוכנית, y כלפי מטה): אחורי → ימין → קדמי → שמאל. */
+const CW: Record<Side, Side> = { back: 'right', right: 'front', front: 'left', left: 'back' };
+
+/** סיבוב חלק אופקי ב-90° סביב המרכז שלו: המידות, הקיר, הקנטים, הישיבה, הפתחים והחלקים האנכיים שעליו מסתובבים איתו. */
+export function rotatePiece(pr: Project, id: string): Project {
+  const p = pr.pieces.find((q) => q.id === id); if (!p || isVertical(p)) return pr;
+  const cx = p.x + p.w / 2, cy = p.y + p.h / 2, H = p.h;
+  const r: Piece = { ...p, x: Math.round(cx - p.h / 2), y: Math.round(cy - p.w / 2), w: p.h, h: p.w, wall: p.wall && CW[p.wall], aprons: p.aprons.map((s) => CW[s]), seat: p.seat && CW[p.seat], jointAt: undefined,
+    outline: p.outline?.map((pt) => ({ x: H - pt.y, y: pt.x })) };
+  const manual = Object.fromEntries(Object.entries(pr.manual || {}).filter(([k]) => !k.startsWith(id)));
+  return { ...pr, manual,
+    pieces: pr.pieces.map((q) => (q.id === id ? r : q.host === id && q.side ? { ...q, side: CW[q.side] } : q)),
+    cutouts: pr.cutouts.map((c) => (c.pieceId === id ? { ...c, x: Math.round(H - c.y - c.h), y: c.x, w: c.h, h: c.w } : c)) };
+}
+
+export type Attach = 'right' | 'left' | 'legRight' | 'legLeft';
+/** משטח חדש שצמוד לחלק קיים: המשך באותו קו (ימינה / שמאלה) או רגל של L שיורדת מהקצה. */
+export function attachPiece(pr: Project, id: string, where: Attach, len = 1000): { project: Project; id: string } | null {
+  const p = pr.pieces.find((q) => q.id === id); if (!p || isVertical(p)) return null;
+  const horiz = p.w >= p.h, depth = Math.min(p.w, p.h);
+  let q: Piece;
+  if (horiz) {
+    if (where === 'right') q = piece({ kind: 'counter', name: 'המשך משטח', x: p.x + p.w, y: p.y, w: len, h: p.h, wall: p.wall, aprons: p.aprons.filter((s) => s === 'front' || s === 'back') });
+    else if (where === 'left') q = piece({ kind: 'counter', name: 'המשך משטח', x: p.x - len, y: p.y, w: len, h: p.h, wall: p.wall, aprons: p.aprons.filter((s) => s === 'front' || s === 'back') });
+    else { const right = where === 'legRight', down = p.wall !== 'front'; q = piece({ kind: 'counter', name: 'רגל L', x: right ? p.x + p.w - depth : p.x, y: down ? p.y + p.h : p.y - len, w: depth, h: len, wall: right ? 'right' : 'left', aprons: [right ? 'left' : 'right', ...(down ? ['front' as Side] : ['back' as Side])] }); }
+  } else {
+    // חלק אנכי בתוכנית (רגל): "ימינה/שמאלה" = המשך למטה/למעלה, "רגל" = יציאה הצידה מהקצה התחתון
+    if (where === 'right') q = piece({ kind: 'counter', name: 'המשך משטח', x: p.x, y: p.y + p.h, w: p.w, h: len, wall: p.wall, aprons: p.aprons.filter((s) => s === 'left' || s === 'right') });
+    else if (where === 'left') q = piece({ kind: 'counter', name: 'המשך משטח', x: p.x, y: p.y - len, w: p.w, h: len, wall: p.wall, aprons: p.aprons.filter((s) => s === 'left' || s === 'right') });
+    else q = piece({ kind: 'counter', name: 'רגל L', x: where === 'legRight' ? p.x + p.w : p.x - len, y: p.y + p.h - depth, w: len, h: depth, wall: 'front', aprons: ['back'] });
+  }
+  return { project: { ...pr, pieces: [...pr.pieces, q] }, id: q.id };
+}
