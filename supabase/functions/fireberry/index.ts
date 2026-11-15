@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
       const d = await query(object, `(accountid = '${account}')`, 30), m = meta(d), pk = str(m.PrimaryKey), pf = str(m.PrimaryField);
       return json({ records: rows(d).map((r) => ({
         id: pick(r, [pk, ...Object.keys(r).filter((k) => /id$/i.test(k) && k !== "accountid" && k !== "ownerid")]),
-        title: pick(r, [pf, "name", "subject", "title"]), number: pick(r, ["ordernumber", "number", "pcfsystemfield1"]),
+        title: pick(r, [pf, "name", "subject", "title"]), number: pick(r, ["crmordernumber", "ordernumber", "number"]),
         date: pick(r, ["createdon", "modifiedon"]),
       })).filter((x) => x.id) });
     }
@@ -94,12 +94,18 @@ Deno.serve(async (req) => {
         return rows(d).map((r) => ({ id: pick(r, [pk, "accountid"]), name: pick(r, [str(m.PrimaryField) || "accountname", "accountname"]), phone: pick(r, ["telephone1", "telephone2", "mobilephone"]), email: pick(r, ["emailaddress1", "emailaddress2"]),
           address: [pick(r, ["billingstreet", "billingaddress", "address1_line1"]), pick(r, ["billingcity", "address1_city"])].filter(Boolean).join(", ") })).filter((a) => a.id); };
       const ordersWhere = async (where: string, n: number) => { const d = await query(object, where, n), m = meta(d), pk = str(m.PrimaryKey), pf = str(m.PrimaryField);
-        return { pf, list: rows(d).map((r) => ({ id: pick(r, [pk, ...Object.keys(r).filter((k) => /id$/i.test(k) && k !== "accountid" && k !== "ownerid")]), title: pick(r, [pf, "name", "subject", "title"]),
-          number: pick(r, [...numFields, "ordernumber", "number", "pcfsystemfield1"]), date: pick(r, ["createdon", "modifiedon"]), accountId: pick(r, ["accountid"]), accountName: pick(r, ["accountidname", "accountname"]) })).filter((x) => x.id) }; };
+        return { pf, list: rows(d).map((r) => ({ id: pick(r, [pk, ...Object.keys(r).filter((k) => /id$/i.test(k) && k !== "accountid" && k !== "ownerid")]), title: pick(r, ["name", "subject", "title"]) || (/^\d+$/.test(pick(r, [pf])) ? "" : pick(r, [pf])),
+          number: pick(r, ["crmordernumber", ...numFields, "ordernumber", "number"]), date: pick(r, ["createdon", "modifiedon"]), accountId: pick(r, ["accountid"]), accountName: pick(r, ["accountidname", "accountname"]) })).filter((x) => x.id) }; };
       const accWhere = [`(accountname like '%${q}%')`, ...(digits.length >= 4 ? [`(telephone1 like '%${digits}%')`, `(telephone2 like '%${digits}%')`] : [])].join(" or ");
       const [accounts, byText] = await Promise.all([
         acc(accWhere, 8).catch((e) => { if ((e as { status?: number }).status === 401) throw e; return []; }),
         (async () => { const probe = await ordersWhere("", 1).catch(() => ({ pf: "", list: [] })); const pf = probe.pf || "name";
+          // מספר הזמנה הוא שדה מספרי: מחפשים בהתאמה מדויקת ובתחילת המספר (like לא עובד על מספרים)
+          if (/^\d+$/.test(q)) {
+            const fields = [...new Set([pf, ...numFields])], out: Awaited<ReturnType<typeof ordersWhere>>["list"] = [];
+            for (const f of fields) for (const expr of [`(${f} = ${q})`, `(${f} start-with '${q}')`]) { const r = await ordersWhere(expr, 10).catch(() => null); if (r) out.push(...r.list); if (out.length) break; }
+            return out;
+          }
           const conds = [`(${pf} like '%${q}%')`, ...numFields.map((f) => `(${f} like '%${q}%')`)].join(" or ");
           return (await ordersWhere(conds, 20).catch(() => ordersWhere(`(${pf} like '%${q}%')`, 20).catch(() => ({ pf, list: [] })))).list; })(),
       ]);
@@ -122,22 +128,29 @@ Deno.serve(async (req) => {
       date: pick(f, ["createdon", "createdOn", "date", "modifiedon"]),
     })).filter((f) => f.id || f.url);
     if (mode === "measures") {
-      const object = Number(body.object) || 1001, account = esc(str(body.accountId)), orderId = str(body.orderId);
-      if (!account) return json({ error: "חסר לקוח." }, 400);
-      const d = await query(object, `(accountid = '${account}')`, 15), m = meta(d), pk = str(m.PrimaryKey), pf = str(m.PrimaryField);
-      const recs = rows(d).map((r) => ({ r, id: pick(r, [pk, ...Object.keys(r).filter((k) => /id$/i.test(k) && k !== "accountid" && k !== "ownerid")]) })).filter((x) => x.id);
-      const out = [];
-      for (const { r, id } of recs.slice(0, 8)) {
-        let files: { id: string; name: string; url: string; date: string }[] = [];
-        for (const path of [`/api/v2/record/${object}/${encodeURIComponent(id)}/files`, `/api/record/${object}/${encodeURIComponent(id)}/files`]) {
-          try { files = asFiles(await fb(path)); if (files.length) break; } catch (e) { if ((e as { status?: number }).status === 401) throw e; }
+      // הקבצים של ההזמנה עצמה, ושל המדידות שמקושרות אליה (שדה קישור להזמנה באובייקט המדידות)
+      const object = Number(body.object) || 1001, orderObj = Number(body.orderObject) || 13, orderId = str(body.orderId);
+      if (!/^[0-9a-f-]{36}$/i.test(orderId)) return json({ measures: [] });
+      const filesOf = async (o: number, id: string) => {
+        for (const path of [`/api/v3/record/${o}/${encodeURIComponent(id)}/files`, `/api/v2/record/${o}/${encodeURIComponent(id)}/files`]) {
+          try { const f = asFiles(await fb(path)); if (f.length) return f; } catch (e) { if ((e as { status?: number }).status === 401) throw e; }
         }
-        // שדות קובץ / קישור בתוך הרשומה עצמה
-        for (const [k, v] of Object.entries(r)) { const u = str(v); if (/^https:\/\//.test(u) && FILE_EXT.test(u) && !files.some((f) => f.url === u)) files.push({ id: "", name: decodeURIComponent(u.split("/").pop()!.split("?")[0]) || k, url: u, date: "" }); }
-        out.push({ id, title: pick(r, [pf, "name", "subject", "title"]) || "מדידה", date: pick(r, ["createdon", "modifiedon"]),
-          order: !!orderId && Object.values(r).some((v) => str(v) === orderId), files: files.filter((f) => !f.name || FILE_EXT.test(f.name) || FILE_EXT.test(f.url)) });
+        return [];
+      };
+      const keep = (files: { id: string; name: string; url: string; date: string }[]) => files.filter((f) => FILE_EXT.test(f.name) || FILE_EXT.test(f.url));
+      const out = [{ id: orderId, title: "קבצים על ההזמנה", date: "", order: true, files: keep(await filesOf(orderObj, orderId)) }];
+      // שדות קישור (lookup) באובייקט המדידות — קודם אלה שהתווית שלהם מזכירה "הזמנה"
+      let links: string[] = [];
+      try { const md = rows(await fb(`/metadata/records/${object}/fields`)); links = md.filter((f) => str(f.systemFieldTypeId) === "a8fcdf65-91bc-46fd-82f6-1234758345a1").sort((x, y) => Number(/הזמנ/.test(str(y.label))) - Number(/הזמנ/.test(str(x.label)))).map((f) => pick(f, ["fieldName", "systemName"])).filter(Boolean).slice(0, 6); } catch { /* */ }
+      for (const f of links) {
+        const d = await query(object, `(${f} = '${orderId}')`, 10).catch(() => null); if (!d) continue;
+        const m = meta(d), pk = str(m.PrimaryKey), pf = str(m.PrimaryField), recs = rows(d); if (!recs.length) continue;
+        for (const r of recs.slice(0, 6)) { const id = pick(r, [pk]); if (!id) continue; out.push({ id, title: `מדידה · ${pick(r, [pf, "name"]) || ""}`, date: pick(r, ["createdon", "modifiedon"]), order: true, files: keep(await filesOf(object, id)) }); }
+        break;
       }
-      out.sort((a, b) => Number(b.order) - Number(a.order) || b.date.localeCompare(a.date));
+      // DXF קודם, ואז PDF ותמונות
+      const rank = (n: string) => (/\.dxf/i.test(n) ? 0 : /\.pdf/i.test(n) ? 1 : 2);
+      for (const m of out) m.files.sort((x, y) => rank(x.name) - rank(y.name));
       return json({ measures: out });
     }
     /** רק קישורים מאובטחים של פיירברי ושל שירותי האחסון שלו. מחזיר את שם השרת, או "" אם לא מותר. */
@@ -182,7 +195,9 @@ Deno.serve(async (req) => {
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       if (bytes.length > 15_000_000) return json({ error: "הקובץ גדול מדי." }, 400);
       const form = new FormData(); form.append("file", new Blob([bytes], { type: "application/pdf" }), str(body.filename) || "barstone.pdf");
-      await fb(`/api/v2/record/${object}/${encodeURIComponent(id)}/files`, { method: "POST", body: form });
+      const mk = () => { const f = new FormData(); f.append("file", new Blob([bytes], { type: "application/pdf" }), str(body.filename) || "barstone.pdf"); return f; };
+      try { await fb(`/api/v3/record/${object}/${encodeURIComponent(id)}/files`, { method: "POST", body: form }); }
+      catch (e) { if ((e as { status?: number }).status === 401) throw e; await fb(`/api/v2/record/${object}/${encodeURIComponent(id)}/files`, { method: "POST", body: mk() }); }
       return json({ ok: true });
     }
     return json({ error: "פעולה לא מוכרת." }, 400);
