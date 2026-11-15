@@ -180,9 +180,11 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
   useEffect(() => {
     if (!fbRec || !fireberry.available()) { setMeas([]); return; }
     setMeas(null); setMeasErr('');
-    fireberry.settings().then((st) => { const mo = st.measureObject || 1001; setMeasObj(mo); return fireberry.measures(mo, st.object || 13, fbRec.id); }).then(setMeas).catch((e) => setMeasErr((e as Error).message));
+    // המדידה האחרונה קודם (לפי תאריך), ואחריה המדידות הישנות; הקבצים שעל ההזמנה עצמה בסוף
+    const latestFirst = (l: FbMeasure[]) => [...l.filter((m) => m.id !== fbRec.id).sort((a, b) => (b.date || '').localeCompare(a.date || '')), ...l.filter((m) => m.id === fbRec.id)];
+    fireberry.settings().then((st) => { const mo = st.measureObject || 1001; setMeasObj(mo); return fireberry.measures(mo, st.object || 13, fbRec.id); }).then((l) => setMeas(latestFirst(l))).catch((e) => setMeasErr((e as Error).message));
   }, [fbRec?.id]);
-  // נפתח מחיפוש הזמנה בפיירברי: אם יש DXF על ההזמנה או על המדידה שלה — הוא נמשך מיד
+  // נפתח מחיפוש הזמנה בפיירברי: ה-DXF נמשך מיד מהמדידה האחרונה (ואם אין בה — מהקודמת, ואז מההזמנה)
   const autoDxf = useRef(false);
   useEffect(() => {
     if (!preset || autoDxf.current || !meas) return;
