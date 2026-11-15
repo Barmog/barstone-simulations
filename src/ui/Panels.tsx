@@ -4,10 +4,11 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { CABINETS, FAUCETS, FINISHES, FLOORS, GLASS, Swatch, WALLS, faucetById } from '../core/catalog';
 import { factorHe, runningMeters } from '../core/pricing';
 import { exportNestDxf } from '../core/dxf';
-import { CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
+import { SLAB, CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
 import { upgrades } from '../core/upgrades';
 import { OrderStatus, STATUS_HE, isLocal, repo, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
+import { Modal } from './Home';
 import { ai, applyDraft, localAssist } from '../ai';
 import { Step, go, useStore } from '../store';
 import { Icon } from './icons';
@@ -73,17 +74,30 @@ export function LeftPanel() {
   const [cmp, setCmp] = useState(false), [q, setQ] = useState('');
   const norm = (t?: string | null) => (t || '').toLowerCase().replace(/[׳'"\s-]/g, '');
   const natInput = useRef<HTMLInputElement>(null), [natBusy, setNatBusy] = useState(false);
-  // אבן טבעית: מצלמים את הלוח (או בוחרים תמונה), והיא נהיית האבן של ההזמנה — בנסטינג, בתלת־ממד ובמסמך
-  async function addNatural(f?: File) {
-    if (!f) return; setNatBusy(true);
+  // אבן טבעית: חובה תמונה של הלוח, ואז המערכת שואלת מה גודל הלוח — והנסטינג נבנה לפי המידה הזאת
+  const [nat, setNat] = useState<{ file: File; preview: string; iw: number; ih: number } | null>(null), [natL, setNatL] = useState(''), [natW, setNatW] = useState(''), [natName, setNatName] = useState('');
+  async function pickNatural(f?: File) {
+    if (!f) return;
+    try { const bmp = await createImageBitmap(f); setNat({ file: f, preview: URL.createObjectURL(f), iw: bmp.width, ih: bmp.height }); bmp.close?.(); setNatName(project.customStone?.name || ''); setNatL(project.customStone?.w ? cm(project.customStone.w) : ''); setNatW(project.customStone?.h ? cm(project.customStone.h) : ''); }
+    catch { useStore.getState().setToast('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.'); }
+  }
+  const natA = parseCm(natL), natB = parseCm(natW), natOk = !!natA && !!natB && natA >= 500 && natB >= 300 && natA <= 4000 && natB <= 2500;
+  const closeNat = () => { if (nat) URL.revokeObjectURL(nat.preview); setNat(null); };
+  async function addNatural() {
+    if (!nat || !natOk) return; setNatBusy(true);
     try {
-      const img = await shrinkImage(f, 2400); if (!img) throw new Error('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.');
-      const url = await repo.uploadCustomStone(isLocal ? (await shrinkImage(f, 1400, 0.8)) || img : img);
-      set({ stoneId: 'custom', customStone: { name: project.customStone?.name || 'אבן טבעית', url } });
-      useStore.getState().setToast('האבן הטבעית נוספה. אפשר לתת לה שם, ולסדר את החלקים על הלוח.');
+      const w = Math.max(natA!, natB!), h = Math.min(natA!, natB!);
+      // הלוח תמיד שוכב לרוחב: צילום לגובה מסובבים, כדי שהגידים לא יימתחו
+      const img = await shrinkImage(nat.file, isLocal ? 1400 : 2400, isLocal ? 0.8 : 0.86, nat.ih > nat.iw); if (!img) throw new Error('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.');
+      const url = await repo.uploadCustomStone(img);
+      set({ stoneId: 'custom', customStone: { name: natName.trim() || 'אבן טבעית', url, w, h }, slabW: w, slabH: h, bookmatch: 'no', manual: {} });
+      useStore.getState().setToast(`האבן הטבעית נוספה, לוח ${cm(w)}×${cm(h)} ס"מ. פריסת החלקים חושבה לפי המידה הזאת.`); closeNat();
     } catch (e) { useStore.getState().setToast((e as Error).message); }
     setNatBusy(false);
   }
+  // מעבר בין אבן טבעית לדגם מהקטלוג מחזיר גם את מידת הלוח המתאימה
+  const pickStone = (id: string | number) => set({ stoneId: id as never, ...(project.stoneId === 'custom' ? { slabW: SLAB.w, slabH: SLAB.h } : {}) });
+  const backToNatural = () => set({ stoneId: 'custom', ...(project.customStone?.w ? { slabW: project.customStone.w, slabH: project.customStone.h! } : {}) });
   const shown = stones.filter((s) => !q.trim() || [s.name, s.en, s.novo].some((t) => norm(t).includes(norm(q))));
   const flat = project.pieces.filter((p) => !isVertical(p)), i = STEPS.findIndex((s) => s.id === step), cur = STEPS[i], m = nest?.metrics;
   const errors = issues.filter((x) => x.level === 'error').length, warns = issues.filter((x) => x.level === 'warn').length;
@@ -116,13 +130,13 @@ export function LeftPanel() {
     <section>
       <span className="cap">לוח</span>
       <input className="input" type="search" placeholder="חיפוש דגם: שם בעברית, באנגלית או השם הקודם…" value={q} onChange={(e) => setQ(e.target.value)} />
-      <input ref={natInput} type="file" hidden accept="image/*" capture="environment" onChange={(e) => { addNatural(e.target.files?.[0]); e.target.value = ''; }} />
+      <input ref={natInput} type="file" hidden accept="image/*" onChange={(e) => { pickNatural(e.target.files?.[0]); e.target.value = ''; }} />
       <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-        <button className="btn sm" disabled={natBusy} onClick={() => natInput.current?.click()}>{natBusy ? <span className="spin dark" /> : <Icon.camera />}אבן טבעית · צילום הלוח</button>
-        {project.customStone && project.stoneId !== 'custom' && <button className="link" onClick={() => set({ stoneId: 'custom' })}>חזרה ל"{project.customStone.name}"</button>}
+        <button className="btn sm" disabled={natBusy} onClick={() => natInput.current?.click()}>{natBusy ? <span className="spin dark" /> : <Icon.camera />}אבן טבעית · תמונת הלוח</button>
+        {project.customStone && project.stoneId !== 'custom' && <button className="link" onClick={backToNatural}>חזרה ל"{project.customStone.name}"</button>}
       </div>
-      {project.stoneId === 'custom' && project.customStone && <label className="field">שם האבן הטבעית<input value={project.customStone.name} onChange={(e) => set({ customStone: { ...project.customStone!, name: e.target.value } }, 'natname')} /></label>}
-      <div className="stonegrid">{shown.map((s) => <button key={s.id} className={`stone ${String(s.id) === String(stone.id) ? 'on' : ''}`} title={stoneLabel(s)} onClick={() => set({ stoneId: s.id })}>
+      {project.stoneId === 'custom' && project.customStone && <label className="field">שם האבן הטבעית<input value={project.customStone.name} onChange={(e) => set({ customStone: { ...project.customStone!, name: e.target.value } }, 'natname')} /><small className="mute">לוח {cm(project.slabW)}×{cm(project.slabH)} ס"מ. להחלפת התמונה או המידה לוחצים שוב על "אבן טבעית".</small></label>}
+      <div className="stonegrid">{shown.map((s) => <button key={s.id} className={`stone ${String(s.id) === String(stone.id) ? 'on' : ''}`} title={stoneLabel(s)} onClick={() => pickStone(s.id)}>
         <i style={{ backgroundImage: s.hasImage ? `url("${s.thumb || s.url}")` : undefined }}>{!s.hasImage && 'אין תמונה'}</i>
         <b>{s.name}</b><small>{s.en || ' '}{s.series ? ` · ${s.series}` : ''}{s.stock === 'no' ? ' · אין במלאי' : ''}</small>
       </button>)}{!shown.length && <div className="mute" style={{ fontSize: 13 }}>לא נמצא דגם בשם הזה.</div>}</div>
@@ -277,6 +291,17 @@ export function LeftPanel() {
   return (
     <aside className="panel glass">
       {cmp && <Compare onClose={() => setCmp(false)} />}
+      {nat && <Modal title="אבן טבעית" onClose={closeNat}>
+        <div style={{ height: 150, borderRadius: 14, background: `#ddd url("${nat.preview}") center/cover` }} />
+        <p className="mute" style={{ margin: 0 }}>מה גודל הלוח? פריסת החלקים (נסטינג) תחושב לפי המידה הזאת, ולכן כדאי לצלם את הלוח כולו, מקצה לקצה.</p>
+        <div className="grid2">
+          <label className="field">אורך הלוח (ס"מ)<input className="input" inputMode="decimal" autoFocus placeholder="למשל 300" value={natL} onChange={(e) => setNatL(e.target.value)} /></label>
+          <label className="field">רוחב הלוח (ס"מ)<input className="input" inputMode="decimal" placeholder="למשל 180" value={natW} onChange={(e) => setNatW(e.target.value)} /></label>
+        </div>
+        {(natL || natW) && !natOk && natA !== null && natB !== null && <div className="note err">המידה לא נראית הגיונית ללוח. מקלידים בס"מ, למשל 300 על 180.</div>}
+        <label className="field">שם האבן (לא חובה)<input className="input" placeholder="למשל גרניט שחור אפריקאי" value={natName} onChange={(e) => setNatName(e.target.value)} /></label>
+        <div className="row"><span className="sp" /><button className="btn" onClick={closeNat}>ביטול</button><button className="btn primary" disabled={!natOk || natBusy} onClick={addNatural}>{natBusy ? <span className="spin" /> : 'הוספת האבן'}</button></div>
+      </Modal>}
       <div className="stephead"><span className="cap">שלב {i + 1} מתוך {STEPS.length}</span><h2>{cur.name}</h2><p>{cur.hint}</p></div>
       {body}
       <span className="sp" />
