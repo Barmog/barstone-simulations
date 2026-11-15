@@ -365,3 +365,10 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 5px; backgrou
 .demo-short { display: none; }
 .top .link, .top .btn { white-space: nowrap; }
 .chip .x { border: 0; background: none; color: inherit; font-size: 15px; line-height: 1; margin-inline-start: 6px; cursor: pointer; padding: 0 2px; opacity: .75; }
+/* ייבוא תמונות לוח מקטלוג ה-PDF */
+.pdfgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; max-height: 58vh; overflow: auto; }
+.pdfrow { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px; align-items: center; padding: 8px; border-radius: 12px; background: rgba(0,0,0,.03); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); cursor: pointer; }
+.pdfrow.on { box-shadow: inset 0 0 0 2px var(--ink, #1b1a18); background: #fff; }
+.pdfrow i { grid-column: 1 / -1; height: 96px; border-radius: 8px; background: #ddd center/cover; }
+.pdfrow span { display: flex; flex-direction: column; min-width: 0; font-size: 13px; }
+.pdfrow small { font-size: 11.5px; }
