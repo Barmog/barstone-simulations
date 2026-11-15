@@ -29,6 +29,26 @@ export async function shrinkImage(file: Blob, max = 2400, quality = 0.86, rotate
   } catch { return null; }
 }
 
+/** תמונת לוח לקטלוג מכל קובץ ובכל גודל (גם TIF ענק מהספק): מפענח, מכווץ ל-JPEG ומסובב לרוחב. */
+export async function slabJpeg(file: File, max = 2400): Promise<Blob> {
+  const tif = /\.tiff?$/i.test(file.name) || /tiff/.test(file.type);
+  let src: Blob | ImageBitmap = file;
+  if (tif) {
+    const UTIF = (await import('utif')).default as any, buf = await file.arrayBuffer(), ifds = UTIF.decode(buf);
+    const big = ifds.filter((d: any) => d.t256 && d.t257).sort((a: any, b: any) => b.t256[0] * b.t257[0] - a.t256[0] * a.t257[0])[0];
+    if (!big) throw new Error('לא הצלחתי לקרוא את קובץ ה-TIF.');
+    UTIF.decodeImage(buf, big, ifds); const w = big.width, h = big.height, rgba = UTIF.toRGBA8(big);
+    src = await createImageBitmap(new ImageData(new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, w * h * 4), w, h));
+  }
+  const bmp = src instanceof ImageBitmap ? src : await createImageBitmap(src).catch(() => { throw new Error('הדפדפן לא מצליח לקרוא את התמונה. נסו JPG, PNG או TIF.'); });
+  const rot = bmp.height > bmp.width, k = Math.min(1, max / Math.max(bmp.width, bmp.height)), w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
+  const cv = document.createElement('canvas'); cv.width = rot ? h : w; cv.height = rot ? w : h;
+  const g = cv.getContext('2d')!; if (rot) { g.translate(h, 0); g.rotate(Math.PI / 2); }
+  g.drawImage(bmp, 0, 0, w, h); bmp.close?.();
+  const out = await new Promise<Blob | null>((res) => cv.toBlob(res, 'image/jpeg', 0.86));
+  if (!out) throw new Error('כיווץ התמונה נכשל.'); return out;
+}
+
 /** מסך צר (טלפון): הסטודיו עובר לפריסת מובייל. */
 const mq = typeof matchMedia === 'function' ? matchMedia('(max-width: 820px)') : null;
 export const useMobile = () => useSyncExternalStore((f) => { mq?.addEventListener('change', f); return () => mq?.removeEventListener('change', f); }, () => !!mq?.matches);
