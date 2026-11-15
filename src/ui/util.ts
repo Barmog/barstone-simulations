@@ -19,11 +19,12 @@ export function useStone() {
 }
 
 /** מקטין תמונה (צילום מהטלפון) ל-JPEG ברוחב מרבי — לפני העלאה או שליחה לזיהוי. מחזיר null אם הדפדפן לא מצליח לפענח. */
-export async function shrinkImage(file: Blob, max = 2400, quality = 0.86): Promise<Blob | null> {
+export async function shrinkImage(file: Blob, max = 2400, quality = 0.86, rotate = false): Promise<Blob | null> {
   try {
     const bmp = await createImageBitmap(file), k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-    const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
-    cv.getContext('2d')!.drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
+    const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k), cv = document.createElement('canvas'); cv.width = rotate ? h : w; cv.height = rotate ? w : h;
+    const g = cv.getContext('2d')!; if (rotate) { g.translate(h, 0); g.rotate(Math.PI / 2); }
+    g.drawImage(bmp, 0, 0, w, h); bmp.close?.();
     return await new Promise((res) => cv.toBlob((b) => res(b), 'image/jpeg', quality));
   } catch { return null; }
 }

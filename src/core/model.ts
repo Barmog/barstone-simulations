@@ -102,7 +102,7 @@ export interface Project {
   /** צוקל מאבן (נכנס לנסטינג) במקום צוקל רגיל. */
   plinthStone?: boolean;
   /** אבן טבעית שצולמה להזמנה הזו (stoneId = 'custom'): שם ותמונת הלוח. */
-  customStone?: { name: string; url: string };
+  customStone?: { name: string; url: string; w?: number; h?: number };
   /** חזיתות ארונות מבריקות (לכה) במקום מט. */
   cabinetGloss?: boolean;
   /** גימור פני האבן: מבריק / מט / סטרקצ׳ר (לפי מה שהדגם מגיע בו). */
