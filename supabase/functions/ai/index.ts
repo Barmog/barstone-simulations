@@ -2,7 +2,6 @@
 // מפתח ה-API נשמר כסוד בשם ANTHROPIC_API_KEY ב-Supabase בלבד, ולא מגיע לדפדפן.
 // גישה: רק משתמש מחובר שנמצא בטבלת staff.
 import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
-import { betaZodOutputFormat } from "npm:@anthropic-ai/sdk@1.8.0/helpers/beta/zod";
 import { z } from "npm:zod@4";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -88,6 +87,16 @@ const SYSTEM = `אתה מומחה לתכנון וייצור משטחי אבן ו
 
 כתוב תמיד בעברית פשוטה וקצרה, בלי כותרות.`;
 
+const FORMAT = `\n\n## פורמט התשובה\nהחזר אובייקט JSON יחיד בלבד, בלי טקסט לפניו או אחריו ובלי \`\`\`, לפי הסכמה הזו (JSON Schema):\n${JSON.stringify(z.toJSONSchema(Reply))}`;
+function readReply(text: string): { ok: true; value: z.infer<typeof Reply> } | { ok: false; error: string } {
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  if (a < 0 || b < a) return { ok: false, error: "לא נמצא JSON בתשובה" };
+  let raw: unknown;
+  try { raw = JSON.parse(text.slice(a, b + 1)); } catch (e) { return { ok: false, error: `JSON שבור: ${(e as Error).message}` }; }
+  const p = Reply.safeParse(raw);
+  return p.success ? { ok: true, value: p.data } : { ok: false, error: JSON.stringify(p.error.issues.slice(0, 8)) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -124,19 +133,33 @@ Deno.serve(async (req) => {
       content.push({ type: "text", text: `mode=advise\nהמטבח:\n${JSON.stringify(body.draft)}\n\nממצאי הבדיקה והנסטינג:\n${JSON.stringify(body.facts || {})}` });
     } else return json({ error: "mode לא מוכר." }, 400);
 
+    // התשובה חוזרת כ-JSON בטקסט ונבדקת כאן מול הסכמה. (פלט מובנה קשיח נדחה: הסכמה גדולה מדי לדקדוק של ה-API)
     const client = new Anthropic();
-    const res = await client.beta.messages.parse({
-      model: "claude-fable-5-2",
-      max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default", // אם המודל מסרב מסיבת מדיניות, הבקשה ממשיכה אוטומטית במודל חלופי
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      output_config: { effort: mode === "plan" || mode === "photo" ? "medium" : "low", format: betaZodOutputFormat(Reply) },
-      messages: [{ role: "user", content }],
-    });
+    const ask = async (msgs: Anthropic.Beta.BetaMessageParam[]) => {
+      const r = await client.beta.messages.create({
+        model: "claude-fable-5-2",
+        max_tokens: 16000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default", // אם המודל מסרב מסיבת מדיניות, הבקשה ממשיכה אוטומטית במודל חלופי
+        system: [{ type: "text", text: SYSTEM + FORMAT, cache_control: { type: "ephemeral" } }],
+        output_config: { effort: mode === "plan" || mode === "photo" ? "medium" : "low" },
+        messages: msgs,
+      } as never) as Anthropic.Beta.BetaMessage;
+      const text = r.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
+      return { r, text };
+    };
+    const msgs: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content }];
+    let { r: res, text } = await ask(msgs);
     if (res.stop_reason === "refusal") return json({ error: "המודל לא יכול היה לטפל בבקשה הזו." }, 422);
-    if (res.stop_reason === "max_tokens" || !res.parsed_output) return json({ error: "התשובה נקטעה. נסו בקשה קצרה יותר." }, 502);
-    return json(res.parsed_output);
+    if (res.stop_reason === "max_tokens") return json({ error: "התשובה נקטעה. נסו בקשה קצרה יותר." }, 502);
+    let out = readReply(text);
+    if (!out.ok) {
+      // ניסיון תיקון אחד: מחזירים למודל את השגיאה
+      ({ r: res, text } = await ask([...msgs, { role: "assistant", content: text || "{}" }, { role: "user", content: `ה-JSON לא תקין: ${out.error.slice(0, 1500)}\nהחזר שוב את התשובה המלאה כ-JSON תקין בלבד.` }]));
+      out = readReply(text);
+    }
+    if (!out.ok) { console.error(out.error); return json({ error: "התשובה של ה-AI לא הייתה תקינה. נסו שוב." }, 502); }
+    return json(out.value);
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) return json({ error: "מפתח ה-API של Anthropic לא תקין." }, 503);
     if (e instanceof Anthropic.RateLimitError) return json({ error: "יותר מדי בקשות כרגע. נסו שוב בעוד דקה." }, 429);
