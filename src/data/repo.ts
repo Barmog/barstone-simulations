@@ -74,11 +74,11 @@ export const repo = {
   },
   async updateStone(sid: number | string, patch: { in_stock?: string; bookmatch?: boolean | null; name?: string }) { if (sb) ok(await sb.from('stones').update(patch).eq('id', sid).select('id')); },
   async addStone(name: string): Promise<number | null> { if (!sb) return null; return ok<{ id: number }>(await sb.from('stones').insert({ name, supplier: 'Barstone' }).select('id').single()).id; },
-  /** העלאת תמונת לוח לדגם (מנהל הקטלוג). */
-  async uploadSlab(sid: number | string, file: File) {
+  /** העלאת תמונת לוח לדגם (מנהל הקטלוג). מקבל JPEG מכווץ (slabJpeg). */
+  async uploadSlab(sid: number | string, file: Blob) {
     if (!sb) throw new Error('העלאה פועלת באתר המחובר.');
-    const path = `barstone/${sid}-${Date.now()}.${(file.name.split('.').pop() || 'jpg').toLowerCase()}`;
-    const up = await sb.storage.from('slabs').upload(path, file, { contentType: file.type || 'image/jpeg' });
+    const path = `barstone/${sid}-${Date.now()}.jpg`;
+    const up = await sb.storage.from('slabs').upload(path, file, { contentType: 'image/jpeg' });
     if (up.error) throw new Error(up.error.message);
     ok(await sb.from('stones').update({ slab_path: path }).eq('id', sid).select('id'));
   },
