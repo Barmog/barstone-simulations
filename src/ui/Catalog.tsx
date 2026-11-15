@@ -4,6 +4,8 @@ import { Stone, repo } from '../data/repo';
 import { go, useStore } from '../store';
 import { Icon } from './icons';
 import { asset, slabJpeg } from './util';
+import { CatalogMatch, scanCatalog } from './catalogImport';
+import { Modal } from './Home';
 
 export function Catalog() {
   const [stones, setStones] = useState<Stone[]>([]), [q, setQ] = useState(''), [busy, setBusy] = useState('');
@@ -22,6 +24,26 @@ export function Catalog() {
     }
     await load(); setBusy(''); setToast(`הועלו ${done} תמונות${made ? ` · נוצרו ${made} דגמים חדשים` : ''}`);
   }
+  // ייבוא מקטלוג ה-PDF: סורקים, מציגים לאישור (לחיצה על תמונה מחליפה לתמונה הבאה מאותו עמוד), ושומרים
+  const pdfIn = useRef<HTMLInputElement>(null), [matches, setMatches] = useState<(CatalogMatch & { pick: number; on: boolean })[] | null>(null);
+  async function fromPdf(f?: File) {
+    if (!f) return; setBusy('קורא את הקטלוג…');
+    try {
+      const m = await scanCatalog(f, stones, setBusy);
+      if (!m.length) setToast('לא מצאתי בקטלוג שמות של דגמים מהרשימה.');
+      else setMatches(m.map((x) => ({ ...x, pick: 0, on: !x.stone.hasImage })));
+    } catch (e) { setToast(`הקטלוג לא נקרא: ${(e as Error).message}`); }
+    setBusy('');
+  }
+  const closeMatches = () => { matches?.forEach((m) => m.images.forEach((u) => URL.revokeObjectURL(u))); setMatches(null); };
+  async function saveMatches() {
+    const list = (matches || []).filter((m) => m.on); let i = 0;
+    for (const m of list) {
+      setBusy(`שומר ${++i} מתוך ${list.length}…`);
+      try { await repo.uploadSlab(m.stone.id, await (await fetch(m.images[m.pick])).blob()); } catch (e) { setToast(`${m.stone.name}: ${(e as Error).message}`); }
+    }
+    closeMatches(); await load(); setBusy(''); setToast(`נשמרו ${list.length} תמונות לוח מהקטלוג`);
+  }
   const shown = stones.filter((s) => !q || [s.name, s.en, s.novo].some((t) => t?.toLowerCase().includes(q.toLowerCase())));
   return (
     <>
@@ -33,6 +55,8 @@ export function Catalog() {
             <input className="input" style={{ flex: '1 1 220px' }} placeholder="חיפוש דגם" value={q} onChange={(e) => setQ(e.target.value)} />
             <input ref={bulk} type="file" hidden multiple accept="image/*,.tif,.tiff" onChange={(e) => many(e.target.files)} />
             <button className="btn primary" disabled={!!busy} onClick={() => bulk.current?.click()}><Icon.plus />{busy || 'העלאת תמונות לוחות'}</button>
+            <input ref={pdfIn} type="file" hidden accept="application/pdf,.pdf" onChange={(e) => { fromPdf(e.target.files?.[0]); e.target.value = ''; }} />
+            <button className="btn" disabled={!!busy} onClick={() => pdfIn.current?.click()}>ייבוא מקטלוג ה-PDF</button>
           </div>
           <div className="note">העלאה מרוכזת: בוחרים הרבה תמונות יחד. שם הקובץ מותאם לשם הדגם (למשל "נורדיק אייס-03.png"); קובץ בלי התאמה יוצר דגם חדש. תמונה אחת של לוח שלם לכל דגם, ביחס 2:1 (320×160).</div>
           <table><thead><tr><th style={{ width: 96 }}>לוח</th><th>דגם</th><th>מלאי</th><th>בוק־מאץ׳</th><th /></tr></thead><tbody>
@@ -48,6 +72,16 @@ export function Catalog() {
           </tbody></table>
         </div>
       </main>
+      {matches && <Modal wide title={`נמצאו ${matches.length} דגמים בקטלוג`} onClose={closeMatches}>
+        <p className="mute" style={{ margin: 0 }}>מסומנים הדגמים שאין להם עדיין תמונה. אם נבחרה תמונה לא נכונה (למשל צילום מטבח), לוחצים עליה כדי לעבור לתמונה הבאה מאותו עמוד.</p>
+        <div className="pdfgrid">{matches.map((m, k) => (
+          <label key={String(m.stone.id)} className={`pdfrow ${m.on ? 'on' : ''}`}>
+            <input type="checkbox" checked={m.on} onChange={(e) => setMatches(matches.map((x, j) => (j === k ? { ...x, on: e.target.checked } : x)))} />
+            <i title="לחיצה: התמונה הבאה" style={{ backgroundImage: `url("${m.images[m.pick]}")` }} onClick={(e) => { e.preventDefault(); setMatches(matches.map((x, j) => (j === k ? { ...x, pick: (x.pick + 1) % x.images.length } : x))); }} />
+            <span><b>{m.stone.name}</b><small className="mute">{m.stone.en} · עמוד {m.page}{m.images.length > 1 ? ` · ${m.pick + 1}/${m.images.length}` : ''}{m.stone.hasImage ? ' · יש כבר תמונה' : ''}</small></span>
+          </label>))}</div>
+        <div className="row"><span className="sp" /><button className="btn" onClick={closeMatches}>ביטול</button><button className="btn primary" disabled={!!busy || !matches.some((m) => m.on)} onClick={saveMatches}>{busy || `שמירת ${matches.filter((m) => m.on).length} תמונות`}</button></div>
+      </Modal>}
     </>
   );
 }
