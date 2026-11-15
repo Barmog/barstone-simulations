@@ -102,12 +102,18 @@ Deno.serve(async (req) => {
     const mode = body.mode as "plan" | "photo" | "chat" | "edit" | "advise";
     const content: Anthropic.Beta.BetaContentBlockParam[] = [];
     if (mode === "plan" || mode === "photo") {
-      const data = String(body.data || ""), media = String(body.media_type || "");
-      if (!data || data.length > 17_000_000) return json({ error: "הקובץ חסר או גדול מדי." }, 400);
-      if (media === "application/pdf" && mode === "plan") content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data } });
-      else if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(media)) content.push({ type: "image", source: { type: "base64", media_type: media as "image/jpeg", data } });
-      else return json({ error: "סוג קובץ לא נתמך. אפשר JPG, PNG, WEBP או PDF." }, 400);
-      content.push({ type: "text", text: mode === "photo" ? "mode=photo\nהערך את המטבח מהתמונה המצורפת." : "mode=plan\nבנה את המטבח מהתוכנית המצורפת." });
+      // קובץ אחד (data + media_type) או כמה קבצים של אותו מטבח (files) — תמונות ו-PDF
+      const files: { media_type: string; data: string; name?: string }[] = Array.isArray(body.files) && body.files.length ? body.files.slice(0, 10) : [{ media_type: String(body.media_type || ""), data: String(body.data || "") }];
+      if (files.some((f) => !f?.data) || files.reduce((t, f) => t + String(f.data).length, 0) > 17_000_000) return json({ error: "הקבצים חסרים או גדולים מדי." }, 400);
+      for (const [i, f] of files.entries()) {
+        const data = String(f.data), media = String(f.media_type || "");
+        if (files.length > 1) content.push({ type: "text", text: `קובץ ${i + 1} מתוך ${files.length}${f.name ? `: ${String(f.name).slice(0, 80)}` : ""}` });
+        if (media === "application/pdf" && mode === "plan") content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data } });
+        else if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(media)) content.push({ type: "image", source: { type: "base64", media_type: media as "image/jpeg", data } });
+        else return json({ error: "סוג קובץ לא נתמך. אפשר תמונות ו-PDF." }, 400);
+      }
+      const many = files.length > 1 ? `\nמצורפים ${files.length} קבצים של אותו מטבח (תוכנית, דף מדידה, חתכים, צילומים). אסוף את המידות והפרטים מכולם למטבח אחד. כשמידה מופיעה בכמה קבצים והיא שונה — העדף את דף המדידה או את הקובץ המפורט יותר, וכתוב את הסתירה ב-assumptions עם שם הקובץ.` : "";
+      content.push({ type: "text", text: (mode === "photo" ? "mode=photo\nהערך את המטבח מהתמונות המצורפות." : "mode=plan\nבנה את המטבח מהתוכנית המצורפת.") + many });
     } else if (mode === "chat" || mode === "edit") {
       const text = String(body.text || "").slice(0, 2000);
       if (!text.trim() || !body.draft) return json({ error: "חסרה בקשה." }, 400);

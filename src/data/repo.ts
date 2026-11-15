@@ -83,6 +83,15 @@ export const repo = {
     ok(await sb.from('stones').update({ slab_path: path }).eq('id', sid).select('id'));
   },
 
+  /** תמונת אבן טבעית שצולמה להזמנה: נשמרת באחסון ומחזירה כתובת ציבורית (בדמו — בתוך ההזמנה עצמה). */
+  async uploadCustomStone(img: Blob): Promise<string> {
+    if (!sb) return await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error('קריאת התמונה נכשלה')); r.readAsDataURL(img); });
+    const path = `custom/${id()}.jpg`;
+    const up = await sb.storage.from('slabs').upload(path, img, { contentType: 'image/jpeg' });
+    if (up.error) throw new Error(up.error.message);
+    return sb.storage.from('slabs').getPublicUrl(path).data.publicUrl;
+  },
+
   async customers(): Promise<Customer[]> {
     if (!sb) return J<Customer[]>('bs.customers', []).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     return ok(await sb.from('customers').select('*').order('updated_at', { ascending: false }));

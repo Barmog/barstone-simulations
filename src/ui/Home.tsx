@@ -169,7 +169,7 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
   const [title, setTitle] = useState(preset?.title || 'מטבח'), [no, setNo] = useState(preset?.number || '');
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const [dxf, setDxf] = useState<{ text: string; name: string; project: Project; info: DxfInfo } | null>(null);
-  const [plan, setPlan] = useState<File | null>(null);
+  const [plan, setPlan] = useState<File[]>([]);
   const [fbObj, setFbObj] = useState<number | null>(null), [fbRecs, setFbRecs] = useState<FbRecord[] | null>(null), [fbRec, setFbRec] = useState<FbRecord | null>(preset || null), [fbErr, setFbErr] = useState('');
   useEffect(() => {
     if (!customer.fb_id || !fireberry.available()) return;
@@ -194,9 +194,9 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
     setMeasBusy(f.id || f.url); setErr('');
     try {
       const file = await fireberry.file(measObj, m.id, f);
-      if (/\.dxf$/i.test(file.name)) { const text = await file.text(); setWay('dxf'); setPlan(null); setDxf({ text, name: file.name, ...parseDxf(text, title) }); }
+      if (/\.dxf$/i.test(file.name)) { const text = await file.text(); setWay('dxf'); setPlan([]); setDxf({ text, name: file.name, ...parseDxf(text, title) }); }
       else if (/\.dwg$/i.test(file.name)) throw new Error('קובץ DWG: צריך לייצא אותו ל-DXF. אפשר גם לצלם את התוכנית.');
-      else { setWay('plan'); setDxf(null); setPlan(file); }
+      else { setWay('plan'); setDxf(null); setPlan((l) => (l.some((x) => x.name === file.name && x.size === file.size) ? l : [...l, file])); }
       setMeasNote(`מדידה מפיירברי: ${m.title} · ${file.name}`);
     } catch (e) { setErr((e as Error).message); }
     setMeasBusy('');
@@ -205,14 +205,15 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
   const input = useRef<HTMLInputElement>(null);
   const setToast = useStore((s) => s.setToast);
 
-  async function pick(f: File | undefined) {
-    if (!f) return; setErr('');
+  async function pick(fl: FileList | File[] | null | undefined) {
+    const files = [...(fl || [])]; if (!files.length) return; setErr('');
     if (way === 'dxf') {
+      const f = files[0];
       if (!/\.dxf$/i.test(f.name)) return setErr('צריך קובץ בסיומת ‎.dxf (אם יש לכם DWG — ייצאו אותו ל-DXF).');
       try { const text = await f.text(); setDxf({ text, name: f.name, ...parseDxf(text, title) }); if (title === 'מטבח') setTitle(f.name.replace(/\.dxf$/i, '')); } catch (e) { setDxf(null); setErr((e as Error).message); }
-    } else setPlan(f);
+    } else setPlan((l) => [...l, ...files.filter((f) => !l.some((x) => x.name === f.name && x.size === f.size))].slice(0, 10)); // מוסיפים לקבצים שכבר נבחרו
   }
-  function pickWay(w: typeof way) { setWay(w); setPlan(null); setErr('');
+  function pickWay(w: typeof way) { setWay(w); setPlan([]); setErr('');
   }
   const rescale = (scale: number) => { if (dxf) try { setDxf({ ...dxf, ...parseDxf(dxf.text, title, scale || undefined) }); } catch (e) { setErr((e as Error).message); } };
 
@@ -223,7 +224,7 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
       if (way === 'template') project = fromTemplate(tpl, title);
       else if (way === 'dxf') { if (!dxf) throw new Error('בחרו קובץ DXF.'); project = { ...dxf.project, name: title }; }
       else {
-        if (!plan) throw new Error('בחרו צילום או PDF של התוכנית.');
+        if (!plan.length) throw new Error('בחרו צילום או PDF של התוכנית.');
         const r = await ai.fromPlan(plan, way === 'photo');
         if (!r.draft?.pieces?.length) throw new Error(r.reply || 'לא הצלחתי לזהות משטחים.');
         project = { ...applyDraft(emptyProject(title), r.draft), source: 'plan', notes: [r.reply, ...(r.assumptions || []).map((a) => `• ${a}`)].filter(Boolean).join('\n') };
@@ -271,10 +272,11 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
       ))}</div>}
       {way !== 'template' && (
         <>
-          <input ref={input} type="file" hidden accept={way === 'dxf' ? '.dxf' : 'image/*,application/pdf'} onChange={(e) => pick(e.target.files?.[0])} />
-          <div className={`drop ${over ? 'over' : ''}`} onClick={() => input.current?.click()} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files[0]); }}>
-            {way === 'dxf' ? (dxf ? <b>{dxf.name}</b> : <>גררו לכאן קובץ <b>DXF</b> או לחצו לבחירה</>) : plan ? <b>{plan.name}</b> : way === 'photo' ? <>גררו לכאן <b>תמונה של המטבח הקיים</b>, או לחצו לבחירה</> : <>גררו לכאן <b>צילום או PDF</b> של התוכנית, או לחצו לבחירה</>}
+          <input ref={input} type="file" hidden multiple={way !== 'dxf'} accept={way === 'dxf' ? '.dxf' : 'image/*,application/pdf,.pdf,.heic,.heif'} onChange={(e) => { pick(e.target.files); e.target.value = ''; }} />
+          <div className={`drop ${over ? 'over' : ''}`} onClick={() => input.current?.click()} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files); }}>
+            {way === 'dxf' ? (dxf ? <b>{dxf.name}</b> : <>גררו לכאן קובץ <b>DXF</b> או לחצו לבחירה</>) : way === 'photo' ? <>גררו לכאן <b>תמונות של המטבח הקיים</b>, או לחצו לבחירה{plan.length ? ' · אפשר להוסיף עוד' : ''}</> : <>גררו לכאן <b>תוכניות ודפי מדידה</b> — כמה קבצים שרוצים, תמונות מכל סוג ו-PDF{plan.length ? ' · אפשר להוסיף עוד' : ''}</>}
           </div>
+          {way !== 'dxf' && plan.length > 0 && <div className="chips">{plan.map((f, i) => <span key={f.name + i} className="chip on" title={f.name}>{f.name.length > 26 ? f.name.slice(0, 24) + '…' : f.name}<button className="x" aria-label="הסרה" onClick={() => setPlan(plan.filter((_, k) => k !== i))}>×</button></span>)}</div>}
         </>
       )}
       {way === 'dxf' && dxf && (
@@ -293,7 +295,7 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
       {way === 'plan' && <div className="note">הזיהוי נעשה בבינה מלאכותית ונמשך כחצי דקה. תמיד עוברים על המידות אחרי — במיוחד בצילום של כתב יד.</div>}
       {err && <div className="note err">{err}</div>}
       <div className="row"><span className="sp" /><button className="btn" onClick={onClose}>ביטול</button>
-        <button className="btn primary" disabled={busy || (way === 'dxf' && !dxf?.info.pieces) || ((way === 'plan' || way === 'photo') && !plan)} onClick={create}>{busy ? <><span className="spin" />{way === 'plan' ? 'מזהה את התוכנית…' : way === 'photo' ? 'מנתח את התמונה…' : 'יוצר…'}</> : 'פתיחת הסטודיו'}</button></div>
+        <button className="btn primary" disabled={busy || (way === 'dxf' && !dxf?.info.pieces) || ((way === 'plan' || way === 'photo') && !plan.length)} onClick={create}>{busy ? <><span className="spin" />{way === 'plan' ? (plan.length > 1 ? `אוסף מידות מ-${plan.length} קבצים…` : 'מזהה את התוכנית…') : way === 'photo' ? 'מנתח את התמונה…' : 'יוצר…'}</> : 'פתיחת הסטודיו'}</button></div>
     </Modal>
   );
 }

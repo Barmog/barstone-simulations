@@ -55,10 +55,12 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
   // גימור האבן: מבריק = השתקפות חדה של החדר; מט = פיזור רך; סטרקצ׳ר = מרקם עדין מתוך הגיד עצמו
   const FIN = { polished: { roughness: 0.07, clearcoat: 1, clearcoatRoughness: 0.035, envMapIntensity: 1.15 }, matte: { roughness: 0.58, clearcoat: 0, clearcoatRoughness: 1, envMapIntensity: 0.8 }, structure: { roughness: 0.72, clearcoat: 0, clearcoatRoughness: 1, envMapIntensity: 0.7 } }[finish];
   const stone = new THREE.MeshPhysicalMaterial({ map: stoneTex, color: stoneTex ? 0xffffff : 0xe6e1d8, ...FIN, ...(finish === 'structure' && stoneTex ? { bumpMap: stoneTex, bumpScale: 2.2 } : {}) });
-  const cab = new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62 });
-  const cabX = project.xray ? new THREE.MeshStandardMaterial({ color: project.cabinetColor, roughness: 0.62, transparent: true, opacity: 0.18, depthWrite: false }) : cab;
+  // חזיתות מבריקות (לכה): השתקפות חדה עם שכבת ברק; אחרת מט
+  const gloss = project.cabinetGloss ? { roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.1 } : { roughness: 0.62 };
+  const cab = new THREE.MeshPhysicalMaterial({ color: project.cabinetColor, ...gloss });
+  const cabX = project.xray ? new THREE.MeshPhysicalMaterial({ color: project.cabinetColor, ...gloss, transparent: true, opacity: 0.18, depthWrite: false }) : cab;
   const upColor = project.upperColor || project.cabinetColor, upStyle = project.upperStyle || 'doors';
-  const upMat = new THREE.MeshStandardMaterial({ color: upColor, roughness: 0.6 });
+  const upMat = new THREE.MeshPhysicalMaterial({ color: upColor, ...gloss });
   const glass = new THREE.MeshPhysicalMaterial({ color: project.glassTint || '#cfe3e6', roughness: 0.06, metalness: 0, transparent: true, opacity: 0.32, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false });
   const sinks: THREE.Vector3[] = [];
   const lamps: THREE.Vector3[] = [], seam = new THREE.MeshBasicMaterial({ color: 0x3a342c, transparent: true, opacity: 0.55 });

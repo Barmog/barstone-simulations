@@ -11,7 +11,8 @@ type Drag =
   | { kind: 'pan'; sx: number; sy: number; v: View }
   | { kind: 'piece'; id: string; mx: number; my: number; ox: number; oy: number; moved: boolean }
   | { kind: 'cut'; id: string; mx: number; my: number; ox: number; oy: number }
-  | { kind: 'resize'; id: string; side: Side; mx: number; my: number; o: Piece };
+  | { kind: 'resize'; id: string; side: Side; mx: number; my: number; o: Piece }
+  | { kind: 'joint'; id: string; n: number; all: number[]; mx: number; my: number };
 interface Dim { x1: number; y1: number; x2: number; y2: number; value: number; off: number; set?: (mm: number) => void }
 
 const path = (p: Piece) => (p.outline ? `M${p.outline.map((q) => `${q.x},${q.y}`).join('L')}Z` : `M0,0H${p.w}V${p.h}H0Z`);
@@ -75,6 +76,13 @@ export function Plan2D() {
       let x = snap(d.ox + dx, xs); if (x === Math.round((d.ox + dx) / 10) * 10) { const r = snap(d.ox + dx + me.w, xs); if (xs.includes(r)) x = r - me.w; }
       let y = snap(d.oy + dy, ys); if (y === Math.round((d.oy + dy) / 10) * 10) { const b = snap(d.oy + dy + me.h, ys); if (ys.includes(b)) y = b - me.h; }
       patchPiece(d.id, { x, y }, `mv-${d.id}`);
+    } else if (d.kind === 'joint') {
+      // גרירת קו החיבור לאורך החלק: נשאר בין החיבורים השכנים, ונצמד ל-1 ס"מ ולמרכז כיור / כיריים
+      const me = byId.get(d.id)!, lx = longIsX(me), len = lx ? me.w : me.h, at0 = d.all[d.n];
+      const mids = project.cutouts.filter((c) => c.pieceId === me.id && c.kind !== 'faucet').map((c) => (lx ? c.x + c.w / 2 : c.y + c.h / 2));
+      const lo = (d.n ? d.all[d.n - 1] : 0) + 30, hi = (d.n < d.all.length - 1 ? d.all[d.n + 1] : len) - 30;
+      const at = Math.max(lo, Math.min(hi, snap(at0 + (lx ? dx : dy), mids, 25)));
+      patchPiece(d.id, { jointAt: d.all.map((x, i) => (i === d.n ? at : x)) }, `jt-${d.id}-${d.n}`);
     } else if (d.kind === 'cut') {
       const c = project.cutouts.find((q) => q.id === d.id)!, host = byId.get(c.pieceId)!;
       const cx = (host.w - c.w) / 2, cy = (host.h - c.h) / 2;
@@ -165,8 +173,13 @@ export function Plan2D() {
                 {pls.map((pl) => <g key={pl.seg} clipPath={`url(#s-${p.id}-${pl.seg})`}><image href={stone.url} width={project.slabW} height={project.slabH} preserveAspectRatio="none" transform={slabToLocalMatrix(p, pl) + (project.bookmatch === 'yes' && pl.slab % 2 ? ` translate(${project.slabW},0) scale(-1,1)` : '')} /></g>)}
                 {!pls.length && <path d={path(p)} fill="rgba(229,72,77,.25)" />}
               </g>
-              {/* חיבורים */}
-              {(nest?.joints || []).filter((j) => j.pieceId === p.id).map((j) => (longIsX(p) ? <line key={j.at} x1={j.at} y1={0} x2={j.at} y2={p.h} /> : <line key={j.at} x1={0} y1={j.at} x2={p.w} y2={j.at} />)).map((l, n) => <g key={n} stroke="var(--cut)" strokeWidth={2 * k} strokeDasharray={`${7 * k} ${5 * k}`} pointerEvents="none">{l}</g>)}
+              {/* חיבורים: אפשר לגרור את הקו כדי להזיז את החיבור */}
+              {(() => { const js = (nest?.joints || []).filter((j) => j.pieceId === p.id).map((j) => j.at).sort((a, b) => a - b), lx = longIsX(p); return js.map((at, n) => (
+                <g key={n} style={{ cursor: lx ? 'ew-resize' : 'ns-resize' }} onPointerDown={(e) => { select({ type: 'piece', id: p.id }); const m = toMm(e); down(e, { kind: 'joint', id: p.id, n, all: js, mx: m.x, my: m.y }); }}>
+                  <line x1={lx ? at : 0} y1={lx ? 0 : at} x2={lx ? at : p.w} y2={lx ? p.h : at} stroke="transparent" strokeWidth={26 * k} />
+                  <line x1={lx ? at : 0} y1={lx ? 0 : at} x2={lx ? at : p.w} y2={lx ? p.h : at} stroke="var(--cut)" strokeWidth={2 * k} strokeDasharray={`${7 * k} ${5 * k}`} pointerEvents="none" />
+                  <circle cx={lx ? at : p.w / 2} cy={lx ? p.h / 2 : at} r={7 * k} fill="#fff" stroke="var(--cut)" strokeWidth={2 * k} />
+                </g>)); })()}
               <path d={path(p)} fill="none" stroke={on ? 'var(--sand)' : 'rgba(27,26,24,.55)'} strokeWidth={(on ? 2.6 : 1.1) * k} pointerEvents="none" />
               {on && <path d={path(p)} fill="none" stroke="var(--sand)" strokeOpacity=".28" strokeWidth={9 * k} pointerEvents="none" />}
               {/* פתחים */}

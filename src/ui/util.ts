@@ -10,8 +10,22 @@ export const parseCm = (s: string) => { const v = parseFloat(String(s).replace('
 export const m2 = (mm2: number) => (mm2 / 1e6).toFixed(2);
 
 export function useStone() {
-  const stones = useStore((s) => s.stones), id = useStore((s) => s.project?.stoneId);
-  return useMemo(() => stones.find((s) => String(s.id) === String(id)) || stones[0] || { id: 'x', name: '', url: asset('stone.jpg'), slab: true, stock: 'unknown' as const, hasImage: true }, [stones, id]);
+  const stones = useStore((s) => s.stones), id = useStore((s) => s.project?.stoneId), custom = useStore((s) => s.project?.customStone);
+  return useMemo(() => {
+    // אבן טבעית שצולמה להזמנה
+    if (id === 'custom' && custom?.url) return { id: 'custom', name: custom.name || 'אבן טבעית', en: 'Natural stone', url: custom.url, thumb: custom.url, slab: true, stock: 'yes' as const, hasImage: true };
+    return stones.find((s) => String(s.id) === String(id)) || stones[0] || { id: 'x', name: '', url: asset('stone.jpg'), slab: true, stock: 'unknown' as const, hasImage: true };
+  }, [stones, id, custom?.url, custom?.name]);
+}
+
+/** מקטין תמונה (צילום מהטלפון) ל-JPEG ברוחב מרבי — לפני העלאה או שליחה לזיהוי. מחזיר null אם הדפדפן לא מצליח לפענח. */
+export async function shrinkImage(file: Blob, max = 2400, quality = 0.86): Promise<Blob | null> {
+  try {
+    const bmp = await createImageBitmap(file), k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+    cv.getContext('2d')!.drawImage(bmp, 0, 0, cv.width, cv.height); bmp.close?.();
+    return await new Promise((res) => cv.toBlob((b) => res(b), 'image/jpeg', quality));
+  } catch { return null; }
 }
 
 /** מסך צר (טלפון): הסטודיו עובר לפריסת מובייל. */
