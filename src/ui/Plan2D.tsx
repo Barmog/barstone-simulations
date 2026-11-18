@@ -1,6 +1,6 @@
 // עורך התוכנית: מבט על חי. גרירת חלקים ופתחים, ידיות לשינוי מידות, מידות שנערכות ישירות על השרטוט.
 import { PointerEvent as RPE, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CUT_HE, Cutout, Piece, Project, Side, bounds, corners, hostEdge, isVertical, letter, longIsX } from '../core/model';
+import { CUT_HE, Cutout, Piece, Project, Side, bounds, corners, reshape, hostEdge, isVertical, letter, longIsX } from '../core/model';
 import { isBody, segLocal, slabToLocalMatrix } from '../core/nesting';
 import { useStore } from '../store';
 import { Icon } from './icons';
@@ -20,7 +20,7 @@ const path = (p: Piece) => (p.outline ? `M${p.outline.map((q) => `${q.x},${q.y}`
 /** שינוי מידות חלק, כולל עדכון חיפוי/מפל צמודים שאורכם היה שווה לצלע. */
 function resized(pr: Project, id: string, patch: Partial<Piece>): Project {
   const old = pr.pieces.find((q) => q.id === id); if (!old) return pr;
-  const nu = { ...old, ...patch, outline: (patch.w ?? old.w) !== old.w || (patch.h ?? old.h) !== old.h ? undefined : old.outline };
+  const nu = reshape({ ...old, ...patch }, (patch.w ?? old.w) !== old.w || (patch.h ?? old.h) !== old.h);
   const len = (q: Piece, s: Side) => (s === 'back' || s === 'front' ? q.w : q.h);
   return { ...pr, pieces: pr.pieces.map((q) => (q.id === id ? nu : q.host === id && q.side && q.w === len(old, q.side) ? { ...q, w: len(nu, q.side) } : q)) };
 }
@@ -198,7 +198,8 @@ export function Plan2D() {
         {corners(project).map((c) => <line key={`cr-${c.b.id}`} x1={c.x1} y1={c.y1} x2={c.x2} y2={c.y2} stroke="var(--cut)" strokeWidth={2.2 * k} strokeDasharray={`${7 * k} ${5 * k}`} pointerEvents="none" />)}
 
         {/* קנטים */}
-        {project.apronH > 0 && flat.flatMap((p) => p.aprons.map((s) => { const l = sideLine(p, s, 2.2 * k); return <line key={`${p.id}-${s}`} {...l} stroke="var(--edge)" strokeWidth={3 * k} strokeLinecap="round" pointerEvents="none" />; }))}
+        {project.apronH > 0 && flat.filter((p) => p.chamfers?.length && p.outline && p.aprons.length).map((p) => <path key={`${p.id}-edge`} d={`M${p.outline!.map((q) => `${p.x + q.x},${p.y + q.y}`).join('L')}Z`} fill="none" stroke="var(--edge)" strokeWidth={3 * k} strokeLinejoin="round" pointerEvents="none" />)}
+        {project.apronH > 0 && flat.filter((p) => !p.chamfers?.length).flatMap((p) => p.aprons.map((s) => { const l = sideLine(p, s, 2.2 * k); return <line key={`${p.id}-${s}`} {...l} stroke="var(--edge)" strokeWidth={3 * k} strokeLinecap="round" pointerEvents="none" />; }))}
 
         {/* חיפוי ומפל: פס לאורך הצלע */}
         {project.pieces.filter(isVertical).map((q) => {

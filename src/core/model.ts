@@ -6,6 +6,10 @@ export type PieceKind = 'counter' | 'island' | 'splash' | 'waterfall' | 'panel';
 export type CutoutKind = 'sink' | 'cooktop' | 'faucet' | 'hole';
 export interface Pt { x: number; y: number }
 
+export type Corner = 'tl' | 'tr' | 'br' | 'bl';
+export interface Chamfer { corner: Corner; x: number; y: number }
+export const CORNER_HE: Record<Corner, string> = { tl: 'אחורי־שמאל', tr: 'אחורי־ימין', br: 'קדמי־ימין', bl: 'קדמי־שמאל' };
+
 export interface Piece {
   id: string;
   name: string;
@@ -37,8 +41,10 @@ export interface Piece {
   seat?: Side;
   seatDepth?: number;
   chairs?: number;
-  /** מתאר מדויק (מ-DXF), בקואורדינטות מקומיות בתוך w×h. ריק = מלבן. */
+  /** מתאר מדויק (מ-DXF, או מחושב מהקיטומים), בקואורדינטות מקומיות בתוך w×h. ריק = מלבן. */
   outline?: Pt[];
+  /** פינות קטומות (אי / משטח בצורה קטומה): x = כמה נחתך לאורך הצלע האופקית, y = לאורך הצלע האנכית. */
+  chamfers?: Chamfer[];
 }
 
 export interface Cutout {
@@ -297,7 +303,8 @@ export function rotatePiece(pr: Project, id: string): Project {
   const p = pr.pieces.find((q) => q.id === id); if (!p || isVertical(p)) return pr;
   const cx = p.x + p.w / 2, cy = p.y + p.h / 2, H = p.h;
   const r: Piece = { ...p, x: Math.round(cx - p.h / 2), y: Math.round(cy - p.w / 2), w: p.h, h: p.w, wall: p.wall && CW[p.wall], aprons: p.aprons.map((s) => CW[s]), seat: p.seat && CW[p.seat], jointAt: undefined,
-    outline: p.outline?.map((pt) => ({ x: H - pt.y, y: pt.x })) };
+    outline: p.outline?.map((pt) => ({ x: H - pt.y, y: pt.x })),
+    chamfers: p.chamfers?.map((c) => ({ corner: ({ tl: 'tr', tr: 'br', br: 'bl', bl: 'tl' } as const)[c.corner], x: c.y, y: c.x })) };
   const manual = Object.fromEntries(Object.entries(pr.manual || {}).filter(([k]) => !k.startsWith(id)));
   return { ...pr, manual,
     pieces: pr.pieces.map((q) => (q.id === id ? r : q.host === id && q.side ? { ...q, side: CW[q.side] } : q)),
@@ -321,4 +328,37 @@ export function attachPiece(pr: Project, id: string, where: Attach, len = 1000):
     else q = piece({ kind: 'counter', name: 'רגל L', x: where === 'legRight' ? p.x + p.w : p.x - len, y: p.y + p.h - depth, w: len, h: depth, wall: 'front', aprons: ['back'] });
   }
   return { project: { ...pr, pieces: [...pr.pieces, q] }, id: q.id };
+}
+
+/** מתאר של מלבן w×h עם פינות קטומות (עם כיוון השעון, מהפינה האחורית־שמאלית). */
+export function chamferOutline(w: number, h: number, ch: Chamfer[]): Pt[] {
+  const c = (k: Corner) => { const f = ch.find((q) => q.corner === k); return f ? { x: Math.max(0, Math.min(w, f.x)), y: Math.max(0, Math.min(h, f.y)) } : null; };
+  const pts: Pt[] = [], tl = c('tl'), tr = c('tr'), br = c('br'), bl = c('bl');
+  if (tl) pts.push({ x: 0, y: tl.y }, { x: tl.x, y: 0 }); else pts.push({ x: 0, y: 0 });
+  if (tr) pts.push({ x: w - tr.x, y: 0 }, { x: w, y: tr.y }); else pts.push({ x: w, y: 0 });
+  if (br) pts.push({ x: w, y: h - br.y }, { x: w - br.x, y: h }); else pts.push({ x: w, y: h });
+  if (bl) pts.push({ x: bl.x, y: h }, { x: 0, y: h - bl.y }); else pts.push({ x: 0, y: h });
+  return pts.filter((q, i) => { const n = pts[(i + 1) % pts.length]; return Math.abs(q.x - n.x) > 0.5 || Math.abs(q.y - n.y) > 0.5; });
+}
+
+/** אחרי שינוי מידות או קיטום: חלק עם קיטומים מקבל מתאר מחושב; חלק בלי (ומידות שהשתנו) חוזר למלבן. */
+export function reshape(p: Piece, sizeChanged: boolean): Piece {
+  if (p.chamfers?.length) return { ...p, outline: chamferOutline(p.w, p.h, p.chamfers) };
+  return sizeChanged ? { ...p, outline: undefined } : p;
+}
+
+/** חיפוי ומפל על חלק קטום מתקצרים לחלק הישר של הצלע (הקיטום אוכל את הקצה שלה). */
+export function fitKids(pr: Project, id: string): Project {
+  const p = pr.pieces.find((q) => q.id === id); if (!p) return pr;
+  const cut = (k: Corner) => p.chamfers?.find((c) => c.corner === k);
+  const span = (s: Side) => {
+    const [a, b] = s === 'back' ? ['tl', 'tr'] : s === 'front' ? ['bl', 'br'] : s === 'left' ? ['tl', 'bl'] : ['tr', 'br'];
+    const axis = s === 'back' || s === 'front' ? 'x' : 'y', full = axis === 'x' ? p.w : p.h, ca = cut(a as Corner)?.[axis] || 0, cb = cut(b as Corner)?.[axis] || 0;
+    return { off: ca, len: Math.max(0, full - ca - cb) };
+  };
+  return { ...pr, pieces: pr.pieces.flatMap((q) => {
+    if (q.host !== id || !q.side) return [q];
+    const sp = span(q.side); if (sp.len < 100) return [];
+    return [{ ...q, w: sp.len, off: sp.off || undefined }];
+  }) };
 }

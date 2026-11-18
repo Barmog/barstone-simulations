@@ -38,8 +38,11 @@ export function DimPlan({ project, nest }: { project: Project; nest: NestResult 
         return (
           <g key={p.id}>
             {splashOf(p).map((q) => { const s = q.side!; const t = fs * 0.45; return s === 'back' ? <rect key={q.id} x={p.x + (q.off || 0)} y={p.y - t} width={q.w} height={t} fill="#c9b99c" /> : s === 'front' ? <rect key={q.id} x={p.x + (q.off || 0)} y={p.y + p.h} width={q.w} height={t} fill="#c9b99c" /> : <rect key={q.id} x={s === 'left' ? p.x - t : p.x + p.w} y={p.y + (q.off || 0)} width={t} height={q.w} fill="#c9b99c" />; })}
-            <rect x={p.x} y={p.y} width={p.w} height={p.h} fill="#f3eee6" stroke="#1b1a18" strokeWidth={fs * 0.07} />
-            {p.aprons.map((s) => { const w = fs * 0.12; return <rect key={s} fill={COLORS.miter} x={s === 'right' ? p.x + p.w - w : p.x} y={s === 'front' ? p.y + p.h - w : p.y} width={s === 'left' || s === 'right' ? w : p.w} height={s === 'back' || s === 'front' ? w : p.h} />; })}
+            {p.outline ? <path d={`M${p.outline.map((q) => `${p.x + q.x},${p.y + q.y}`).join('L')}Z`} fill="#f3eee6" stroke="#1b1a18" strokeWidth={fs * 0.07} /> : <rect x={p.x} y={p.y} width={p.w} height={p.h} fill="#f3eee6" stroke="#1b1a18" strokeWidth={fs * 0.07} />}
+            {/* קיטום: מה שנשאר ישר בכל צלע, כמו בסקיצה */}
+            {(p.chamfers || []).map((c) => { const L = c.corner[1] === 'l', T0 = c.corner[0] === 't', hx = L ? p.x + c.x : p.x, hx2 = L ? p.x + p.w : p.x + p.w - c.x, ey = T0 ? p.y : p.y + p.h, vy = T0 ? p.y + c.y : p.y, vy2 = T0 ? p.y + p.h : p.y + p.h - c.y, ex = L ? p.x : p.x + p.w;
+              return <g key={c.corner}>{p.w - c.x > 0 && <Dim x1={hx} y1={ey} x2={hx2} y2={ey} off={[0, T0 ? -fs * 2.2 : fs * 2.2]} text={cmTxt(p.w - c.x)} fs={fs * 0.8} />}{p.h - c.y > 0 && <Dim x1={ex} y1={vy} x2={ex} y2={vy2} off={[L ? -fs * 2.2 : fs * 2.2, 0]} text={cmTxt(p.h - c.y)} fs={fs * 0.8} />}</g>; })}
+            {!p.chamfers?.length && p.aprons.map((s) => { const w = fs * 0.12; return <rect key={s} fill={COLORS.miter} x={s === 'right' ? p.x + p.w - w : p.x} y={s === 'front' ? p.y + p.h - w : p.y} width={s === 'left' || s === 'right' ? w : p.w} height={s === 'back' || s === 'front' ? w : p.h} />; })}
             {p.seat && (() => { const s = p.seat, d = p.seatDepth || 300; return <rect x={s === 'right' ? p.x + p.w - d : p.x} y={s === 'front' ? p.y + p.h - d : p.y} width={s === 'left' || s === 'right' ? d : p.w} height={s === 'back' || s === 'front' ? d : p.h} fill="none" stroke="#8a7a5c" strokeWidth={fs * 0.05} strokeDasharray={`${fs * 0.4} ${fs * 0.3}`} />; })()}
             {cuts.map((c) => {
               const cx = p.x + c.x, cy = p.y + c.y, along = lx ? c.x : c.y;
