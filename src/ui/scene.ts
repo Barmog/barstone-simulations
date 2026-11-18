@@ -1,7 +1,7 @@
 // בניית סצנת התלת־ממד מתוך מודל המטבח. יחידות: מטר. x בתוכנית → x, y בתוכנית → z, גובה → y.
 import { Finish } from '../data/lucente';
 import * as THREE from 'three';
-import { Cutout, PLINTH_H, Piece, Project, SEAT_DEPTH, Side, UPPER_TOP, chairCount, cornerExt, corners, hostEdge, isVertical, longIsX, upperBottom } from '../core/model';
+import { Cutout, PLINTH_H, chamferOutline, Piece, Project, SEAT_DEPTH, Side, UPPER_TOP, chairCount, cornerExt, corners, hostEdge, isVertical, longIsX, upperBottom } from '../core/model';
 import { NestResult, Placement, Rect, isBody, localToSlab, segLocal } from '../core/nesting';
 import { FINISHES, faucetById, floorById } from '../core/catalog';
 
@@ -116,18 +116,37 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
       const line = new THREE.Mesh(new THREE.BoxGeometry((lx ? 1.6 : wid) * S, 0.6 * S, (lx ? wid : 1.6) * S), seam); line.position.set((p.x + (lx ? j.at : wid / 2)) * S, (H + 0.4) * S, (p.y + (lx ? wid / 2 : j.at)) * S); group.add(line);
     }
     // --- קנט ---
-    if (project.apronH > T) for (const side of p.aprons.filter((sd) => !project.pieces.some((w) => w.kind === 'waterfall' && w.host === p.id && w.side === sd))) {
-      const e = hostEdge(p, side), ah = project.apronH - T, n = Math.max(1, Math.ceil(e.len / 120));
+    // חלק בצורה קטומה: הקנט הולך לאורך צלעות המתאר, כולל האלכסון
+    const edgesOf = (): ReturnType<typeof hostEdge>[] => {
+      const free = p.aprons.filter((sd) => !project.pieces.some((w) => w.kind === 'waterfall' && w.host === p.id && w.side === sd));
+      if (!p.chamfers?.length || !p.outline) return free.map((sd) => hostEdge(p, sd));
+      const o = p.outline; return o.flatMap((a, i) => {
+        const b = o[(i + 1) % o.length], len = Math.hypot(b.x - a.x, b.y - a.y), dx = (b.x - a.x) / len, dy = (b.y - a.y) / len, nx = dy, ny = -dx;
+        const sides: Side[] = [...(ny < -0.3 ? ['back' as Side] : ny > 0.3 ? ['front' as Side] : []), ...(nx < -0.3 ? ['left' as Side] : nx > 0.3 ? ['right' as Side] : [])];
+        return len > 1 && sides.some((sd) => free.includes(sd)) ? [{ ...hostEdge(p, sides[0]), x: p.x + a.x, y: p.y + a.y, dx, dy, nx, ny, len }] : [];
+      });
+    };
+    if (project.apronH > T) for (const e of edgesOf()) {
+      const ah = project.apronH - T, n = Math.max(1, Math.ceil(e.len / 120));
       const g = new THREE.BoxGeometry(e.len, ah, T, n, 1, 1), pos = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
       for (let i = 0; i < pos.count; i++) { const a = pos.getX(i) + e.len / 2, lx = e.x - p.x + e.dx * a, ly = e.y - p.y + e.dy * a, [u, v] = uvAt(p, pls, lx, ly); uv.setXY(i, u, v - ((ah / 2 - pos.getY(i)) / project.slabH) * 0.6); }
       g.scale(S, S, S);
-      const m = new THREE.Mesh(g, stone); m.position.set((e.x + (e.dx * e.len) / 2 - (e.nx * T) / 2) * S, (H - T - ah / 2) * S, (e.y + (e.dy * e.len) / 2 - (e.ny * T) / 2) * S); if (e.dy) m.rotation.y = -Math.PI / 2; add(m);
+      const m = new THREE.Mesh(g, stone); m.position.set((e.x + (e.dx * e.len) / 2 - (e.nx * T) / 2) * S, (H - T - ah / 2) * S, (e.y + (e.dy * e.len) / 2 - (e.ny * T) / 2) * S); m.rotation.y = -Math.atan2(e.dy, e.dx); add(m);
     }
     // --- ארונות תחתונים ---
     if (project.cabinets && p.kind !== 'panel') {
       const front: Side = p.wall === 'back' ? 'front' : p.wall === 'front' ? 'back' : p.wall === 'left' ? 'right' : p.wall === 'right' ? 'left' : p.w >= p.h ? 'front' : 'right';
       const ins = (s: Side) => (p.seat === s ? p.seatDepth || SEAT_DEPTH : p.wall === s ? 0 : s === front ? 30 : p.kind === 'island' ? 30 : 4) + (project.pieces.some((w) => w.kind === 'waterfall' && w.host === p.id && w.side === s) ? T : 0);
       const x0 = p.x + ins('left'), x1 = p.x + p.w - ins('right'), z0 = p.y + ins('back'), z1 = p.y + p.h - ins('front'), toe = PLINTH_H, ch = H - T - toe, toeMat = project.plinthStone ? stone : dark;
+      if (p.chamfers?.length) {
+        // אי / משטח קטום: גוף ארון אחד שעוקב אחרי הצורה (בלי דלתות), וצוקל שקוע מתחתיו
+        const cw = x1 - x0, cd = z1 - z0;
+        for (const [y0, hh, mat, k] of [[toe, ch, cab, 0], [0, toe, toeMat, 60]] as const) {
+          const shp = new THREE.Shape(); chamferOutline(cw - 2 * k, cd - 2 * k, p.chamfers.map((c) => ({ ...c, x: Math.max(10, c.x - 30 - k), y: Math.max(10, c.y - 30 - k) }))).forEach((q, i) => (i ? shp.lineTo(q.x + k, q.y + k) : shp.moveTo(q.x + k, q.y + k)));
+          const g = new THREE.ExtrudeGeometry(shp, { depth: hh, bevelEnabled: false }); g.rotateX(Math.PI / 2); g.scale(S, S, S);
+          const m = new THREE.Mesh(g, mat); m.position.set(x0 * S, (y0 + hh) * S, z0 * S); add(m);
+        }
+      } else {
       // גוף הארון חלול מתחת לכיור, כדי שהכיור, הטוחן ומערכת המים יהיו אמיתיים בפנים
       let bodies: Rect[] = [{ x: x0, y: z0, w: x1 - x0, h: z1 - z0 }];
       for (const c of cuts.filter((q) => q.kind === 'sink')) bodies = bodies.flatMap((r) => subtract(r, { x: p.x + c.x - T - 8, y: p.y + c.y - T - 8, w: c.w + 2 * T + 16, h: c.h + 2 * T + 16 }));
@@ -140,6 +159,7 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
         const a0 = (e.dx ? e.x : e.y) + a - dw / 2, a1 = a0 + dw, atSink = cuts.some((q) => q.kind === 'sink' && (e.dx ? p.x + q.x < a1 && p.x + q.x + q.w > a0 : p.y + q.y < a1 && p.y + q.y + q.h > a0));
         box(e.dx ? dw - 5 : 18, ch - 6, e.dx ? 18 : dw - 5, atSink ? cabX : cab, cx, toe + ch / 2, cz);
         box(e.dx ? 150 : 10, 10, e.dx ? 10 : 150, dark, cx + e.nx * 16, toe + ch - 48, cz + e.ny * 16);
+      }
       }
     }
     // --- כיסאות בר בצד הישיבה ---
@@ -305,7 +325,7 @@ export function buildKitchen(project: Project, nest: NestResult | null, stoneTex
   // --- חיפוי קיר ומפלים ---
   for (const q of project.pieces.filter(isVertical)) {
     const host = q.host ? byId.get(q.host) : undefined; if (!host || !q.side) continue;
-    const e = hostEdge(host, q.side), pls = plsOf(q.id), len = q.kind === 'splash' ? q.w : Math.min(q.w, e.len), o0 = q.kind === 'splash' ? q.off || 0 : 0, splash = q.kind === 'splash', n = Math.max(1, Math.ceil(len / 200));
+    const e = hostEdge(host, q.side), pls = plsOf(q.id), len = q.kind === 'splash' ? q.w : Math.min(q.w, e.len), o0 = q.off || 0, splash = q.kind === 'splash', n = Math.max(1, Math.ceil(len / 200));
     const g = new THREE.BoxGeometry(len, q.h, T, n, 1, 1), pos = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) { const [u, v] = uvAt(q, pls, pos.getX(i) + len / 2, q.h / 2 - pos.getY(i)); uv.setXY(i, u, v); }
     g.scale(S, S, S);

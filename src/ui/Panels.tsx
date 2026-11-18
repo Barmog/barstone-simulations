@@ -4,11 +4,13 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { CABINETS, FAUCETS, FINISHES, FLOORS, GLASS, Swatch, WALLS, faucetById } from '../core/catalog';
 import { factorHe, runningMeters } from '../core/pricing';
 import { exportNestDxf } from '../core/dxf';
-import { SLAB, Attach, attachPiece, rotatePiece, CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
+import { SLAB, Attach, attachPiece, rotatePiece, reshape, fitKids, CORNER_HE, Corner, CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
 import { upgrades } from '../core/upgrades';
 import { OrderStatus, STATUS_HE, isLocal, repo, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
 import { Modal } from './Home';
+import { SlabCropper } from './SlabCropper';
+import { Quad, detectQuad, landscape, warp } from './slabWarp';
 import { ai, applyDraft, localAssist } from '../ai';
 import { Step, go, useStore } from '../store';
 import { Icon } from './icons';
@@ -75,20 +77,21 @@ export function LeftPanel() {
   const norm = (t?: string | null) => (t || '').toLowerCase().replace(/[׳'"\s-]/g, '');
   const natInput = useRef<HTMLInputElement>(null), [natBusy, setNatBusy] = useState(false);
   // אבן טבעית: חובה תמונה של הלוח, ואז המערכת שואלת מה גודל הלוח — והנסטינג נבנה לפי המידה הזאת
-  const [nat, setNat] = useState<{ file: File; preview: string; iw: number; ih: number } | null>(null), [natL, setNatL] = useState(''), [natW, setNatW] = useState(''), [natName, setNatName] = useState('');
+  const [nat, setNat] = useState<{ file: File; preview: string; bmp: ImageBitmap; quad: Quad } | null>(null), [natL, setNatL] = useState(''), [natW, setNatW] = useState(''), [natName, setNatName] = useState('');
   async function pickNatural(f?: File) {
     if (!f) return;
-    try { const bmp = await createImageBitmap(f); setNat({ file: f, preview: URL.createObjectURL(f), iw: bmp.width, ih: bmp.height }); bmp.close?.(); setNatName(project.customStone?.name || ''); setNatL(project.customStone?.w ? cm(project.customStone.w) : ''); setNatW(project.customStone?.h ? cm(project.customStone.h) : ''); }
+    try { const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }); setNat({ file: f, preview: URL.createObjectURL(f), bmp, quad: detectQuad(bmp) }); setNatName(project.customStone?.name || ''); setNatL(project.customStone?.w ? cm(project.customStone.w) : ''); setNatW(project.customStone?.h ? cm(project.customStone.h) : ''); }
     catch { useStore.getState().setToast('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.'); }
   }
   const natA = parseCm(natL), natB = parseCm(natW), natOk = !!natA && !!natB && natA >= 500 && natB >= 300 && natA <= 4000 && natB <= 2500;
-  const closeNat = () => { if (nat) URL.revokeObjectURL(nat.preview); setNat(null); };
+  const closeNat = () => { if (nat) { URL.revokeObjectURL(nat.preview); nat.bmp.close?.(); } setNat(null); };
   async function addNatural() {
     if (!nat || !natOk) return; setNatBusy(true);
     try {
       const w = Math.max(natA!, natB!), h = Math.min(natA!, natB!);
-      // הלוח תמיד שוכב לרוחב: צילום לגובה מסובבים, כדי שהגידים לא יימתחו
-      const img = await shrinkImage(nat.file, isLocal ? 1400 : 2400, isLocal ? 0.8 : 0.86, nat.ih > nat.iw); if (!img) throw new Error('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.');
+      // רק האבן: הלוח שסומן בצילום מיושר ונמתח למלבן במידות הלוח, תמיד לרוחב
+      const OW = isLocal ? 1400 : 2400, out = warp(nat.bmp, landscape(nat.quad), OW, Math.round((OW * h) / w));
+      const img = await new Promise<Blob | null>((r) => out.toBlob(r, 'image/jpeg', isLocal ? 0.8 : 0.86)); if (!img) throw new Error('לא הצלחתי לעבד את התמונה.');
       const url = await repo.uploadCustomStone(img);
       set({ stoneId: 'custom', customStone: { name: natName.trim() || 'אבן טבעית', url, w, h }, slabW: w, slabH: h, bookmatch: 'no', manual: {} });
       useStore.getState().setToast(`האבן הטבעית נוספה, לוח ${cm(w)}×${cm(h)} ס"מ. פריסת החלקים חושבה לפי המידה הזאת.`); closeNat();
@@ -292,7 +295,7 @@ export function LeftPanel() {
     <aside className="panel glass">
       {cmp && <Compare onClose={() => setCmp(false)} />}
       {nat && <Modal title="אבן טבעית" onClose={closeNat}>
-        <div style={{ height: 150, borderRadius: 14, background: `#ddd url("${nat.preview}") center/cover` }} />
+        <SlabCropper bmp={nat.bmp} url={nat.preview} quad={nat.quad} aspect={natOk ? Math.max(natA!, natB!) / Math.min(natA!, natB!) : 2} onChange={(quad) => setNat({ ...nat, quad })} />
         <p className="mute" style={{ margin: 0 }}>מה גודל הלוח? פריסת החלקים (נסטינג) תחושב לפי המידה הזאת, ולכן כדאי לצלם את הלוח כולו, מקצה לקצה.</p>
         <div className="grid2">
           <label className="field">אורך הלוח (ס"מ)<input className="input" inputMode="decimal" autoFocus placeholder="למשל 300" value={natL} onChange={(e) => setNatL(e.target.value)} /></label>
@@ -321,7 +324,7 @@ function Inspector() {
   if (sel.type === 'piece') {
     const p = project.pieces.find((q) => q.id === sel.id); if (!p) return null;
     const vert = isVertical(p), up = (patch: Partial<Piece>) => patchPiece(p.id, patch);
-    const resize = (patch: Partial<Piece>) => apply((pr) => ({ ...pr, pieces: pr.pieces.map((q) => (q.id === p.id ? { ...q, ...patch, outline: undefined } : q.host === p.id && q.side && q.w === (q.side === 'back' || q.side === 'front' ? p.w : p.h) ? { ...q, w: q.side === 'back' || q.side === 'front' ? patch.w ?? p.w : patch.h ?? p.h } : q)) }));
+    const resize = (patch: Partial<Piece>) => apply((pr) => ({ ...pr, pieces: pr.pieces.map((q) => (q.id === p.id ? reshape({ ...q, ...patch }, true) : q.host === p.id && q.side && q.w === (q.side === 'back' || q.side === 'front' ? p.w : p.h) ? { ...q, w: q.side === 'back' || q.side === 'front' ? patch.w ?? p.w : patch.h ?? p.h } : q)) }));
     return (
       <section style={card}>
         <div className="row"><span className="cap">{KIND_HE[p.kind]} · {letter(project.pieces.indexOf(p))}</span><span className="sp" /><button className="btn sm icon danger" title="מחיקה" onClick={() => remove(sel)}><Icon.trash /></button></div>
@@ -336,6 +339,20 @@ function Inspector() {
           const opts: [Attach, string][] = horiz ? [['right', 'המשך ימינה'], ['left', 'המשך שמאלה'], ['legRight', 'רגל L מימין'], ['legLeft', 'רגל L משמאל']] : [['right', 'המשך למטה'], ['left', 'המשך למעלה'], ['legRight', 'יציאה ימינה מהקצה'], ['legLeft', 'יציאה שמאלה מהקצה']];
           return <>
             <div className="field"><span>סיבוב</span><div className="chips"><button className="chip" onClick={() => apply((pr) => rotatePiece(pr, p.id))}>↻ סיבוב ב-90°</button></div></div>
+            {(() => {
+              // צורה קטומה: בוחרים פינה, ומקלידים כמה לחתוך לאורך ולעומק (או כמה להשאיר)
+              const ch = p.chamfers || [], setCh = (next: typeof ch) => apply((pr) => fitKids({ ...pr, manual: Object.fromEntries(Object.entries(pr.manual || {}).filter(([k]) => !k.startsWith(p.id))), pieces: pr.pieces.map((q) => (q.id === p.id ? reshape({ ...q, chamfers: next.length ? next : undefined, outline: next.length ? q.outline : undefined }, false) : q)) }, p.id));
+              const toggle = (k: Corner) => setCh(ch.some((c) => c.corner === k) ? ch.filter((c) => c.corner !== k) : [...ch, { corner: k, x: Math.round(p.w * 0.45 / 10) * 10, y: Math.round(p.h * 0.6 / 10) * 10 }]);
+              const edit = (k: Corner, patch: { x?: number; y?: number }) => setCh(ch.map((c) => (c.corner === k ? { ...c, x: Math.min(p.w - 10, patch.x ?? c.x), y: Math.min(p.h - 10, patch.y ?? c.y) } : c)));
+              return <div className="field"><span>צורה קטומה{ch.length ? '' : ' · לחיצה על פינה חותכת אותה באלכסון'}</span>
+                <div className="chips">{(['tl', 'tr', 'bl', 'br'] as Corner[]).map((k) => <button key={k} className={`chip ${ch.some((c) => c.corner === k) ? 'on' : ''}`} onClick={() => toggle(k)}>◺ {CORNER_HE[k]}</button>)}</div>
+                {ch.map((c) => <div key={c.corner} className="grid2">
+                  <Num label={`${CORNER_HE[c.corner]}: נשאר ישר באורך`} value={p.w - c.x} min={0} onChange={(v) => edit(c.corner, { x: Math.max(10, p.w - v) })} />
+                  <Num label="נשאר ישר בעומק" value={p.h - c.y} min={0} onChange={(v) => edit(c.corner, { y: Math.max(10, p.h - v) })} />
+                  <small className="mute" style={{ gridColumn: '1 / -1' }}>האלכסון חותך {cm(c.x)} ס"מ מהאורך ו-{cm(c.y)} ס"מ מהעומק, כמו בסקיצה: האורך המלא, ומה שנשאר ישר בכל צד.</small>
+                </div>)}
+              </div>;
+            })()}
             <div className="field"><span>הוספת משטח צמוד לחלק הזה</span><div className="chips">{opts.map(([k, v]) => <button key={k} className="chip" onClick={() => add(k)}>+ {v}</button>)}</div></div>
           </>;
         })()}
@@ -353,7 +370,7 @@ function Inspector() {
             {js.length > 0 && <div className="grid2">{js.map((at, n) => <div key={n} className="row" style={{ gap: 4 }}><Num label={`חיבור ${n + 1}`} value={at} min={30} onChange={(v) => up({ jointAt: js.map((x, i) => (i === n ? Math.min(L - 30, v) : x)) })} /><button className="link" title="הסרת החיבור" style={{ alignSelf: 'flex-end', padding: '0 4px 8px' }} onClick={() => up({ jointAt: js.filter((_, i) => i !== n) })}>×</button></div>)}</div>}
             <div className="row" style={{ flexWrap: 'wrap', gap: 10 }}><button className="chip" disabled={L < 400} onClick={add}>+ חיבור</button>{p.jointAt !== undefined && <button className="link" style={{ fontSize: 12.5 }} onClick={() => up({ jointAt: undefined })}>חזרה לחיבור אוטומטי</button>}<span className="mute" style={{ fontSize: 12 }}>אפשר גם לגרור את קו החיבור בשרטוט.</span></div></div>; })()}
         <div className="chips"><button className={`chip ${p.grainLock ? 'on' : ''}`} onClick={() => up({ grainLock: !p.grainLock })}>{p.grainLock ? 'כיוון גיד נעול' : 'גיד חופשי (מותר לסובב)'}</button></div>
-        {p.outline && <div className="note">החלק בצורה לא מלבנית (מה-DXF). שינוי מידות יהפוך אותו למלבן.</div>}
+        {p.outline && !p.chamfers?.length && <div className="note">החלק בצורה לא מלבנית (מה-DXF). שינוי מידות יהפוך אותו למלבן.</div>}
       </section>
     );
   }

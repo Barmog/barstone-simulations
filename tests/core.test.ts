@@ -263,3 +263,16 @@ describe('סיבוב חלק והוספת משטח צמוד', () => {
     assertValid(r2.project);
   });
 });
+
+describe('צורה קטומה', () => {
+  it('אי 220×92 שנשאר ישר 55 בתחתית ו-31 בצד שמאל, כמו בסקיצה', async () => {
+    const { chamferOutline, rotatePiece } = await import('../src/core/model');
+    const o = chamferOutline(2200, 920, [{ corner: 'bl', x: 2200 - 550, y: 920 - 310 }]);
+    expect(o).toEqual([{ x: 0, y: 0 }, { x: 2200, y: 0 }, { x: 2200, y: 920 }, { x: 1650, y: 920 }, { x: 0, y: 310 }]);
+    const pr = emptyProject(), a = { ...piece({ kind: 'island', name: 'אי', x: 0, y: 0, w: 2200, h: 920, aprons: ['back', 'front', 'left', 'right'] }), chamfers: [{ corner: 'bl' as const, x: 1650, y: 610 }], outline: o };
+    let r: import('../src/core/model').Project = { ...pr, pieces: [a], cutouts: [] };
+    for (let i = 0; i < 4; i++) r = rotatePiece(r, a.id);
+    expect(r.pieces[0].chamfers).toEqual(a.chamfers); expect(r.pieces[0].outline).toEqual(o);
+    assertValid(r);
+  });
+});
