@@ -9,6 +9,8 @@ import { upgrades } from '../core/upgrades';
 import { OrderStatus, STATUS_HE, isLocal, repo, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
 import { Modal } from './Home';
+import { SlabCropper } from './SlabCropper';
+import { Quad, detectQuad, landscape, warp } from './slabWarp';
 import { ai, applyDraft, localAssist } from '../ai';
 import { Step, go, useStore } from '../store';
 import { Icon } from './icons';
@@ -75,20 +77,21 @@ export function LeftPanel() {
   const norm = (t?: string | null) => (t || '').toLowerCase().replace(/[׳'"\s-]/g, '');
   const natInput = useRef<HTMLInputElement>(null), [natBusy, setNatBusy] = useState(false);
   // אבן טבעית: חובה תמונה של הלוח, ואז המערכת שואלת מה גודל הלוח — והנסטינג נבנה לפי המידה הזאת
-  const [nat, setNat] = useState<{ file: File; preview: string; iw: number; ih: number } | null>(null), [natL, setNatL] = useState(''), [natW, setNatW] = useState(''), [natName, setNatName] = useState('');
+  const [nat, setNat] = useState<{ file: File; preview: string; bmp: ImageBitmap; quad: Quad } | null>(null), [natL, setNatL] = useState(''), [natW, setNatW] = useState(''), [natName, setNatName] = useState('');
   async function pickNatural(f?: File) {
     if (!f) return;
-    try { const bmp = await createImageBitmap(f); setNat({ file: f, preview: URL.createObjectURL(f), iw: bmp.width, ih: bmp.height }); bmp.close?.(); setNatName(project.customStone?.name || ''); setNatL(project.customStone?.w ? cm(project.customStone.w) : ''); setNatW(project.customStone?.h ? cm(project.customStone.h) : ''); }
+    try { const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }); setNat({ file: f, preview: URL.createObjectURL(f), bmp, quad: detectQuad(bmp) }); setNatName(project.customStone?.name || ''); setNatL(project.customStone?.w ? cm(project.customStone.w) : ''); setNatW(project.customStone?.h ? cm(project.customStone.h) : ''); }
     catch { useStore.getState().setToast('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.'); }
   }
   const natA = parseCm(natL), natB = parseCm(natW), natOk = !!natA && !!natB && natA >= 500 && natB >= 300 && natA <= 4000 && natB <= 2500;
-  const closeNat = () => { if (nat) URL.revokeObjectURL(nat.preview); setNat(null); };
+  const closeNat = () => { if (nat) { URL.revokeObjectURL(nat.preview); nat.bmp.close?.(); } setNat(null); };
   async function addNatural() {
     if (!nat || !natOk) return; setNatBusy(true);
     try {
       const w = Math.max(natA!, natB!), h = Math.min(natA!, natB!);
-      // הלוח תמיד שוכב לרוחב: צילום לגובה מסובבים, כדי שהגידים לא יימתחו
-      const img = await shrinkImage(nat.file, isLocal ? 1400 : 2400, isLocal ? 0.8 : 0.86, nat.ih > nat.iw); if (!img) throw new Error('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.');
+      // רק האבן: הלוח שסומן בצילום מיושר ונמתח למלבן במידות הלוח, תמיד לרוחב
+      const OW = isLocal ? 1400 : 2400, out = warp(nat.bmp, landscape(nat.quad), OW, Math.round((OW * h) / w));
+      const img = await new Promise<Blob | null>((r) => out.toBlob(r, 'image/jpeg', isLocal ? 0.8 : 0.86)); if (!img) throw new Error('לא הצלחתי לעבד את התמונה.');
       const url = await repo.uploadCustomStone(img);
       set({ stoneId: 'custom', customStone: { name: natName.trim() || 'אבן טבעית', url, w, h }, slabW: w, slabH: h, bookmatch: 'no', manual: {} });
       useStore.getState().setToast(`האבן הטבעית נוספה, לוח ${cm(w)}×${cm(h)} ס"מ. פריסת החלקים חושבה לפי המידה הזאת.`); closeNat();
@@ -292,7 +295,7 @@ export function LeftPanel() {
     <aside className="panel glass">
       {cmp && <Compare onClose={() => setCmp(false)} />}
       {nat && <Modal title="אבן טבעית" onClose={closeNat}>
-        <div style={{ height: 150, borderRadius: 14, background: `#ddd url("${nat.preview}") center/cover` }} />
+        <SlabCropper bmp={nat.bmp} url={nat.preview} quad={nat.quad} aspect={natOk ? Math.max(natA!, natB!) / Math.min(natA!, natB!) : 2} onChange={(quad) => setNat({ ...nat, quad })} />
         <p className="mute" style={{ margin: 0 }}>מה גודל הלוח? פריסת החלקים (נסטינג) תחושב לפי המידה הזאת, ולכן כדאי לצלם את הלוח כולו, מקצה לקצה.</p>
         <div className="grid2">
           <label className="field">אורך הלוח (ס"מ)<input className="input" inputMode="decimal" autoFocus placeholder="למשל 300" value={natL} onChange={(e) => setNatL(e.target.value)} /></label>
