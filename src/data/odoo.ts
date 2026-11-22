@@ -36,5 +36,5 @@ export const odoo = {
   status: () => call<{ connected: boolean; version?: string; error?: string; base?: string }>({ mode: 'status' }),
   order: (key: string) => call<{ order: OdooOrder; base: string }>({ mode: 'order', key }),
   find: (q: string) => call<{ orders: OdooOrder[] }>({ mode: 'find', q }).then((r) => r.orders),
-  attach: (id: number, filename: string, data: string, note: string) => call<{ ok: boolean; posted: boolean }>({ mode: 'attach', id, filename, data, note }),
+  attach: (id: number, filename: string, data: string, note: string, plan = false) => call<{ ok: boolean; posted: boolean; plan: boolean }>({ mode: 'attach', id, filename, data, note, plan }),
 };

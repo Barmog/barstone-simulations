@@ -134,9 +134,9 @@ export function Doc({ id }: { id: string }) {
       const { blob, base64 } = await pagesToPdf([...book.current.querySelectorAll<HTMLElement>('.a3')]).finally(() => book.current?.classList.remove('capture'));
       if (send === 'odoo' && order?.odoo_id) {
         const note = prod ? `טופס ייצור מאושר אחרי מדידה (${order.approval?.by || ''}) · Barstone הדמיות` : signed?.signed_at ? `הדמיה שאושרה בחתימת הלקוח (${signed.signer_name || ''}) · Barstone הדמיות` : 'הדמיה · Barstone הדמיות';
-        const r = await odoo.attach(order.odoo_id, fileName, base64, note);
+        const r = await odoo.attach(order.odoo_id, fileName, base64, note, prod);
         const at = new Date().toISOString(); await repo.updateOrder(order.id, { odoo_sent_at: at }); useStore.setState({ order: { ...useStore.getState().order!, odoo_sent_at: at } });
-        setToast(r.posted ? `המסמך צורף להזמנה ${order.odoo_name || ''} ב-Odoo` : 'הקובץ צורף להזמנה ב-Odoo (בלי הודעה בצ׳אטר)');
+        setToast(r.plan ? `טופס הייצור צורף להזמנה ${order.odoo_name || ''} ב-Odoo ונשמר כשרטוט החיבורים` : r.posted ? `המסמך צורף להזמנה ${order.odoo_name || ''} ב-Odoo` : 'הקובץ צורף להזמנה ב-Odoo (בלי הודעה בצ׳אטר)');
       } else if (send && order?.fb_id && order.fb_object) {
         await fireberry.attach(order.fb_object, order.fb_id, fileName, base64);
         const at = new Date().toISOString(); await repo.updateOrder(order.id, { fb_sent_at: at }); useStore.setState({ order: { ...order, fb_sent_at: at } });

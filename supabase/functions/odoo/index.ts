@@ -1,4 +1,4 @@
-// פונקציית קצה: חיבור ל-Odoo (JSON-RPC, מפתח API של משתמש שירות אחד לכל החברה).
+// פונקציית קצה: חיבור ל-Odoo (JSON-2 ב-Odoo 19 ומעלה, JSON-RPC בגרסאות ישנות; מפתח API של משתמש שירות אחד לכל החברה).
 // פעולות: status · order (הזמנת מכירה לפי מזהה או מספר) · find (חיפוש לפי מספר הזמנה או שם לקוח) · attach (צירוף PDF להזמנה, עם הודעה בצ'אטר).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -36,6 +36,15 @@ Deno.serve(async (req) => {
     if (!cfg) return json(mode === "status" ? { connected: false } : { error: "Odoo עוד לא מחובר. המנהל מחבר במסך \"Odoo\"." }, mode === "status" ? 200 : 400);
     const base = baseUrl(cfg.url);
 
+    // Odoo 19 ומעלה: JSON-2 (‎/json/2/<model>/<method>, מפתח API ב-Authorization). גרסאות ישנות: JSON-RPC עם משתמש ומפתח.
+    const j2 = async (model: string, method: string, kwargs: Rec = {}) => {
+      const r = await fetch(`${base}/json/2/${model}/${method}`, { method: "POST", redirect: "error", headers: { "Content-Type": "application/json", Authorization: `bearer ${cfg.api_key}`, ...(cfg.db ? { "X-Odoo-Database": cfg.db } : {}) }, body: JSON.stringify({ context: { lang: "he_IL" }, ...kwargs }) });
+      const text = await r.text(); let data: unknown = null; try { data = JSON.parse(text); } catch { /* לא JSON */ }
+      if (r.status === 404 && !(data && typeof data === "object" && "message" in (data as Rec))) return { missing: true as const };
+      if (r.status === 401 || r.status === 403) throw new Error("Odoo דחה את מפתח ה-API. בדקו את המפתח וההרשאות של המשתמש.");
+      if (!r.ok) throw new Error(`Odoo: ${str((data as Rec)?.message) || `שגיאה ${r.status}`}`.slice(0, 300));
+      return { missing: false as const, data };
+    };
     const rpc = async (service: string, method: string, args: unknown[]) => {
       const r = await fetch(`${base}/jsonrpc`, { method: "POST", headers: { "Content-Type": "application/json" }, redirect: "error", body: JSON.stringify({ jsonrpc: "2.0", method: "call", id: Date.now(), params: { service, method, args } }) });
       const j = await r.json().catch(() => null) as { result?: unknown; error?: { message?: string; data?: { message?: string } } } | null;
@@ -43,14 +52,28 @@ Deno.serve(async (req) => {
       if (j.error) throw new Error(`Odoo: ${str(j.error.data?.message) || str(j.error.message) || "שגיאה"}`.slice(0, 300));
       return j.result;
     };
-    const uid = await rpc("common", "authenticate", [cfg.db, cfg.login, cfg.api_key, {}]);
-    if (!uid || typeof uid !== "number") return json(mode === "status" ? { connected: false, error: "ההתחברות נדחתה: מסד, משתמש או מפתח API לא נכונים." } : { error: "ההתחברות ל-Odoo נדחתה. בדקו את הפרטים במסך \"Odoo\"." }, mode === "status" ? 200 : 400);
-    const kw = (model: string, method: string, args: unknown[], kwargs: Rec = {}) => rpc("object", "execute_kw", [cfg.db, uid, cfg.api_key, model, method, args, kwargs]);
+    // בדיקת חיבור קובעת באיזה API משתמשים
+    let legacyUid = 0, api = "json2";
+    const probe = await j2("res.users", "context_get");
+    if (probe.missing) {
+      api = "jsonrpc";
+      const uid = await rpc("common", "authenticate", [cfg.db, cfg.login, cfg.api_key, {}]);
+      if (!uid || typeof uid !== "number") return json(mode === "status" ? { connected: false, error: "ההתחברות נדחתה: מסד, משתמש או מפתח API לא נכונים." } : { error: "ההתחברות ל-Odoo נדחתה. בדקו את הפרטים במסך \"Odoo\"." }, mode === "status" ? 200 : 400);
+      legacyUid = uid;
+    }
+    /** קריאה למודל. ids = רשומות שעליהן פועלים; kwargs = פרמטרים בשמם. */
+    const kw = async (model: string, method: string, ids: number[] | null, kwargs: Rec = {}) => {
+      if (api === "json2") return (await j2(model, method, { ...(ids ? { ids } : {}), ...kwargs })).data;
+      return rpc("object", "execute_kw", [cfg.db, legacyUid, cfg.api_key, model, method, ids ? [ids] : [], kwargs]);
+    };
+    const searchRead = (model: string, domain: unknown[], opts: Rec) => kw(model, "search_read", null, { domain, ...opts }) as Promise<Rec[]>;
 
     const ORDER_FIELDS = ["name", "partner_id", "partner_shipping_id", "date_order", "state", "client_order_ref", "amount_total"];
     const shape = async (rows: Rec[]) => {
       const ids = [...new Set(rows.flatMap((o) => [m2o(o.partner_id)?.[0], m2o(o.partner_shipping_id)?.[0]]).filter((x): x is number => !!x))];
-      const partners = ids.length ? await kw("res.partner", "read", [ids], { fields: ["name", "phone", "mobile", "email", "street", "street2", "city"] }) as Rec[] : [];
+      // mobile הוסר בגרסאות חדשות: קוראים רק שדות שקיימים
+      const have = ids.length ? Object.keys(await kw("res.partner", "fields_get", null, { allfields: ["name", "phone", "mobile", "email", "street", "street2", "city"], attributes: ["type"] }) as Rec) : [];
+      const partners = ids.length ? await kw("res.partner", "read", ids, { fields: have }) as Rec[] : [];
       const byId = new Map(partners.map((p) => [p.id as number, p]));
       return rows.map((o) => {
         const p = byId.get(m2o(o.partner_id)?.[0] ?? -1), s = byId.get(m2o(o.partner_shipping_id)?.[0] ?? -1) || p;
@@ -60,13 +83,14 @@ Deno.serve(async (req) => {
     };
 
     if (mode === "status") {
-      const ver = await rpc("common", "version", []) as Rec;
-      return json({ connected: true, version: str(ver?.server_version), base });
+      let version = "";
+      if (api === "jsonrpc") { const ver = await rpc("common", "version", []) as Rec; version = str(ver?.server_version); }
+      return json({ connected: true, version, api, base });
     }
     if (mode === "order") {
       const key = str(body.key).slice(0, 60); if (!key) return json({ error: "חסר מזהה הזמנה." }, 400);
       const domain = /^\d+$/.test(key) ? ["|", ["id", "=", Number(key)], ["name", "=", key]] : [["name", "=ilike", key]];
-      const rows = await kw("sale.order", "search_read", [domain], { fields: ORDER_FIELDS, limit: 2, order: "id desc" }) as Rec[];
+      const rows = await searchRead("sale.order", domain, { fields: ORDER_FIELDS, limit: 2, order: "id desc" });
       // מזהה מספרי: מעדיפים התאמה לפי id (כך נשלח מהכפתור ב-Odoo)
       const hit = rows.find((o) => String(o.id) === key) || rows[0];
       if (!hit) return json({ error: `לא נמצאה ב-Odoo הזמנה "${key}".` }, 404);
@@ -74,18 +98,22 @@ Deno.serve(async (req) => {
     }
     if (mode === "find") {
       const q = str(body.q).slice(0, 60); if (q.length < 2) return json({ orders: [] });
-      const rows = await kw("sale.order", "search_read", [["|", ["name", "ilike", q], ["partner_id.name", "ilike", q]]], { fields: ORDER_FIELDS, limit: 12, order: "date_order desc" }) as Rec[];
+      const rows = await searchRead("sale.order", ["|", ["name", "ilike", q], ["partner_id.name", "ilike", q]], { fields: ORDER_FIELDS, limit: 12, order: "date_order desc" });
       return json({ orders: await shape(rows), base });
     }
     if (mode === "attach") {
       const id = Number(body.id), filename = str(body.filename).slice(0, 120) || "barstone.pdf", data = String(body.data || ""), note = str(body.note).slice(0, 400);
       if (!id || !data) return json({ error: "חסר קובץ או הזמנה." }, 400);
       if (data.length > 28_000_000) return json({ error: "הקובץ גדול מדי לצירוף." }, 400);
-      const att = await kw("ir.attachment", "create", [{ name: filename, datas: data, res_model: "sale.order", res_id: id, mimetype: "application/pdf" }]) as number;
+      const made = await kw("ir.attachment", "create", null, { vals_list: [{ name: filename, datas: data, res_model: "sale.order", res_id: id, mimetype: "application/pdf" }] });
+      const att = Array.isArray(made) ? Number(made[0]) : Number(made);
       // הודעה בצ'אטר של ההזמנה עם הקובץ; אם אין הרשאה להודעה — הקובץ עדיין מצורף
       let posted = true;
-      try { await kw("sale.order", "message_post", [[id]], { body: note || "מסמך מ-Barstone הדמיות", attachment_ids: [att], message_type: "comment", subtype_xmlid: "mail.mt_note" }); } catch { posted = false; }
-      return json({ ok: true, attachment: att, posted });
+      try { await kw("sale.order", "message_post", [id], { body: note || "מסמך מ-Barstone הדמיות", attachment_ids: [att], message_type: "comment", subtype_xmlid: "mail.mt_note" }); } catch { posted = false; }
+      // טופס ייצור מאושר נשמר גם כ"שרטוט החיבורים" של ההזמנה (אפליקציית המתקינים), אם השדה קיים
+      let plan = false;
+      if (body.plan === true) { try { await kw("sale.order", "write", [id], { vals: { barstone_plan_joints: data, barstone_plan_joints_name: filename } }); plan = true; } catch { /* אין שדה כזה או אין הרשאה */ } }
+      return json({ ok: true, attachment: att, posted, plan });
     }
     return json({ error: "mode לא מוכר." }, 400);
   } catch (e) {
