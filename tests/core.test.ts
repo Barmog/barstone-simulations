@@ -276,3 +276,15 @@ describe('צורה קטומה', () => {
     assertValid(r);
   });
 });
+
+describe('אישור אחרי מדידה', () => {
+  it('שינוי מידה או מיקום חיבור מבטל את האישור; שינוי צבע ארונות לא', async () => {
+    const { approvalHash } = await import('../src/core/approval');
+    const p = fromTemplate('l-island'), h = approvalHash(p);
+    expect(approvalHash(JSON.parse(JSON.stringify(p)))).toBe(h);
+    expect(approvalHash({ ...p, cabinetColor: '#000000' })).toBe(h);
+    expect(approvalHash({ ...p, pieces: p.pieces.map((q, i) => (i ? q : { ...q, w: q.w + 1 })) })).not.toBe(h);
+    expect(approvalHash({ ...p, pieces: p.pieces.map((q, i) => (i ? q : { ...q, jointAt: [1500] })) })).not.toBe(h);
+    expect(approvalHash({ ...p, thickness: 20 })).not.toBe(h);
+  });
+});

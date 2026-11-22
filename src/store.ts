@@ -101,15 +101,16 @@ export const useStore = create<State>((set, get) => {
 });
 
 // ניתוב פשוט לפי hash: #/ · #/c/<לקוח> · #/o/<הזמנה> · #/o/<הזמנה>/doc
-export type Route = { name: 'portal'; token: string } | { name: 'home'; customer?: string } | { name: 'studio'; id: string } | { name: 'doc'; id: string } | { name: 'team' } | { name: 'catalog' } | { name: 'fireberry' } | { name: 'feedback' };
+export type Route = { name: 'portal'; token: string } | { name: 'home'; customer?: string } | { name: 'studio'; id: string } | { name: 'doc'; id: string } | { name: 'team' } | { name: 'catalog' } | { name: 'fireberry' } | { name: 'odoo' } | { name: 'feedback' };
 export function parseRoute(hash: string): Route {
   const [a, b, c] = hash.replace(/^#\/?/, '').split('/');
   if (a === 'p' && b) return { name: 'portal', token: b };
-  if (a === 'o' && b) return c === 'doc' ? { name: 'doc', id: b } : { name: 'studio', id: b };
+  if (a === 'o' && b) return c?.startsWith('doc') ? { name: 'doc', id: b } : { name: 'studio', id: b };
   if (a === 'c' && b) return { name: 'home', customer: b };
   if (a === 'team') return { name: 'team' };
   if (a === 'catalog') return { name: 'catalog' };
   if (a === 'fireberry') return { name: 'fireberry' };
+  if (a === 'odoo') return { name: 'odoo' };
   if (a === 'feedback') return { name: 'feedback' };
   return { name: 'home' };
 }

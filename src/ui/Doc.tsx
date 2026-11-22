@@ -2,8 +2,11 @@
 // פריסת לוחות על תמונת האבן, טבלת חלקים עם פרופיל קנט, אביזרים, ומטר רץ. נשמר כ-PDF ונשלח לפיירברי.
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { factorHe, runningMeters } from '../core/pricing';
-import { STATUS_HE, repo, stoneLabel } from '../data/repo';
+import { STATUS_HE, repo, sb, stoneLabel } from '../data/repo';
 import { fireberry } from '../data/fireberry';
+import { odoo } from '../data/odoo';
+import { approvalHash } from '../core/approval';
+import { ApprovePanel, CutList, JointTable, SlabTable, Stamp, jointRows } from './Production';
 import { CUT_HE, Project, SIDE_HE, UPPER_HE, chairCount, corners, isVertical, letter } from '../core/model';
 import { FINISHES, faucetById } from '../core/catalog';
 import { go, useStore } from '../store';
@@ -30,7 +33,10 @@ export function Doc({ id }: { id: string }) {
   const { order, customer, missing } = useOrder(id);
   const project = useStore((s) => s.project), nest = useStore((s) => s.nest), stone = useStone(), setToast = useStore((s) => s.setToast);
   const [shots, setShots] = useState<Partial<Record<ViewName, string>>>({}), [slabs, setSlabs] = useState<string[]>([]);
-  const [internal, setInternal] = useState(false), [busy, setBusy] = useState<'' | 'pdf' | 'fb'>(''), [pro, setPro] = useState<number | null>(null);
+  const issues = useStore((s) => s.issues);
+  const [mode, setMode] = useState<'customer' | 'prod'>(() => (/[?&]prod\b/.test(location.hash) ? 'prod' : 'customer')), [me, setMe] = useState(() => { try { return localStorage.getItem('bs.approver') || ''; } catch { return ''; } });
+  useEffect(() => { if (!me) sb?.auth.getUser().then(({ data }) => setMe((m) => m || data.user?.email?.split('@')[0] || '')); }, []);
+  const [internal, setInternal] = useState(false), [busy, setBusy] = useState<'' | 'pdf' | 'fb' | 'odoo' | 'approve'>(''), [pro, setPro] = useState<number | null>(null);
   const book = useRef<HTMLDivElement>(null), [share, setShare] = useState(false), { signed, reload: reloadShares } = useShares(id);
   const key = project ? JSON.stringify([project, stone.url]) : '';
   useEffect(() => {
@@ -47,9 +53,16 @@ export function Doc({ id }: { id: string }) {
   // עמודי A3 מוקטנים בדיוק לרוחב המסך (בטלפון אפשר להגדיל בצביטה)
   const [zoom, setZoom] = useState(1);
   useEffect(() => { const f = () => setZoom(Math.min(1, (Math.min(window.innerWidth, window.screen?.width || 9999, document.documentElement.clientWidth || 9999) - 24) / 1587)); f(); addEventListener('resize', f); return () => removeEventListener('resize', f); }, []);
-  const autoSent = useRef(false);
+  const autoSent = useRef(false), sendAfter = useRef(false);
+  // אחרי אישור לייצור: הטופס המאושר נשלח לבד להזמנה ב-Odoo (ולפיירברי, אם ההזמנה מקושרת)
   useEffect(() => {
-    if (autoSent.current || !signed?.signed_at || !order?.fb_id || !order.fb_object || !shots.hero || (nest && !slabs.length)) return;
+    if (!sendAfter.current || mode !== 'prod' || !order?.approval || busy || (nest && !slabs.length)) return;
+    sendAfter.current = false;
+    const t = setTimeout(async () => { if (order.odoo_id) await exportPdf('odoo'); if (order.fb_id && order.fb_object) await exportPdf(true); }, 600);
+    return () => clearTimeout(t);
+  }, [order?.approval?.at, mode, slabs.length, busy]);
+  useEffect(() => {
+    if (mode !== 'customer' || autoSent.current || !signed?.signed_at || !order?.fb_id || !order.fb_object || !shots.hero || (nest && !slabs.length)) return;
     if (order.fb_sent_at && order.fb_sent_at >= signed.signed_at) return;
     autoSent.current = true; exportPdf(true);
   }, [signed?.signed_at, shots.hero, slabs.length, order?.fb_sent_at]);
@@ -60,7 +73,8 @@ export function Doc({ id }: { id: string }) {
   const fm = faucetById(project.faucet), fin = FINISHES[project.faucetFinish && fm.finishes.includes(project.faucetFinish) ? project.faucetFinish : fm.finishes[0]];
   const forProduction = order.status === 'approved' || order.status === 'production' || order.status === 'done';
   const date = new Date(order.updated_at).toLocaleDateString('he-IL'), ready = !!shots.hero && (!nest || slabs.length > 0);
-  const fileName = `${order.title}${order.order_no ? ` ${order.order_no}` : ''} - Barstone.pdf`;
+  const prod = mode === 'prod', approved = !!order.approval && order.approval.hash === approvalHash(project);
+  const fileName = `${order.title}${order.order_no ? ` ${order.order_no}` : ''} - ${prod ? 'טופס ייצור ' : ''}Barstone.pdf`;
 
   const material = `${stone.name ? stoneLabel(stone) : '—'} · ${FINISH_HE[stoneFinish(project, stone.en)]} · ${project.thickness} מ"מ`;
   const block = (
@@ -71,7 +85,8 @@ export function Doc({ id }: { id: string }) {
       <div className="tb-notes"><h4>הערות</h4>{NOTES.map((n) => <p key={n}>• {n}</p>)}</div>
       {signed?.signature ? <div className="tb-sign signed"><h4>אישור הלקוח · דיגיטלי</h4><img src={signed.signature} alt="חתימה" /><p><b>{signed.signer_name}</b> · {new Date(signed.signed_at!).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}</p></div>
         : <div className="tb-sign"><h4>אישור הלקוח</h4><p>שם: ____________________</p><p>חתימה: __________________</p><p>תאריך: _________________</p></div>}
-      <div className="tb-brand"><img src={asset('logo.png')} alt="Barstone" /><span className={`st ${forProduction ? 'go' : ''}`}><i className={!forProduction ? 'on' : ''} />לעיון <i className={forProduction ? 'on' : ''} />לביצוע</span><small>{date} · {STATUS_HE[order.status]}</small></div>
+      {prod ? <div className="tb-brand"><img src={asset('logo.png')} alt="Barstone" /><Stamp approval={order.approval} valid={approved} /></div> :
+      <div className="tb-brand"><img src={asset('logo.png')} alt="Barstone" /><span className={`st ${forProduction ? 'go' : ''}`}><i className={!forProduction ? 'on' : ''} />לעיון <i className={forProduction ? 'on' : ''} />לביצוע</span><small>{date} · {STATUS_HE[order.status]}</small></div>}
     </div>
   );
   let n = 0;
@@ -95,12 +110,34 @@ export function Doc({ id }: { id: string }) {
     setPro(null);
   }
 
-  async function exportPdf(send: boolean) {
-    if (!book.current) return; setBusy(send ? 'fb' : 'pdf');
+  async function approve(by: string, note: string) {
+    if (!order || !project) return; setBusy('approve');
+    try {
+      await useStore.getState().flush();
+      const approval = { at: new Date().toISOString(), by, hash: approvalHash(project), ...(note ? { note } : {}) };
+      await repo.updateOrder(order.id, { approval, status: 'production' }); useStore.setState({ order: { ...order, approval, status: 'production' } });
+      try { localStorage.setItem('bs.approver', by); } catch { /* */ }
+      setToast('ההזמנה אושרה לייצור'); if (order.odoo_id || (order.fb_id && order.fb_object)) sendAfter.current = true;
+    } catch (e) { setToast(`האישור נכשל: ${(e as Error).message}`); }
+    setBusy('');
+  }
+  async function revoke() {
+    if (!order || !confirm('לבטל את האישור לייצור?')) return; setBusy('approve');
+    try { await repo.updateOrder(order.id, { approval: null, status: 'approved' }); useStore.setState({ order: { ...order, approval: null, status: 'approved' } }); } catch (e) { setToast((e as Error).message); }
+    setBusy('');
+  }
+
+  async function exportPdf(send: boolean | 'odoo') {
+    if (!book.current) return; setBusy(send === 'odoo' ? 'odoo' : send ? 'fb' : 'pdf');
     try {
       book.current.classList.add('capture');
       const { blob, base64 } = await pagesToPdf([...book.current.querySelectorAll<HTMLElement>('.a3')]).finally(() => book.current?.classList.remove('capture'));
-      if (send && order?.fb_id && order.fb_object) {
+      if (send === 'odoo' && order?.odoo_id) {
+        const note = prod ? `טופס ייצור מאושר אחרי מדידה (${order.approval?.by || ''}) · Barstone הדמיות` : signed?.signed_at ? `הדמיה שאושרה בחתימת הלקוח (${signed.signer_name || ''}) · Barstone הדמיות` : 'הדמיה · Barstone הדמיות';
+        const r = await odoo.attach(order.odoo_id, fileName, base64, note);
+        const at = new Date().toISOString(); await repo.updateOrder(order.id, { odoo_sent_at: at }); useStore.setState({ order: { ...useStore.getState().order!, odoo_sent_at: at } });
+        setToast(r.posted ? `המסמך צורף להזמנה ${order.odoo_name || ''} ב-Odoo` : 'הקובץ צורף להזמנה ב-Odoo (בלי הודעה בצ׳אטר)');
+      } else if (send && order?.fb_id && order.fb_object) {
         await fireberry.attach(order.fb_object, order.fb_id, fileName, base64);
         const at = new Date().toISOString(); await repo.updateOrder(order.id, { fb_sent_at: at }); useStore.setState({ order: { ...order, fb_sent_at: at } });
         setToast(signed?.signed_at ? 'המסמך החתום צורף להזמנה בפיירברי' : 'המסמך צורף להזמנה בפיירברי');
@@ -112,15 +149,39 @@ export function Doc({ id }: { id: string }) {
   return (
     <>
       <header className="top noprint doctop">
-        <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div><span className="sp" />
-        <button className="btn" onClick={() => setShare(true)}>{signed ? '✓ אושר בחתימה' : 'שליחה ללקוח לאישור'}</button>
-        <label className="row mute" style={{ fontSize: 13 }}><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />כולל מטר רץ (פנימי)</label>
-        <button className="btn hide-m" disabled={!ready || pro !== null} onClick={proCover} title="מחשב את תמונת השער באור פיזיקלי אמיתי">{pro !== null ? <><span className="spin dark" /><span>צילום {Math.round(pro * 100)}%</span></> : <span>צילום מקצועי לשער</span>}</button>
-        {order.fb_id && order.fb_object && <button className="btn" disabled={!ready || !!busy} onClick={() => exportPdf(true)}>{busy === 'fb' ? <span className="spin dark" /> : <Icon.send />}<span>{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף לפיירברי'}</span></button>}
-        <button className="btn primary" disabled={!ready || !!busy} onClick={() => exportPdf(false)}>{busy === 'pdf' ? <span className="spin" /> : <Icon.download />}<span>{ready ? 'הורדת PDF' : 'מכין הדמיות…'}</span></button>
+        <img className="logo" src={asset('logo.png')} alt="Barstone" onClick={() => go('/')} /><div className="crumb"><a onClick={() => go(`/o/${id}`)}>חזרה לסטודיו</a></div>
+        <div className="doctabs"><button className={!prod ? 'on' : ''} onClick={() => setMode('customer')}>מסמך ללקוח</button><button className={prod ? 'on' : ''} onClick={() => setMode('prod')}>טופס ייצור{approved ? ' ✓' : ''}</button></div><span className="sp" />
+        {!prod && <button className="btn" onClick={() => setShare(true)}>{signed ? '✓ אושר בחתימה' : 'שליחה ללקוח לאישור'}</button>}
+        {!prod && <label className="row mute" style={{ fontSize: 13 }}><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} />כולל מטר רץ (פנימי)</label>}
+        {!prod && <button className="btn hide-m" disabled={!ready || pro !== null} onClick={proCover} title="מחשב את תמונת השער באור פיזיקלי אמיתי">{pro !== null ? <><span className="spin dark" /><span>צילום {Math.round(pro * 100)}%</span></> : <span>צילום מקצועי לשער</span>}</button>}
+        {order.odoo_id && <button className="btn" disabled={!ready || !!busy || (prod && !approved)} onClick={() => exportPdf('odoo')}>{busy === 'odoo' ? <span className="spin dark" /> : <Icon.send />}<span>{order.odoo_sent_at ? 'שליחה שוב ל-Odoo' : 'צירוף להזמנה ב-Odoo'}</span></button>}
+        {order.fb_id && order.fb_object && <button className="btn" disabled={!ready || !!busy || (prod && !approved)} onClick={() => exportPdf(true)}>{busy === 'fb' ? <span className="spin dark" /> : <Icon.send />}<span>{order.fb_sent_at ? 'שליחה שוב לפיירברי' : 'צירוף לפיירברי'}</span></button>}
+        <button className="btn primary" disabled={!ready || !!busy || (prod && !approved)} title={prod && !approved ? 'הטופס יוצא רק אחרי אישור' : undefined} onClick={() => exportPdf(false)}>{busy === 'pdf' ? <span className="spin" /> : <Icon.download />}<span>{ready ? 'הורדת PDF' : 'מכין הדמיות…'}</span></button>
       </header>
       {share && <ShareModal orderId={id} title={order.title} phone={customer?.phone} onClose={() => { setShare(false); reloadShares(); }} />}
-      <main className="book" ref={book} style={{ ['--z' as string]: zoom }}>
+      {prod && <ApprovePanel key={`${order.approval?.at}-${me}`} issues={issues} nest={nest} approval={order.approval} valid={approved} signedBy={signed?.signer_name} defaultName={me} busy={busy === 'approve'} onApprove={approve} onRevoke={revoke} />}
+      {prod && <main className="book" ref={book} style={{ ['--z' as string]: zoom }}>
+        {page('טופס ייצור · רשימת חיתוך', <>
+          <div className="prodhead">
+            <div><small>לקוח</small><b>{customer?.name || '—'}</b></div><div><small>הזמנה</small><b>{order.odoo_name || order.order_no || order.title}</b></div>
+            <div><small>חומר</small><b>{material}</b></div><div><small>לוחות · חיבורים</small><b>{nest?.metrics.slabs ?? 0} לוחות {cm(project.slabW)}×{cm(project.slabH)} · {jointRows(project, nest).length} חיבורים</b></div>
+            <Stamp approval={order.approval} valid={approved} />
+          </div>
+          <CutList project={project} nest={nest} stoneName={stone.name} />
+          {order.approval?.note && approved && <p className="fine"><b>הערה למפעל:</b> {order.approval.note}</p>}
+          <p className="fine">מידות במ"מ. מיקום פתח: X מהקצה השמאלי של החלק, Y מהקצה האחורי. קנט גרונג נחתך צמוד לחלק לשמירת רצף הגיד.</p>
+        </>)}
+        {page('טופס ייצור · חיבורים', <>
+          <div className="plan" style={{ maxHeight: 520 }}><DimPlan project={project} nest={nest} /></div>
+          <JointTable project={project} nest={nest} />
+          <div className="legend"><span><i style={{ background: COLORS.joint }} />חיבור</span><span><i style={{ background: COLORS.miter }} />קנט גרונג</span><span>כל המידות בתוכנית בס"מ, ובטבלה במ"מ</span></div>
+        </>)}
+        {nest && nest.slabs.map((_, i) => i % 2 === 0 && page(`טופס ייצור · פריסה על הלוח${nest.slabs.length > 2 ? ` (${i / 2 + 1}/${Math.ceil(nest.slabs.length / 2)})` : ''}`, <>
+          <div className={`prodslabs ${nest.slabs.length - i === 1 ? 'one' : ''}`}>{[i, i + 1].filter((k) => k < nest.slabs.length).map((k) => <figure key={k}>{slabs[k] ? <img src={slabs[k]} alt={`לוח ${k + 1}`} /> : <div className="ph"><span className="spin dark" /></div>}<SlabTable project={project} nest={nest} slab={k} /></figure>)}</div>
+          <p className="fine">X מהקצה השמאלי של הלוח, Y מהקצה העליון, במ"מ. מרווח מסור {project.kerf} מ"מ, שוליים {project.margin} מ"מ.{project.bookmatch === 'yes' ? ' לוחות זוגיים הם תמונת מראה (בוק־מאץ׳).' : ''}</p>
+        </>))}
+      </main>}
+      {!prod && <main className="book" ref={book} style={{ ['--z' as string]: zoom }}>
         {page('שער', <>
           <div className="cover">
             <div className="cover-shot"><Shot v="hero" label="" /></div>
@@ -194,7 +255,7 @@ export function Doc({ id }: { id: string }) {
           </tbody></table>
           <p className="fine">לפי רוחב (בחיפוי — לפי הגובה): עד 20 ס"מ שליש · 20–30 חצי · 31–70 רגיל · 70–150 כפול · 150–170 פי 2.5 · מעל 170 פי 3. פינה נספרת בשתי הצלעות. מפל = גובה 90 לפי עומק האי.</p>
         </>)}
-      </main>
+      </main>}
     </>
   );
 }

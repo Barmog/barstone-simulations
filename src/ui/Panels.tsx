@@ -6,6 +6,7 @@ import { factorHe, runningMeters } from '../core/pricing';
 import { exportNestDxf } from '../core/dxf';
 import { SLAB, Attach, attachPiece, rotatePiece, reshape, fitKids, CORNER_HE, Corner, CUT_HE, Cutout, CutoutKind, KIND_HE, Piece, Project, SEAT_DEPTH, SIDE_HE, Side, UPPER_HE, UpperStyle, bounds, chairCount, cornerExt, setSplash, isVertical, letter, piece as mkPiece, pieceLen, sinkNet, uid, upperBottom } from '../core/model';
 import { upgrades } from '../core/upgrades';
+import { approvalHash } from '../core/approval';
 import { OrderStatus, STATUS_HE, isLocal, repo, stoneLabel } from '../data/repo';
 import { Compare } from './Compare';
 import { Modal } from './Home';
@@ -289,6 +290,8 @@ export function LeftPanel() {
       <div className="mute" style={{ fontSize: 13 }}>{stoneLabel(stone)} · {project.thickness} מ"מ · {project.apronH ? `קנט ${project.apronH} מ"מ` : 'בלי קנט'}</div>
     </section>
     <button className="btn primary" onClick={() => { flush(); go(`/o/${order.id}/doc`); }}><Icon.doc />מסמך ללקוח</button>
+    <button className="btn" onClick={() => { flush(); go(`/o/${order.id}/doc?prod`); }}>{order.approval && order.approval.hash === approvalHash(project) ? '✓ טופס ייצור מאושר' : order.approval ? 'שונה אחרי האישור · אישור מחדש' : 'אישור אחרי מדידה · טופס ייצור'}</button>
+    {order.odoo_name && <div className="mute" style={{ fontSize: 12.5 }}>מקושר להזמנה {order.odoo_name} ב-Odoo</div>}
   </>;
 
   return (

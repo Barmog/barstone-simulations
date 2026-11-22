@@ -14,7 +14,7 @@ export const isLocal = !sb;
 export const isDemoOnLive = DEMO && !!live;
 export const exitDemo = () => { try { sessionStorage.removeItem('bs.demo'); } catch { /* */ } location.href = location.pathname; };
 
-export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; fb_id?: string | null; created_at: string; updated_at: string }
+export interface Customer { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; notes?: string | null; fb_id?: string | null; odoo_id?: number | null; created_at: string; updated_at: string }
 export interface Share { token: string; order_id: string; created_at: string; expires_at: string; viewed_at?: string | null; signed_at?: string | null; signer_name?: string | null; signature?: string | null; customer_note?: string | null; layout_changed?: boolean }
 export interface PortalData { order: { id: string; title: string; order_no?: string | null; status: OrderStatus; project: Project; updated_at: string }; customer: { name: string; address: string }; share: { signed_at?: string | null; signer_name?: string | null; signature?: string | null; expires_at: string } }
 export type FbKind = 'bug' | 'idea' | 'design' | 'other';
@@ -24,7 +24,9 @@ export const FB_KIND_HE: Record<FbKind, string> = { bug: 'תקלה', idea: 'רע
 export const FB_STATUS_HE: Record<FbStatus, string> = { new: 'חדש', doing: 'בטיפול', done: 'שופר', wontfix: 'לא נעשה' };
 export type OrderStatus = 'draft' | 'review' | 'approved' | 'production' | 'done';
 export interface OrderMetrics { rm?: number; slabs?: number; utilization?: number; joints?: number; area?: number; issues?: number }
-export interface Order { fb_object?: number | null; fb_id?: string | null; fb_sent_at?: string | null; id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
+/** אישור אחרי מדידה: מי אישר, מתי, וטביעת האצבע של המידות שאושרו (שינוי אחרי האישור מבטל אותו). */
+export interface Approval { at: string; by: string; hash: string; note?: string }
+export interface Order { odoo_id?: number | null; odoo_name?: string | null; odoo_sent_at?: string | null; approval?: Approval | null; fb_object?: number | null; fb_id?: string | null; fb_sent_at?: string | null; id: string; customer_id: string; title: string; order_no?: string | null; status: OrderStatus; stone_id: number | null; project: Project; metrics: OrderMetrics; created_at: string; updated_at: string }
 export interface Stone { id: number | string; name: string; color?: string | null; url: string; slab: boolean; stock: 'yes' | 'no' | 'unknown'; hasImage: boolean; bookmatch?: boolean | null; en?: string | null; novo?: string | null; thumb?: string; series?: string | null }
 /** שם דגם לתצוגה: עברית ולצידה השם באנגלית (LUCENTE). */
 export const stoneLabel = (s: { name: string; en?: string | null }) => (s.en ? `${s.name} · ${s.en}` : s.name);
@@ -113,7 +115,7 @@ export const repo = {
   /** רשימת הזמנות בלי גוף הפרויקט (קל וטוען מהר). */
   async orders(): Promise<Omit<Order, 'project'>[]> {
     if (!sb) return J<Order[]>('bs.orders', []).map(({ project, ...o }) => o).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-    return ok(await sb.from('orders').select('id,customer_id,title,order_no,status,stone_id,metrics,created_at,updated_at,fb_id').order('updated_at', { ascending: false }));
+    return ok(await sb.from('orders').select('id,customer_id,title,order_no,status,stone_id,metrics,created_at,updated_at,fb_id,odoo_id,odoo_name,approval').order('updated_at', { ascending: false }));
   },
   async order(oid: string): Promise<Order | null> {
     if (!sb) return J<Order[]>('bs.orders', []).find((o) => o.id === oid) || null;
@@ -121,12 +123,12 @@ export const repo = {
     if (error) throw new Error(error.message);
     return data as Order | null;
   },
-  async createOrder(o: { customer_id: string; title: string; order_no?: string; project: Project; fb_object?: number; fb_id?: string }): Promise<Order> {
+  async createOrder(o: { customer_id: string; title: string; order_no?: string; project: Project; fb_object?: number; fb_id?: string; odoo_id?: number; odoo_name?: string }): Promise<Order> {
     const base = { ...o, status: 'draft' as OrderStatus, stone_id: typeof o.project.stoneId === 'number' ? o.project.stoneId : null, metrics: {} };
     if (!sb) { const row: Order = { ...base, id: id(), created_at: now(), updated_at: now() }; W('bs.orders', [row, ...J<Order[]>('bs.orders', [])]); return row; }
     return ok(await sb.from('orders').insert(base).select().single());
   },
-  async updateOrder(oid: string, patch: Partial<Pick<Order, 'title' | 'order_no' | 'status' | 'project' | 'metrics' | 'stone_id' | 'fb_sent_at'>>) {
+  async updateOrder(oid: string, patch: Partial<Pick<Order, 'title' | 'order_no' | 'status' | 'project' | 'metrics' | 'stone_id' | 'fb_sent_at' | 'odoo_sent_at' | 'approval'>>) {
     if (!sb) { W('bs.orders', J<Order[]>('bs.orders', []).map((o) => (o.id === oid ? { ...o, ...patch, updated_at: now() } : o))); return; }
     ok(await sb.from('orders').update(patch).eq('id', oid).select('id'));
   },
