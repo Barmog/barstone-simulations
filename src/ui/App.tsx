@@ -1,3 +1,4 @@
+import { Odoo } from './Odoo';
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { isLocal, repo, sb } from '../data/repo';
@@ -47,6 +48,7 @@ export function App() {
   else if (route.name === 'catalog' && access === 'admin' && !isLocal) body = <Catalog />;
   else if (route.name === 'feedback') body = <FeedbackPage admin={access === 'admin'} />;
   else if (route.name === 'fireberry' && !isLocal) body = <Fireberry admin={access === 'admin'} />;
+  else if (route.name === 'odoo' && !isLocal) body = <Odoo admin={access === 'admin'} />;
   else body = <Home customerId={route.name === 'home' ? route.customer : undefined} admin={access === 'admin'} email={session?.user.email} />;
 
   const inApp = route.name !== 'portal' && (isLocal || (!!session && (access === 'admin' || access === 'sales')));

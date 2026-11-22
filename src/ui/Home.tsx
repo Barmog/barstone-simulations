@@ -8,6 +8,7 @@ import { go, useStore } from '../store';
 import { Icon } from './icons';
 import { asset } from './util';
 import { signOut } from './App';
+import { OdooOrder, odoo } from '../data/odoo';
 import { FbAccount, FbFile, FbMeasure, FbOrder, FbRecord, fireberry } from '../data/fireberry';
 
 type OrderRow = Omit<Order, 'project'>;
@@ -37,11 +38,31 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<Partial<Customer> | null>(null);
-  const [newOrder, setNewOrder] = useState<boolean | FbRecord>(false), [find, setFind] = useState(false);
+  const [newOrder, setNewOrder] = useState<boolean | Preset>(false), [find, setFind] = useState(false), [odooFind, setOdooFind] = useState(false), [odooOn, setOdooOn] = useState(false), [odooBusy, setOdooBusy] = useState('');
   const setToast = useStore((s) => s.setToast);
 
   const load = () => Promise.all([repo.customers(), repo.orders()]).then(([c, o]) => { setCustomers(c); setOrders(o); }).catch((e) => { setCustomers([]); setToast(e.message); });
   useEffect(() => { load(); }, []);
+
+  // פתיחה מהזמנה ב-Odoo: הזמנה שכבר קיימת אצלנו נפתחת; אחרת הלקוח נוצר או מזוהה, ונפתחת הזמנה חדשה מקושרת
+  async function openOdoo(o: OdooOrder, list: OrderRow[], cs: Customer[]) {
+    const exist = list.find((x) => x.odoo_id === o.id); if (exist) { go(`/o/${exist.id}`); return; }
+    const a = o.customer; if (!a) { setToast('להזמנה הזו אין לקוח ב-Odoo.'); return; }
+    let c = cs.find((x) => x.odoo_id === a.id) || matchLocal(cs, { id: '', name: a.name, phone: a.phone, email: a.email, address: a.address })?.c;
+    if (c && !c.odoo_id) c = await repo.saveCustomer({ ...c, odoo_id: a.id, phone: c.phone || a.phone || null, email: c.email || a.email || null, address: c.address || a.address || null });
+    if (!c) c = await repo.saveCustomer({ name: a.name || 'לקוח מ-Odoo', phone: a.phone || null, email: a.email || null, address: a.address || null, odoo_id: a.id });
+    await load(); go(`/c/${c.id}`); setNewOrder({ id: '', title: 'מטבח', number: o.name, date: o.date, odoo: { id: o.id, name: o.name } });
+  }
+  useEffect(() => { if (odoo.available()) odoo.info().then((i) => setOdooOn(!!i)).catch(() => {}); }, []);
+  // הגענו מהכפתור ב-Odoo (‎?odoo=<מזהה ההזמנה>)
+  const cameFromOdoo = useRef(false);
+  useEffect(() => {
+    const key = odoo.pending(); if (!key || cameFromOdoo.current || customers === null || !odoo.available()) return;
+    cameFromOdoo.current = true; odoo.clearPending(); setOdooBusy(key);
+    const local = orders.find((x) => String(x.odoo_id) === key || x.odoo_name === key);
+    if (local) { setOdooBusy(''); go(`/o/${local.id}`); return; }
+    odoo.order(key).then((r) => openOdoo(r.order, orders, customers)).catch((e) => setToast(`Odoo: ${(e as Error).message}`)).finally(() => setOdooBusy(''));
+  }, [customers]);
 
   const current = customers?.find((c) => c.id === customerId);
   const shown = useMemo(() => (customers || []).filter((c) => !q || `${c.name} ${c.phone || ''} ${c.address || ''}`.toLowerCase().includes(q.toLowerCase())), [customers, q]);
@@ -67,7 +88,9 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
         {isDemoOnLive && <button className="link" onClick={exitDemo}>יציאה מהדמו</button>}
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/catalog')}><Icon.grid />קטלוג ומלאי</button>}
         {!isLocal && <button className="btn sm primary" onClick={() => setFind(true)}><Icon.link />פתיחה מהזמנה בפיירברי</button>}
+        {!isLocal && odooOn && <button className="btn sm primary" onClick={() => setOdooFind(true)}><Icon.link />פתיחה מהזמנה ב-Odoo</button>}
         {!isLocal && <button className="btn sm" onClick={() => go('/fireberry')}>פיירברי</button>}
+        {!isLocal && (admin || odooOn) && <button className="btn sm" onClick={() => go('/odoo')}>Odoo</button>}
         <button className="btn sm" onClick={() => go('/feedback')}>משובים</button>
         {admin && !isLocal && <button className="btn sm" onClick={() => go('/team')}><Icon.team />צוות</button>}
         {email && <button className="btn sm" title={email} onClick={signOut}><Icon.out />יציאה</button>}
@@ -114,7 +137,7 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
             {current && <button className="ocard new" onClick={() => setNewOrder(true)}><Icon.plus />הזמנה חדשה</button>}
             {list.map((o) => (
               <div key={o.id} className="ocard" role="button" tabIndex={0} onClick={() => go(`/o/${o.id}`)} onKeyDown={(e) => e.key === 'Enter' && go(`/o/${o.id}`)}>
-                <div className="row"><span className={`badge ${o.status === 'approved' || o.status === 'done' ? 'ok' : o.status === 'draft' ? '' : 'sand'}`}>{STATUS_HE[o.status]}</span><span className="sp" />{o.order_no && <span className="mono mute">#{o.order_no}</span>}</div>
+                <div className="row"><span className={`badge ${o.status === 'approved' || o.status === 'done' ? 'ok' : o.status === 'draft' ? '' : 'sand'}`}>{STATUS_HE[o.status]}</span>{o.approval && <span className="badge ok">מאושר לייצור</span>}<span className="sp" />{o.odoo_name ? <span className="mono mute" title="מקושר ל-Odoo">Odoo {o.odoo_name}</span> : o.order_no && <span className="mono mute">#{o.order_no}</span>}</div>
                 <div><h3>{o.title}</h3>{!current && <span className="mute">{customers?.find((c) => c.id === o.customer_id)?.name}</span>}</div>
                 <div className="nums"><div><b>{o.metrics.slabs ?? '–'}</b>לוחות</div><div><b>{o.metrics.utilization != null ? `${o.metrics.utilization}%` : '–'}</b>ניצולת</div><div><b>{o.metrics.rm ?? '–'}</b>מטר רץ</div></div>
                 <div className="row mute" style={{ fontSize: 12 }}><span>עודכן {day(o.updated_at)}</span><span className="sp" />{!!o.metrics.issues && <span className="badge err">{o.metrics.issues} לבדיקה</span>}
@@ -139,6 +162,8 @@ export function Home({ customerId, admin, email }: { customerId?: string; admin:
           <div className="row">{editing.id && <button className="btn danger" onClick={() => removeCustomer(editing as Customer)}><Icon.trash />מחיקת לקוח</button>}<span className="sp" /><button className="btn" onClick={() => setEditing(null)}>ביטול</button><button className="btn primary" disabled={!editing.name?.trim()} onClick={saveCustomer}>שמירה</button></div>
         </Modal>
       )}
+      {odooBusy && <div className="scrim"><div className="modal" style={{ alignItems: 'center' }}><span className="spin dark" /><b>פותח את הזמנה {odooBusy} מ-Odoo…</b></div></div>}
+      {odooFind && <OdooFind orders={orders} onClose={() => setOdooFind(false)} onOpen={async (o) => { await openOdoo(o, orders, customers || []); setOdooFind(false); }} />}
       {newOrder && current && <NewOrder customer={current} preset={typeof newOrder === 'object' ? newOrder : undefined} onClose={() => setNewOrder(false)} />}
       {find && <FbFind customers={customers || []} onClose={() => setFind(false)} onOpen={async (o) => {
         // הזמנה שכבר נפתחה במערכת — נכנסים אליה; אחרת: הלקוח (קיים או חדש) והזמנה חדשה מקושרת
@@ -163,14 +188,15 @@ const SHAPES: Record<TemplateId, string> = {
   island: '<rect x="4" y="6" width="46" height="9" rx="1.5"/><rect x="14" y="24" width="26" height="10" rx="1.5"/>', 'l-island': '<path d="M4 6h46v28h-9V15H4z"/><rect x="6" y="24" width="26" height="10" rx="1.5"/>',
 };
 
-function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: () => void; preset?: FbRecord }) {
+type Preset = FbRecord & { odoo?: { id: number; name: string } };
+function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: () => void; preset?: Preset }) {
   const [way, setWay] = useState<'template' | 'dxf' | 'plan' | 'photo'>('template');
   const [tpl, setTpl] = useState<TemplateId>('straight');
   const [title, setTitle] = useState(preset?.title || 'מטבח'), [no, setNo] = useState(preset?.number || '');
   const [busy, setBusy] = useState(false), [err, setErr] = useState('');
   const [dxf, setDxf] = useState<{ text: string; name: string; project: Project; info: DxfInfo } | null>(null);
   const [plan, setPlan] = useState<File[]>([]);
-  const [fbObj, setFbObj] = useState<number | null>(null), [fbRecs, setFbRecs] = useState<FbRecord[] | null>(null), [fbRec, setFbRec] = useState<FbRecord | null>(preset || null), [fbErr, setFbErr] = useState('');
+  const [fbObj, setFbObj] = useState<number | null>(null), [fbRecs, setFbRecs] = useState<FbRecord[] | null>(null), [fbRec, setFbRec] = useState<FbRecord | null>(preset && !preset.odoo ? preset : null), [fbErr, setFbErr] = useState('');
   useEffect(() => {
     if (!customer.fb_id || !fireberry.available()) return;
     fireberry.settings().then((st) => { if (!st.object) return; setFbObj(st.object); return fireberry.records(st.object, customer.fb_id!).then((r) => setFbRecs(preset && !r.some((x) => x.id === preset.id) ? [preset, ...r] : r)); }).catch((e) => setFbErr((e as Error).message));
@@ -230,7 +256,7 @@ function NewOrder({ customer, onClose, preset }: { customer: Customer; onClose: 
         project = { ...applyDraft(emptyProject(title), r.draft), source: 'plan', notes: [r.reply, ...(r.assumptions || []).map((a) => `• ${a}`)].filter(Boolean).join('\n') };
       }
       if (measNote) project = { ...project, notes: [measNote, project.notes].filter(Boolean).join('\n') };
-      const o = await repo.createOrder({ customer_id: customer.id, title: title.trim() || 'מטבח', order_no: no.trim() || undefined, project, ...(fbRec && fbObj ? { fb_object: fbObj, fb_id: fbRec.id } : {}) });
+      const o = await repo.createOrder({ customer_id: customer.id, title: title.trim() || 'מטבח', order_no: no.trim() || undefined, project, ...(fbRec && fbObj ? { fb_object: fbObj, fb_id: fbRec.id } : {}), ...(preset?.odoo ? { odoo_id: preset.odoo.id, odoo_name: preset.odoo.name } : {}) });
       if (way === 'plan') setToast('התוכנית זוהתה — כדאי לעבור על המידות');
       if (way === 'photo') setToast('המידות מהצילום משוערות — חובה לאמת במדידה');
       go(`/o/${o.id}`);
@@ -320,6 +346,30 @@ function FbPicker({ onPick }: { onPick: (a: FbAccount) => void }) {
 }
 
 /** חיפוש אחד בפיירברי: שם לקוח, טלפון או מספר הזמנה. בוחרים הזמנה — והיא נפתחת כבר מקושרת. */
+/** חיפוש הזמנת מכירה ב-Odoo לפי מספר הזמנה או שם לקוח. */
+function OdooFind({ orders, onClose, onOpen }: { orders: OrderRow[]; onClose: () => void; onOpen: (o: OdooOrder) => Promise<void> }) {
+  const [q, setQ] = useState(''), [res, setRes] = useState<OdooOrder[] | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState(''), [opening, setOpening] = useState(0);
+  useEffect(() => {
+    if (q.trim().length < 2) { setRes(null); return; }
+    const t = setTimeout(() => { setBusy(true); setErr(''); odoo.find(q.trim()).then(setRes).catch((e) => { setErr((e as Error).message); setRes(null); }).finally(() => setBusy(false)); }, 450);
+    return () => clearTimeout(t);
+  }, [q]);
+  return (
+    <Modal title="פתיחה מהזמנה ב-Odoo" onClose={onClose}>
+      <input className="input" autoFocus placeholder="מספר הזמנה (S00123) או שם לקוח" value={q} onChange={(e) => setQ(e.target.value)} />
+      {busy && <div className="row mute"><span className="spin dark" />מחפש ב-Odoo…</div>}
+      {err && <div className="note err">{err}</div>}
+      {res && !res.length && !busy && <div className="mute">לא נמצאה הזמנה כזו ב-Odoo.</div>}
+      <div className="col" style={{ gap: 6 }}>{(res || []).map((o) => { const has = orders.some((x) => x.odoo_id === o.id); return (
+        <button key={o.id} className="citem" disabled={!!opening} onClick={async () => { setOpening(o.id); try { await onOpen(o); } catch (e) { setErr((e as Error).message); } setOpening(0); }}>
+          <span className="avatar">{opening === o.id ? <span className="spin dark" /> : '#'}</span>
+          <span style={{ minWidth: 0, flex: 1 }}><b>{o.name} · {o.customer?.name || 'בלי לקוח'}</b><small>{[o.date, o.customer?.phone, o.customer?.address].filter(Boolean).join(' · ')}</small></span>
+          <span className={`badge ${has ? 'ok' : 'sand'}`}>{has ? 'יש הדמיה · פתיחה' : 'הדמיה חדשה'}</span>
+        </button>); })}</div>
+    </Modal>
+  );
+}
+
 function FbFind({ customers, onClose, onOpen, onAccount }: { customers: Customer[]; onClose: () => void; onOpen: (o: FbOrder) => Promise<void>; onAccount: (a: FbAccount) => Promise<void> }) {
   const [q, setQ] = useState(''), [obj, setObj] = useState<number | null | undefined>(undefined), [res, setRes] = useState<{ orders: FbOrder[]; accounts: FbAccount[] } | null>(null);
   const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [opening, setOpening] = useState('');
